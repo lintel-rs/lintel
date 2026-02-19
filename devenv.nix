@@ -1,17 +1,9 @@
-{
-  pkgs,
-  lib,
-  config,
-  inputs,
-  ...
-}:
+{ pkgs, ... }:
 
 {
-  packages = [
-    pkgs.git
-    pkgs.secretspec
-    pkgs.nixfmt
-    pkgs.nodePackages.prettier
+  packages = with pkgs; [
+    git
+    secretspec
   ];
 
   languages.rust.enable = true;
@@ -20,7 +12,6 @@
     cargo run -p lintel -- "$@"
   '';
 
-  # https://devenv.sh/git-hooks/
   git-hooks.hooks = {
     clippy = {
       enable = true;
@@ -31,5 +22,6 @@
     prettier.enable = true;
   };
 
-  # See full reference at https://devenv.sh/reference/options/
+  cachix.pull = [ "lintel" ];
+
 }
