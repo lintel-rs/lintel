@@ -13,6 +13,10 @@ impl Parser for JsoncParser {
             allow_comments: true,
             allow_loose_object_property_names: false,
             allow_trailing_commas: true,
+            allow_single_quoted_strings: false,
+            allow_hexadecimal_numbers: false,
+            allow_missing_commas: false,
+            allow_unary_plus_numbers: false,
         };
         jsonc_parser::parse_to_serde_value(content, &opts)
             .map_err(|e| {

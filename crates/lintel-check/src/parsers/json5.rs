@@ -10,12 +10,10 @@ pub struct Json5Parser;
 impl Parser for Json5Parser {
     fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
         ::json5::from_str(content).map_err(|e| {
-            let offset = match &e {
-                ::json5::Error::Message { location, .. } => location
-                    .as_ref()
-                    .map(|loc| super::line_col_to_offset(content, loc.line, loc.column))
-                    .unwrap_or(0),
-            };
+            let offset = e
+                .position()
+                .map(|pos| super::line_col_to_offset(content, pos.line + 1, pos.column + 1))
+                .unwrap_or(0);
             ParseDiagnostic {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),
