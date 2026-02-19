@@ -1,6 +1,6 @@
 [package]
 name = "lintel"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors = ["Ian Macalinao <me@ianm.com>"]
 description = "Validate JSON and YAML files against JSON Schema"
@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "development-tools"]
 readme = "../../README.md"
 
 [dependencies]
-lintel-check = { version = "0.0.1", path = "../lintel-check" }
+lintel-check = { version = "0.0.2", path = "../lintel-check" }
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 miette = { version = "7", features = ["fancy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

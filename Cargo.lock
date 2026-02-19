@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "lintel"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1093,7 +1093,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "glob",
@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "glob-match",

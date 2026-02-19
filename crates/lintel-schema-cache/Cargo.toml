@@ -1,6 +1,6 @@
 [package]
 name = "lintel-schema-cache"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors = ["Ian Macalinao <me@ianm.com>"]
 description = "Disk-backed cache for JSON Schema files with pluggable HTTP and jsonschema integration"
