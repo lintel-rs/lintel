@@ -2,6 +2,7 @@
 name = "lintel-check"
 version = "0.0.1"
 edition = "2021"
+authors = ["Ian Macalinao <me@ianm.com>"]
 description = "Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC against JSON Schema"
 license = "Apache-2.0"
 repository = "https://github.com/lintel-rs/lintel"

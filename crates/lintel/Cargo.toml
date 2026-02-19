@@ -2,6 +2,7 @@
 name = "lintel"
 version = "0.0.1"
 edition = "2021"
+authors = ["Ian Macalinao <me@ianm.com>"]
 description = "Validate JSON and YAML files against JSON Schema"
 license = "Apache-2.0"
 repository = "https://github.com/lintel-rs/lintel"
