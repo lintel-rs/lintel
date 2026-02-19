@@ -48,5 +48,4 @@ lintel ci
 
 ## License
 
-[MIT](LICENSE)
-</div>
+Copyright Ian Macalinao. Licensed under the [Apache License, Version 2.0](LICENSE).

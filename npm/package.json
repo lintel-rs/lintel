@@ -2,7 +2,7 @@
   "name": "lintel-rs",
   "version": "0.0.1",
   "description": "Schema validation for your entire repo",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/lintel-rs/lintel"
