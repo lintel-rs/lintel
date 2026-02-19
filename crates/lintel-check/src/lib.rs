@@ -2,6 +2,7 @@
 
 pub mod catalog;
 pub use lintel_config as config;
+pub use lintel_validation_cache as validation_cache;
 pub mod diagnostics;
 pub mod discover;
 pub mod parsers;

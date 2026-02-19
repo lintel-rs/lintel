@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +15,7 @@ use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
 use crate::retriever::{CacheStatus, HttpClient, SchemaCache, default_cache_dir};
+use crate::validation_cache::{self, ValidationCacheStatus};
 
 pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
@@ -26,8 +27,11 @@ pub struct ValidateArgs {
     /// Cache directory for remote schemas
     pub cache_dir: Option<String>,
 
-    /// Disable schema caching
-    pub no_cache: bool,
+    /// Bypass schema cache reads (still writes fetched schemas to cache)
+    pub force_schema_fetch: bool,
+
+    /// Bypass validation cache reads (still writes results to cache)
+    pub force_validation: bool,
 
     /// Disable `SchemaStore` catalog matching
     pub no_catalog: bool,
@@ -37,6 +41,9 @@ pub struct ValidateArgs {
 
     /// Directory to search for `lintel.toml` (defaults to cwd)
     pub config_dir: Option<PathBuf>,
+
+    /// TTL for cached schemas. `None` means no expiry.
+    pub schema_cache_ttl: Option<std::time::Duration>,
 }
 
 /// A single lint error produced during validation.
@@ -90,6 +97,8 @@ pub struct CheckedFile {
     pub schema: String,
     /// `None` for local schemas and builtins; `Some` for remote schemas.
     pub cache_status: Option<CacheStatus>,
+    /// `None` when validation caching is not applicable; `Some` for validation cache hits/misses.
+    pub validation_cache_status: Option<ValidationCacheStatus>,
 }
 
 /// Result of a validation run.
@@ -222,6 +231,7 @@ fn validate_config(
             path: path_str,
             schema: "(builtin)".to_string(),
             cache_status: None,
+            validation_cache_status: None,
         };
         on_check(&cf);
         checked.push(cf);
@@ -389,9 +399,12 @@ fn parse_and_group_files(
 // ---------------------------------------------------------------------------
 
 /// Fetch a schema by URI, returning its parsed JSON and cache status.
-fn fetch_schema<C: HttpClient>(
+///
+/// For remote URIs, checks the prefetched map first; for local URIs, reads
+/// from disk.
+fn fetch_schema_from_prefetched(
     schema_uri: &str,
-    retriever: &SchemaCache<C>,
+    prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
     group: &[ParsedFile],
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
@@ -400,10 +413,11 @@ fn fetch_schema<C: HttpClient>(
     let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
 
     let result: Result<(Value, Option<CacheStatus>), String> = if is_remote {
-        retriever
-            .fetch(schema_uri)
-            .map(|(v, status)| (v, Some(status)))
-            .map_err(|e| format!("failed to fetch schema: {schema_uri}: {e}"))
+        match prefetched.get(schema_uri) {
+            Some(Ok((v, status))) => Ok((v.clone(), Some(*status))),
+            Some(Err(e)) => Err(format!("failed to fetch schema: {schema_uri}: {e}")),
+            None => Err(format!("schema not prefetched: {schema_uri}")),
+        }
     } else {
         fs::read_to_string(schema_uri)
             .map_err(|e| format!("failed to read local schema {schema_uri}: {e}"))
@@ -424,20 +438,22 @@ fn fetch_schema<C: HttpClient>(
 }
 
 /// Report the same error for every file in a schema group.
-fn report_group_error(
+fn report_group_error<P: std::borrow::Borrow<ParsedFile>>(
     message: &str,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
-    group: &[ParsedFile],
+    group: &[P],
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
-    for pf in group {
+    for item in group {
+        let pf = item.borrow();
         let cf = CheckedFile {
             path: pf.path.clone(),
             schema: schema_uri.to_string(),
             cache_status,
+            validation_cache_status: None,
         };
         on_check(&cf);
         checked.push(cf);
@@ -449,54 +465,78 @@ fn report_group_error(
 }
 
 /// Mark every file in a group as checked (no errors).
-fn mark_group_checked(
+fn mark_group_checked<P: std::borrow::Borrow<ParsedFile>>(
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
-    group: &[ParsedFile],
+    validation_cache_status: Option<ValidationCacheStatus>,
+    group: &[P],
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
-    for pf in group {
+    for item in group {
+        let pf = item.borrow();
         let cf = CheckedFile {
             path: pf.path.clone(),
             schema: schema_uri.to_string(),
             cache_status,
+            validation_cache_status,
         };
         on_check(&cf);
         checked.push(cf);
     }
 }
 
-/// Validate all files in a group against an already-compiled validator.
-fn validate_group(
+/// Convert `(instance_path, message)` pairs into `LintError::Validation` diagnostics.
+fn push_error_pairs(
+    pf: &ParsedFile,
+    error_pairs: &[(String, String)],
+    errors: &mut Vec<LintError>,
+) {
+    for (ip, msg) in error_pairs {
+        let offset = find_instance_path_offset(&pf.content, ip);
+        errors.push(LintError::Validation(ValidationDiagnostic {
+            src: miette::NamedSource::new(&pf.path, pf.content.clone()),
+            span: offset.into(),
+            path: pf.path.clone(),
+            instance_path: ip.clone(),
+            message: msg.clone(),
+        }));
+    }
+}
+
+/// Validate all files in a group against an already-compiled validator and store
+/// results in the validation cache.
+#[allow(clippy::too_many_arguments)]
+fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
     schema_uri: &str,
+    schema_value: &Value,
+    validate_formats: bool,
     cache_status: Option<CacheStatus>,
-    group: &[ParsedFile],
+    group: &[P],
+    vcache: &validation_cache::ValidationCache,
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
-    for pf in group {
+    for item in group {
+        let pf = item.borrow();
+        let file_errors: Vec<(String, String)> = validator
+            .iter_errors(&pf.instance)
+            .map(|error| (error.instance_path().to_string(), error.to_string()))
+            .collect();
+
+        vcache.store(&pf.content, schema_value, validate_formats, &file_errors);
+        push_error_pairs(pf, &file_errors, errors);
+
         let cf = CheckedFile {
             path: pf.path.clone(),
             schema: schema_uri.to_string(),
             cache_status,
+            validation_cache_status: Some(ValidationCacheStatus::Miss),
         };
         on_check(&cf);
         checked.push(cf);
-
-        for error in validator.iter_errors(&pf.instance) {
-            let ip = error.instance_path().to_string();
-            let offset = find_instance_path_offset(&pf.content, &ip);
-            errors.push(LintError::Validation(ValidationDiagnostic {
-                src: miette::NamedSource::new(&pf.path, pf.content.clone()),
-                span: offset.into(),
-                path: pf.path.clone(),
-                instance_path: ip,
-                message: error.to_string(),
-            }));
-        }
     }
 }
 
@@ -523,16 +563,16 @@ pub async fn run_with<C: HttpClient>(
     client: C,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<ValidateResult> {
-    let cache_dir = if args.no_cache {
-        None
-    } else {
-        Some(
-            args.cache_dir
-                .as_ref()
-                .map_or_else(default_cache_dir, PathBuf::from),
-        )
-    };
-    let retriever = SchemaCache::new(cache_dir, client.clone());
+    let cache_dir = args
+        .cache_dir
+        .as_ref()
+        .map_or_else(default_cache_dir, PathBuf::from);
+    let retriever = SchemaCache::new(
+        Some(cache_dir),
+        client.clone(),
+        args.force_schema_fetch,
+        args.schema_cache_ttl,
+    );
 
     let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
@@ -540,30 +580,51 @@ pub async fn run_with<C: HttpClient>(
     let mut compiled_catalogs = Vec::new();
 
     if !args.no_catalog {
-        // Default Lintel catalog (github:lintel-rs/catalog)
-        match registry::fetch(&retriever, registry::DEFAULT_REGISTRY) {
-            Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
-            Err(e) => {
-                eprintln!(
-                    "warning: failed to fetch default catalog {}: {e}",
-                    registry::DEFAULT_REGISTRY
-                );
-            }
-        }
+        // Fetch all catalogs in parallel using JoinSet.
+        // Each task returns (label, result) so error messages stay specific.
+        type CatalogResult = (
+            String,
+            Result<CompiledCatalog, Box<dyn std::error::Error + Send + Sync>>,
+        );
+        let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
+
+        // Lintel catalog
+        let r = retriever.clone();
+        let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
+        catalog_tasks.spawn(async move {
+            let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
+                .await
+                .map(|cat| CompiledCatalog::compile(&cat));
+            (label, result)
+        });
+
         // SchemaStore catalog
-        match catalog::fetch_catalog(&retriever) {
-            Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
-            Err(e) => {
-                eprintln!("warning: failed to fetch SchemaStore catalog: {e}");
-            }
-        }
+        let r = retriever.clone();
+        catalog_tasks.spawn(async move {
+            let result = catalog::fetch_catalog(&r)
+                .await
+                .map(|cat| CompiledCatalog::compile(&cat));
+            ("SchemaStore catalog".to_string(), result)
+        });
+
         // Additional registries from lintel.toml
         for registry_url in &config.registries {
-            match registry::fetch(&retriever, registry_url) {
-                Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
-                Err(e) => {
-                    eprintln!("warning: failed to fetch registry {registry_url}: {e}");
-                }
+            let r = retriever.clone();
+            let url = registry_url.clone();
+            let label = format!("registry {url}");
+            catalog_tasks.spawn(async move {
+                let result = registry::fetch(&r, &url)
+                    .await
+                    .map(|cat| CompiledCatalog::compile(&cat));
+                (label, result)
+            });
+        }
+
+        while let Some(result) = catalog_tasks.join_next().await {
+            match result {
+                Ok((_, Ok(compiled))) => compiled_catalogs.push(compiled),
+                Ok((label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
+                Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
             }
         }
     }
@@ -586,11 +647,53 @@ pub async fn run_with<C: HttpClient>(
         &mut errors,
     );
 
+    // Create validation cache
+    let vcache = validation_cache::ValidationCache::new(
+        validation_cache::default_cache_dir(),
+        args.force_validation,
+    );
+
+    // Prefetch all remote schemas in parallel
+    let remote_uris: Vec<&String> = schema_groups
+        .keys()
+        .filter(|uri| uri.starts_with("http://") || uri.starts_with("https://"))
+        .collect();
+
+    let mut schema_tasks = tokio::task::JoinSet::new();
+    for uri in remote_uris {
+        let r = retriever.clone();
+        let u = uri.clone();
+        schema_tasks.spawn(async move {
+            let result = r.fetch(&u).await;
+            (u, result)
+        });
+    }
+
+    let mut prefetched: HashMap<String, Result<(Value, CacheStatus), String>> = HashMap::new();
+    while let Some(result) = schema_tasks.join_next().await {
+        match result {
+            Ok((uri, fetch_result)) => {
+                prefetched.insert(uri, fetch_result.map_err(|e| e.to_string()));
+            }
+            Err(e) => eprintln!("warning: schema prefetch task failed: {e}"),
+        }
+    }
+
     // Phase 2: Compile each schema once and validate all matching files
     for (schema_uri, group) in &schema_groups {
-        let Some((schema_value, cache_status)) = fetch_schema(
+        // If ANY file in the group matches a `validate_formats = false` override,
+        // disable format validation for the whole group (they share one compiled validator).
+        let validate_formats = group.iter().all(|pf| {
+            config
+                .should_validate_formats(&pf.path, &[&pf.original_schema_uri, schema_uri.as_str()])
+        });
+
+        // Remote schemas were prefetched in parallel above; local schemas are
+        // read from disk here. We need the schema value both for the validation
+        // cache key and for compilation.
+        let Some((schema_value, cache_status)) = fetch_schema_from_prefetched(
             schema_uri,
-            &retriever,
+            &prefetched,
             group,
             &mut errors,
             &mut checked,
@@ -599,13 +702,34 @@ pub async fn run_with<C: HttpClient>(
             continue;
         };
 
-        // If ANY file in the group matches a `validate_formats = false` override,
-        // disable format validation for the whole group (they share one compiled validator).
-        let validate_formats = group.iter().all(|pf| {
-            config
-                .should_validate_formats(&pf.path, &[&pf.original_schema_uri, schema_uri.as_str()])
-        });
+        // Split the group into validation cache hits and misses.
+        let mut cache_misses: Vec<&ParsedFile> = Vec::new();
 
+        for pf in group {
+            let (cached, vcache_status) =
+                vcache.lookup(&pf.content, &schema_value, validate_formats);
+
+            if let Some(cached_errors) = cached {
+                push_error_pairs(pf, &cached_errors, &mut errors);
+                let cf = CheckedFile {
+                    path: pf.path.clone(),
+                    schema: schema_uri.clone(),
+                    cache_status,
+                    validation_cache_status: Some(vcache_status),
+                };
+                on_check(&cf);
+                checked.push(cf);
+            } else {
+                cache_misses.push(pf);
+            }
+        }
+
+        // If all files hit the validation cache, skip schema compilation entirely.
+        if cache_misses.is_empty() {
+            continue;
+        }
+
+        // Compile the schema for cache misses.
         let validator = match jsonschema::async_options()
             .with_retriever(retriever.clone())
             .should_validate_formats(validate_formats)
@@ -621,7 +745,8 @@ pub async fn run_with<C: HttpClient>(
                     mark_group_checked(
                         schema_uri,
                         cache_status,
-                        group,
+                        Some(ValidationCacheStatus::Miss),
+                        &cache_misses,
                         &mut checked,
                         &mut on_check,
                     );
@@ -631,7 +756,7 @@ pub async fn run_with<C: HttpClient>(
                     &format!("failed to compile schema: {e}"),
                     schema_uri,
                     cache_status,
-                    group,
+                    &cache_misses,
                     &mut errors,
                     &mut checked,
                     &mut on_check,
@@ -643,8 +768,11 @@ pub async fn run_with<C: HttpClient>(
         validate_group(
             &validator,
             schema_uri,
+            &schema_value,
+            validate_formats,
             cache_status,
-            group,
+            &cache_misses,
+            &vcache,
             &mut errors,
             &mut checked,
             &mut on_check,
@@ -672,8 +800,9 @@ mod tests {
     #[derive(Clone)]
     struct MockClient(HashMap<String, String>);
 
+    #[async_trait::async_trait]
     impl HttpClient for MockClient {
-        fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+        async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
             self.0
                 .get(uri)
                 .cloned()
@@ -716,10 +845,12 @@ mod tests {
             globs: scenario_globs(dirs),
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         }
     }
 
@@ -740,10 +871,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -799,10 +932,12 @@ mod tests {
             globs: vec![dir.to_string_lossy().to_string()],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -821,10 +956,12 @@ mod tests {
             ],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -843,10 +980,12 @@ mod tests {
             globs: vec![dir.to_string_lossy().to_string(), glob_pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -860,10 +999,12 @@ mod tests {
             globs: vec![base.join("*.json").to_string_lossy().to_string()],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(result.has_errors());
@@ -877,10 +1018,12 @@ mod tests {
             globs: vec![base.join("*.yaml").to_string_lossy().to_string()],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(result.has_errors());
@@ -900,10 +1043,12 @@ mod tests {
                 base.join("missing_name.yaml").to_string_lossy().to_string(),
             ],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -919,10 +1064,12 @@ mod tests {
             globs: scenario_globs(&["positive_tests"]),
             exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
-            no_cache: false,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -955,10 +1102,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -985,10 +1134,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -1006,10 +1157,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(result.has_errors());
@@ -1042,10 +1195,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -1076,10 +1231,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -1135,10 +1292,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, client).await?;
         assert!(!result.has_errors());
@@ -1167,10 +1326,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, client).await?;
         assert!(result.has_errors());
@@ -1201,10 +1362,12 @@ mod tests {
             globs: vec![],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
 
         let orig_dir = std::env::current_dir()?;
@@ -1238,10 +1401,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: None,
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -1277,10 +1442,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
 
         let result = run(&c, mock(&[])).await?;
@@ -1309,10 +1476,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
 
         let result = run(&c, mock(&[])).await?;
@@ -1349,10 +1518,12 @@ mod tests {
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(
@@ -1392,10 +1563,12 @@ validate_formats = false
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(
@@ -1417,10 +1590,12 @@ validate_formats = false
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: true,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -1457,10 +1632,12 @@ validate_formats = false
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, client).await?;
         assert!(!result.has_errors());
@@ -1492,10 +1669,12 @@ validate_formats = false
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, client).await?;
         assert!(!result.has_errors());
@@ -1529,14 +1708,77 @@ validate_formats = false
             globs: vec![pattern],
             exclude: vec![],
             cache_dir: None,
-            no_cache: true,
+            force_schema_fetch: true,
+            force_validation: true,
             no_catalog: false,
             format: None,
             config_dir: Some(tmp.path().to_path_buf()),
+            schema_cache_ttl: None,
         };
         let result = run(&c, client).await?;
         assert!(result.has_errors());
         assert_eq!(result.files_checked(), 1);
+        Ok(())
+    }
+
+    // --- Validation cache ---
+
+    #[tokio::test]
+    async fn validation_cache_hit_skips_revalidation() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let schema_path = tmp.path().join("schema.json");
+        fs::write(&schema_path, SCHEMA)?;
+
+        let f = tmp.path().join("valid.json");
+        fs::write(
+            &f,
+            format!(
+                r#"{{"$schema":"{}","name":"hello"}}"#,
+                schema_path.to_string_lossy()
+            ),
+        )?;
+
+        let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
+
+        // First run: force_validation = false so results get cached
+        let c = ValidateArgs {
+            globs: vec![pattern.clone()],
+            exclude: vec![],
+            cache_dir: None,
+            force_schema_fetch: true,
+            force_validation: false,
+            no_catalog: true,
+            format: None,
+            config_dir: None,
+            schema_cache_ttl: None,
+        };
+        let mut first_statuses = Vec::new();
+        let result = run_with(&c, mock(&[]), |cf| {
+            first_statuses.push(cf.validation_cache_status);
+        })
+        .await?;
+        assert!(!result.has_errors());
+        assert!(result.files_checked() > 0);
+
+        // Verify the first run recorded a validation cache miss
+        assert!(
+            first_statuses.contains(&Some(ValidationCacheStatus::Miss)),
+            "expected at least one validation cache miss on first run"
+        );
+
+        // Second run: same file, same schema — should hit validation cache
+        let mut second_statuses = Vec::new();
+        let result = run_with(&c, mock(&[]), |cf| {
+            second_statuses.push(cf.validation_cache_status);
+        })
+        .await?;
+        assert!(!result.has_errors());
+
+        // Verify the second run got a validation cache hit
+        assert!(
+            second_statuses.contains(&Some(ValidationCacheStatus::Hit)),
+            "expected at least one validation cache hit on second run"
+        );
         Ok(())
     }
 }

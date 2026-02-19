@@ -6,18 +6,26 @@ pub mod init;
 
 use lintel_check::retriever::CacheStatus;
 use lintel_check::validate::CheckedFile;
+use lintel_check::validation_cache::ValidationCacheStatus;
 
 use crate::ValidateArgs;
 
-/// Format a verbose line for a checked file, including cache status tag.
+/// Format a verbose line for a checked file, including cache status tags.
 pub fn format_checked_verbose(file: &CheckedFile) -> String {
-    match file.cache_status {
-        Some(CacheStatus::Hit) => format!("  {} ({}) [cached]", file.path, file.schema),
-        Some(CacheStatus::Miss | CacheStatus::Disabled) => {
-            format!("  {} ({}) [fetched]", file.path, file.schema)
-        }
-        None => format!("  {} ({})", file.path, file.schema),
-    }
+    let schema_tag = match file.cache_status {
+        Some(CacheStatus::Hit) => " [cached]",
+        Some(CacheStatus::Miss | CacheStatus::Disabled) => " [fetched]",
+        None => "",
+    };
+    let validation_tag = match file.validation_cache_status {
+        Some(ValidationCacheStatus::Hit) => " [validated:cached]",
+        Some(ValidationCacheStatus::Miss) => " [validated]",
+        None => "",
+    };
+    format!(
+        "  {} ({}){schema_tag}{validation_tag}",
+        file.path, file.schema
+    )
 }
 
 /// Load `lintel.toml` and merge its excludes into the args.

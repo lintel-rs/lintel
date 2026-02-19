@@ -45,6 +45,7 @@ impl From<FileFormat> for lintel_check::parsers::FileFormat {
 }
 
 #[derive(Debug, Clone, Bpaf)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ValidateArgs {
     #[bpaf(long("exclude"), argument("PATTERN"))]
     pub exclude: Vec<String>,
@@ -52,14 +53,27 @@ pub struct ValidateArgs {
     #[bpaf(long("cache-dir"), argument("DIR"))]
     pub cache_dir: Option<String>,
 
-    #[bpaf(long("no-cache"), switch)]
-    pub no_cache: bool,
+    /// Bypass schema cache reads (still writes fetched schemas to cache)
+    #[bpaf(long("force-schema-fetch"), switch)]
+    pub force_schema_fetch: bool,
+
+    /// Bypass validation cache reads (still writes results to cache)
+    #[bpaf(long("force-validation"), switch)]
+    pub force_validation: bool,
+
+    /// Bypass all cache reads (combines --force-schema-fetch and --force-validation)
+    #[bpaf(long("force"), switch)]
+    pub force: bool,
 
     #[bpaf(long("no-catalog"), switch)]
     pub no_catalog: bool,
 
     #[bpaf(long("format"), argument("FORMAT"))]
     pub format: Option<FileFormat>,
+
+    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
+    #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
+    pub schema_cache_ttl: Option<String>,
 
     #[bpaf(positional("PATH"))]
     pub globs: Vec<String>,
@@ -79,10 +93,18 @@ impl From<&ValidateArgs> for lintel_check::validate::ValidateArgs {
             globs: args.globs.clone(),
             exclude: args.exclude.clone(),
             cache_dir: args.cache_dir.clone(),
-            no_cache: args.no_cache,
+            force_schema_fetch: args.force_schema_fetch || args.force,
+            force_validation: args.force_validation || args.force,
             no_catalog: args.no_catalog,
             format: args.format.map(Into::into),
             config_dir,
+            schema_cache_ttl: Some(args.schema_cache_ttl.as_deref().map_or(
+                lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL,
+                |s| {
+                    humantime::parse_duration(s)
+                        .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
+                },
+            )),
         }
     }
 }
@@ -212,7 +234,7 @@ async fn main() -> ExitCode {
         Commands::Check(cli_options, mut args) => {
             commands::check::run(
                 &mut args,
-                lintel_check::retriever::UreqClient,
+                lintel_check::retriever::ReqwestClient::default(),
                 cli_options.verbose,
             )
             .await
@@ -220,7 +242,7 @@ async fn main() -> ExitCode {
         Commands::CI(cli_options, mut args) => {
             commands::ci::run(
                 &mut args,
-                lintel_check::retriever::UreqClient,
+                lintel_check::retriever::ReqwestClient::default(),
                 cli_options.verbose,
             )
             .await
@@ -272,7 +294,9 @@ mod tests {
                 assert_eq!(args.globs, vec!["*.json"]);
                 assert!(args.exclude.is_empty());
                 assert!(args.cache_dir.is_none());
-                assert!(!args.no_cache);
+                assert!(!args.force_schema_fetch);
+                assert!(!args.force_validation);
+                assert!(!args.force);
                 assert!(!args.no_catalog);
                 assert!(args.format.is_none());
             }
@@ -294,7 +318,8 @@ mod tests {
                 "vendor/**",
                 "--cache-dir",
                 "/tmp/cache",
-                "--no-cache",
+                "--force-schema-fetch",
+                "--force-validation",
                 "--no-catalog",
                 "--format",
                 "jsonc",
@@ -305,9 +330,30 @@ mod tests {
                 assert_eq!(args.globs, vec!["*.json", "**/*.json"]);
                 assert_eq!(args.exclude, vec!["node_modules/**", "vendor/**"]);
                 assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
-                assert!(args.no_cache);
+                assert!(args.force_schema_fetch);
+                assert!(args.force_validation);
+                assert!(!args.force);
                 assert!(args.no_catalog);
                 assert_eq!(args.format, Some(FileFormat::Jsonc));
+            }
+            _ => panic!("expected Check"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_force_implies_both_force_flags() -> anyhow::Result<()> {
+        let cli = cli()
+            .run_inner(&["check", "--force"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match cli.command {
+            Commands::Check(_, args) => {
+                assert!(args.force);
+                // The individual flags should be false in the CLI struct —
+                // the combination happens in the From impl.
+                let lib_args = lintel_check::validate::ValidateArgs::from(&args);
+                assert!(lib_args.force_schema_fetch);
+                assert!(lib_args.force_validation);
             }
             _ => panic!("expected Check"),
         }

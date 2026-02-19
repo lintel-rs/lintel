@@ -54,6 +54,14 @@ The formatting goal is to cover what [Biome](https://biomejs.dev/) doesn't — Y
 - [ ] Homebrew formula
 - [ ] WASM build for browser playground
 
+## Documentation
+
+- [ ] Documentation website — usage guides, configuration reference, catalog docs, and integration examples
+
+## Benchmarks
+
+- [ ] Performance benchmarks vs other validators (e.g. ajv, check-jsonschema, v8r)
+
 ## DX
 
 - [ ] Better `--verbose` logging showing which schema was resolved for each file

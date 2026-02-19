@@ -43,14 +43,14 @@ pub fn resolve_urls(url: &str) -> Vec<String> {
 /// # Errors
 ///
 /// Returns an error if none of the resolved URLs can be fetched or parsed.
-pub fn fetch<C: HttpClient>(
+pub async fn fetch<C: HttpClient>(
     cache: &SchemaCache<C>,
     url: &str,
 ) -> Result<Catalog, Box<dyn std::error::Error + Send + Sync>> {
     let urls = resolve_urls(url);
     let mut last_err: Option<Box<dyn std::error::Error + Send + Sync>> = None;
     for resolved in &urls {
-        match cache.fetch(resolved) {
+        match cache.fetch(resolved).await {
             Ok((value, _status)) => {
                 let catalog = schemastore::parse_catalog(value)?;
                 return Ok(catalog);

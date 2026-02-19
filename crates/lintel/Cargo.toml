@@ -14,6 +14,7 @@ readme = "../../README.md"
 [dependencies]
 lintel-check = { version = "0.0.2", path = "../lintel-check" }
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+humantime = "2"
 miette = { version = "7", features = ["fancy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"

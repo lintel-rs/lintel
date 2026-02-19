@@ -3,6 +3,10 @@ use std::error::Error;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
+use std::time::Duration;
+
+/// Default TTL for cached schemas (12 hours).
+pub const DEFAULT_SCHEMA_CACHE_TTL: Duration = Duration::from_secs(12 * 60 * 60);
 
 use serde_json::Value;
 
@@ -18,21 +22,29 @@ pub enum CacheStatus {
 }
 
 /// Trait for fetching content over HTTP.
+#[async_trait::async_trait]
 pub trait HttpClient: Clone + Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns an error if the HTTP request fails or the response cannot be read.
-    fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>>;
+    async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>>;
 }
 
-/// Default HTTP client using ureq.
+/// Default HTTP client using reqwest.
 #[derive(Clone)]
-pub struct UreqClient;
+pub struct ReqwestClient(pub reqwest::Client);
 
-impl HttpClient for UreqClient {
-    fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-        let mut response = ureq::get(uri).call()?;
-        Ok(response.body_mut().read_to_string()?)
+impl Default for ReqwestClient {
+    fn default() -> Self {
+        Self(reqwest::Client::new())
+    }
+}
+
+#[async_trait::async_trait]
+impl HttpClient for ReqwestClient {
+    async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+        let resp = self.0.get(uri).send().await?.error_for_status()?;
+        Ok(resp.text().await?)
     }
 }
 
@@ -43,14 +55,26 @@ impl HttpClient for UreqClient {
 /// requested, the cache is checked first; on a miss the schema is fetched
 /// and written to disk for future use.
 #[derive(Clone)]
-pub struct SchemaCache<C: HttpClient = UreqClient> {
+pub struct SchemaCache<C: HttpClient = ReqwestClient> {
     cache_dir: Option<PathBuf>,
     client: C,
+    skip_read: bool,
+    ttl: Option<Duration>,
 }
 
 impl<C: HttpClient> SchemaCache<C> {
-    pub fn new(cache_dir: Option<PathBuf>, client: C) -> Self {
-        Self { cache_dir, client }
+    pub fn new(
+        cache_dir: Option<PathBuf>,
+        client: C,
+        skip_read: bool,
+        ttl: Option<Duration>,
+    ) -> Self {
+        Self {
+            cache_dir,
+            client,
+            skip_read,
+            ttl,
+        }
     }
 
     /// Fetch a schema by URI, using the disk cache when available.
@@ -58,23 +82,31 @@ impl<C: HttpClient> SchemaCache<C> {
     /// Returns the parsed schema and a [`CacheStatus`] indicating whether the
     /// result came from the disk cache, the network, or caching was disabled.
     ///
+    /// When `skip_read` is set, the cache read is skipped but fetched schemas
+    /// are still written to disk.
+    ///
     /// # Errors
     ///
     /// Returns an error if the schema cannot be fetched from the network,
     /// read from disk cache, or parsed as JSON.
-    pub fn fetch(&self, uri: &str) -> Result<(Value, CacheStatus), Box<dyn Error + Send + Sync>> {
-        // Check cache first
-        if let Some(ref cache_dir) = self.cache_dir {
+    pub async fn fetch(
+        &self,
+        uri: &str,
+    ) -> Result<(Value, CacheStatus), Box<dyn Error + Send + Sync>> {
+        // Check cache first (unless skip_read is set)
+        if !self.skip_read
+            && let Some(ref cache_dir) = self.cache_dir
+        {
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
-            if cache_path.exists() {
+            if cache_path.exists() && !self.is_expired(&cache_path) {
                 let content = fs::read_to_string(&cache_path)?;
                 return Ok((serde_json::from_str(&content)?, CacheStatus::Hit));
             }
         }
 
         // Fetch from network
-        let body = self.client.get(uri)?;
+        let body = self.client.get(uri).await?;
         let value: Value = serde_json::from_str(&body)?;
 
         let status = if let Some(ref cache_dir) = self.cache_dir {
@@ -89,6 +121,22 @@ impl<C: HttpClient> SchemaCache<C> {
         };
 
         Ok((value, status))
+    }
+
+    /// Check whether a cached file has exceeded the configured TTL.
+    ///
+    /// Returns `false` (not expired) when:
+    /// - No TTL is configured (`self.ttl` is `None`)
+    /// - The file metadata or mtime cannot be read (graceful degradation)
+    fn is_expired(&self, path: &std::path::Path) -> bool {
+        let Some(ttl) = self.ttl else {
+            return false;
+        };
+        fs::metadata(path)
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|mtime| mtime.elapsed().ok())
+            .is_some_and(|age| age > ttl)
     }
 
     fn hash_uri(uri: &str) -> String {
@@ -108,25 +156,13 @@ pub fn default_cache_dir() -> PathBuf {
 
 // -- jsonschema trait impls --------------------------------------------------
 
-impl<C: HttpClient> jsonschema::Retrieve for SchemaCache<C> {
-    fn retrieve(
-        &self,
-        uri: &jsonschema::Uri<String>,
-    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        let (value, _status) = self.fetch(uri.as_str())?;
-        Ok(value)
-    }
-}
-
 #[async_trait::async_trait]
 impl<C: HttpClient> jsonschema::AsyncRetrieve for SchemaCache<C> {
     async fn retrieve(
         &self,
         uri: &jsonschema::Uri<String>,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        let cache = self.clone();
-        let uri_str = uri.as_str().to_string();
-        let (value, _status) = tokio::task::spawn_blocking(move || cache.fetch(&uri_str)).await??;
+        let (value, _status) = self.fetch(uri.as_str()).await?;
         Ok(value)
     }
 }
@@ -139,8 +175,9 @@ mod tests {
     #[derive(Clone)]
     struct MockClient(HashMap<String, String>);
 
+    #[async_trait::async_trait]
     impl HttpClient for MockClient {
-        fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+        async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
             self.0
                 .get(uri)
                 .cloned()
@@ -177,22 +214,28 @@ mod tests {
         anyhow::anyhow!("{e}")
     }
 
-    #[test]
-    fn fetch_no_cache_dir() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn fetch_no_cache_dir() -> anyhow::Result<()> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
-        let cache = SchemaCache::new(None, client);
-        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
+        let cache = SchemaCache::new(None, client, false, None);
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
         assert_eq!(status, CacheStatus::Disabled);
         Ok(())
     }
 
-    #[test]
-    fn fetch_cold_cache() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn fetch_cold_cache() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let client = mock(&[("https://example.com/s.json", r#"{"type":"string"}"#)]);
-        let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
+        let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client, false, None);
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "string"}));
         assert_eq!(status, CacheStatus::Miss);
 
@@ -203,8 +246,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn fetch_warm_cache() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn fetch_warm_cache() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
         let cache_path = tmp.path().join(format!("{hash}.json"));
@@ -212,46 +255,117 @@ mod tests {
 
         // Client has no entries — if it were called, it would error
         let client = mock(&[]);
-        let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
+        let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client, false, None);
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "number"}));
         assert_eq!(status, CacheStatus::Hit);
         Ok(())
     }
 
-    #[test]
-    fn fetch_client_error() {
-        let client = mock(&[]);
-        let cache = SchemaCache::new(None, client);
-        assert!(cache.fetch("https://example.com/missing.json").is_err());
-    }
+    #[tokio::test]
+    async fn fetch_skip_read_bypasses_cache() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
+        let cache_path = tmp.path().join(format!("{hash}.json"));
+        fs::write(&cache_path, r#"{"type":"number"}"#)?;
 
-    #[test]
-    fn fetch_invalid_json() {
-        let client = mock(&[("https://example.com/bad.json", "not json")]);
-        let cache = SchemaCache::new(None, client);
-        assert!(cache.fetch("https://example.com/bad.json").is_err());
-    }
-
-    #[test]
-    fn retrieve_trait_delegates() -> anyhow::Result<()> {
-        let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
-        let cache = SchemaCache::new(None, client);
-        let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
-        let val = jsonschema::Retrieve::retrieve(&cache, &uri).map_err(boxerr)?;
-        assert_eq!(val, serde_json::json!({"type": "object"}));
+        // With skip_read, the cached value is ignored and the client is called
+        let client = mock(&[("https://example.com/s.json", r#"{"type":"string"}"#)]);
+        let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client, true, None);
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
+        assert_eq!(val, serde_json::json!({"type": "string"}));
+        assert_eq!(status, CacheStatus::Miss);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_client_error() {
+        let client = mock(&[]);
+        let cache = SchemaCache::new(None, client, false, None);
+        assert!(
+            cache
+                .fetch("https://example.com/missing.json")
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_invalid_json() {
+        let client = mock(&[("https://example.com/bad.json", "not json")]);
+        let cache = SchemaCache::new(None, client, false, None);
+        assert!(cache.fetch("https://example.com/bad.json").await.is_err());
     }
 
     #[tokio::test]
     async fn async_retrieve_trait_delegates() -> anyhow::Result<()> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
-        let cache = SchemaCache::new(None, client);
+        let cache = SchemaCache::new(None, client, false, None);
         let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
         let val = jsonschema::AsyncRetrieve::retrieve(&cache, &uri)
             .await
             .map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_expired_ttl_refetches() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
+        let cache_path = tmp.path().join(format!("{hash}.json"));
+        fs::write(&cache_path, r#"{"type":"number"}"#)?;
+
+        // Set mtime to 2 seconds ago
+        let two_secs_ago = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(2),
+        );
+        filetime::set_file_mtime(&cache_path, two_secs_ago)?;
+
+        // TTL of 1 second — the cached file is stale
+        let client = mock(&[("https://example.com/s.json", r#"{"type":"string"}"#)]);
+        let cache = SchemaCache::new(
+            Some(tmp.path().to_path_buf()),
+            client,
+            false,
+            Some(Duration::from_secs(1)),
+        );
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
+        assert_eq!(val, serde_json::json!({"type": "string"}));
+        assert_eq!(status, CacheStatus::Miss);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_unexpired_ttl_serves_cache() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
+        let cache_path = tmp.path().join(format!("{hash}.json"));
+        fs::write(&cache_path, r#"{"type":"number"}"#)?;
+
+        // TTL of 1 hour — the file was just written, so it's fresh
+        let client = mock(&[]);
+        let cache = SchemaCache::new(
+            Some(tmp.path().to_path_buf()),
+            client,
+            false,
+            Some(Duration::from_secs(3600)),
+        );
+        let (val, status) = cache
+            .fetch("https://example.com/s.json")
+            .await
+            .map_err(boxerr)?;
+        assert_eq!(val, serde_json::json!({"type": "number"}));
+        assert_eq!(status, CacheStatus::Hit);
         Ok(())
     }
 
