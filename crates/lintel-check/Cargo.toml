@@ -1,7 +1,7 @@
 [package]
 name = "lintel-check"
 version = "0.0.1"
-edition = "2021"
+edition.workspace = true
 authors = ["Ian Macalinao <me@ianm.com>"]
 description = "Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC against JSON Schema"
 license = "Apache-2.0"
@@ -29,6 +29,9 @@ toml = "1.0"
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
 schemastore = { version = "0.0.1", path = "../schemastore" }
+
+[lints]
+workspace = true
 
 [dev-dependencies]
 insta = { version = "1", features = ["filters"] }
