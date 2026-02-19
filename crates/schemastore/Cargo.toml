@@ -1,0 +1,16 @@
+[package]
+name = "schemastore"
+version = "0.0.1"
+edition = "2021"
+description = "Fetch and match files against the SchemaStore catalog"
+license = "MIT"
+repository = "https://github.com/lintel-rs/lintel"
+homepage = "https://github.com/lintel-rs/lintel"
+keywords = ["json-schema", "schemastore", "validation"]
+categories = ["development-tools"]
+readme = "README.md"
+
+[dependencies]
+glob-match = "0.2"
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

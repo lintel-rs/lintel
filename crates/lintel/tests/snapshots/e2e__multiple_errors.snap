@@ -1,0 +1,9 @@
+---
+source: crates/lintel/tests/e2e.rs
+assertion_line: 50
+expression: text
+---
+error: key must be a string at line 2 column 3
+error: trailing comma at line 5 column 3
+Checked 1 files in [TIME]. 2 error(s) found.
+exit code: 1

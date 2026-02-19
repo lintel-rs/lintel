@@ -1,0 +1,8 @@
+---
+source: crates/lintel/tests/e2e.rs
+assertion_line: 48
+expression: text
+---
+error: trailing comma at line 5 column 3
+Checked 1 files in [TIME]. 1 error(s) found.
+exit code: 1

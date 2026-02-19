@@ -1,0 +1,1280 @@
+---
+source: crates/lintel/tests/e2e.rs
+assertion_line: 52
+expression: text
+---
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "March 1st, 2020" is not a "date" (at /planDate)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: "zero" is not of type "integer" (at /abcMaterialsMap/1/decimalPrecision)
+error: "one hundred" is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: "0" is not of type "integer" (at /abcMaterialsMap/1/firmingPeriod)
+error: "three" is not of type "integer" (at /abcMaterialsMap/1/leadTime)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "tabs" is a required property (at /analytics)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "March 1st, 2020" is not a "date" (at /planDate)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: "zero" is not of type "integer" (at /abcMaterialsMap/1/decimalPrecision)
+error: "one hundred" is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: "0" is not of type "integer" (at /abcMaterialsMap/1/firmingPeriod)
+error: "three" is not of type "integer" (at /abcMaterialsMap/1/leadTime)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/targetMFCs)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [{"endDate":null,"startDate":null,"timeDependentValue":3},{"endDate":"2020-12-31","startDate":"2021-01-01","timeDependentValue":4}] has more than 1 item (at /abcMaterialsMap/1/targetMFCs)
+error: "tabs" is a required property (at /analytics)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "March 1st, 2020" is not a "date" (at /planDate)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: "zero" is not of type "integer" (at /abcMaterialsMap/1/decimalPrecision)
+error: "one hundred" is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: "0" is not of type "integer" (at /abcMaterialsMap/1/firmingPeriod)
+error: "three" is not of type "integer" (at /abcMaterialsMap/1/leadTime)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "tabs" is a required property (at /analytics)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "March 1st, 2020" is not a "date" (at /planDate)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: "zero" is not of type "integer" (at /abcMaterialsMap/1/decimalPrecision)
+error: "one hundred" is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: "0" is not of type "integer" (at /abcMaterialsMap/1/firmingPeriod)
+error: "three" is not of type "integer" (at /abcMaterialsMap/1/leadTime)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "tabs" is a required property (at /analytics)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: 100 is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "March 1st, 2020" is not a "date" (at /planDate)
+error: "uom" is a required property (at /abcMaterialsMap/1)
+error: "materialShape" is a required property (at /abcMaterialsMap/1)
+error: "materialColor" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: "lotSize" is a required property (at /abcMaterialsMap/1)
+error: "targetMFCs" is a required property (at /abcMaterialsMap/1)
+error: "planningFrequencies" is a required property (at /abcMaterialsMap/1)
+error: "shelfLives" is a required property (at /abcMaterialsMap/1)
+error: "stopshipBuffers" is a required property (at /abcMaterialsMap/1)
+error: "initialInventories" is a required property (at /abcMaterialsMap/1)
+error: "demandDetails" is a required property (at /abcMaterialsMap/1)
+error: "otherDemandAnnotation" is a required property (at /abcMaterialsMap/1)
+error: "showQuantitiesAs" is a required property (at /abcMaterialsMap/1)
+error: "expiryAnalysisType" is a required property (at /abcMaterialsMap/1)
+error: "timeDependentPlanningParameters" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemMaterialNumber" is a required property (at /abcMaterialsMap/1)
+error: "inventorySystemLocationName" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('firmRelease', 'inventory', 'lifetime', 'lotSizes', 'maximumInventories', 'otherDemandAnnotations', 'plannedRelease', 'productionMethod' were unexpected) (at /abcMaterialsMap/1)
+error: "zero" is not of type "integer" (at /abcMaterialsMap/1/decimalPrecision)
+error: "one hundred" is not of type "object" (at /abcMaterialsMap/1/demand/2020-07-01)
+error: "0" is not of type "integer" (at /abcMaterialsMap/1/firmingPeriod)
+error: "three" is not of type "integer" (at /abcMaterialsMap/1/leadTime)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: [] has less than 1 item (at /abcMaterialsMap/1/minimumInventories)
+error: "tabs" is a required property (at /analytics)
+error: "timeDependentValue" is a required property (at /recipeMap/1-2/percentAllocations/0)
+error: "timeDependentValue" is a required property (at /recipeMap/2-3/percentAllocations/0)
+error: Additional properties are not allowed ('this_is_an_invalid_property', 'timestamp' were unexpected)
+error: "ordering" is a required property (at /abcMaterialsMap/1)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/1)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/1)
+error: "currency" is a required property (at /abcMaterialsMap/1)
+error: "unitCost" is a required property (at /abcMaterialsMap/1)
+error: "minimumInventory" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('shelfLife', 'stopshipBuffer' were unexpected) (at /abcMaterialsMap/1)
+error: "ordering" is a required property (at /abcMaterialsMap/2)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/2)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/2)
+error: "currency" is a required property (at /abcMaterialsMap/2)
+error: "unitCost" is a required property (at /abcMaterialsMap/2)
+error: "minimumInventory" is a required property (at /abcMaterialsMap/2)
+error: Additional properties are not allowed ('shelfLife', 'stopshipBuffer' were unexpected) (at /abcMaterialsMap/2)
+error: "ordering" is a required property (at /abcMaterialsMap/3)
+error: "isCapacityConstraintNode" is a required property (at /abcMaterialsMap/3)
+error: "inventoryMethod" is a required property (at /abcMaterialsMap/3)
+error: "currency" is a required property (at /abcMaterialsMap/3)
+error: "unitCost" is a required property (at /abcMaterialsMap/3)
+error: "minimumInventory" is a required property (at /abcMaterialsMap/3)
+error: Additional properties are not allowed ('shelfLife', 'stopshipBuffer' were unexpected) (at /abcMaterialsMap/3)
+error: 1.25 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1111 is not of type "string" (at /planDate)
+error: 22222 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 44444 is not of type "string" (at /abcMaterialsMap/1/currency)
+error: 77777 is not of type "string" (at /abcMaterialsMap/1/otherDemandAnnotation/2024-05-01)
+error: 66666 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 55555 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: 33333 is not of type "string" (at /abcMaterialsMap/1/uom)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 2 is not of type "string" (at /abcMaterialsMap/2/abcMaterialName)
+error: 3 is not of type "string" (at /abcMaterialsMap/3/abcMaterialName)
+error: 11 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 12 is not of type "string" (at /abcMaterialsMap/1/firmOrders/1/firmOrderName)
+error: 13 is not of type "string" (at /abcMaterialsMap/1/firmOrders/2/firmOrderName)
+error: 14 is not of type "string" (at /abcMaterialsMap/1/firmOrders/3/firmOrderName)
+error: 15 is not of type "string" (at /abcMaterialsMap/1/firmOrders/4/firmOrderName)
+error: 20 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: 21 is not of type "string" (at /abcMaterialsMap/1/initialInventories/1/lotNumber)
+error: 22 is not of type "string" (at /abcMaterialsMap/1/initialInventories/2/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('unitCost' was unexpected) (at /abcMaterialsMap/1)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('unitCost' was unexpected) (at /abcMaterialsMap/1)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: Additional properties are not allowed ('this_is_an_invalid_property' was unexpected)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('unitCost' was unexpected) (at /abcMaterialsMap/1)
+error: 100.8 is not of type "integer" (at /abcMaterialsMap/1/lotSize)
+error: 1715443874 is not of type "string" (at /planDate)
+error: "manufacturingCost" is a required property (at /abcMaterialsMap/1)
+error: "standardCost" is a required property (at /abcMaterialsMap/1)
+error: "salesPrice" is a required property (at /abcMaterialsMap/1)
+error: Additional properties are not allowed ('unitCost' was unexpected) (at /abcMaterialsMap/1)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/abcMaterialName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/firmOrders/0/firmOrderName)
+error: 1 is not of type "string" (at /abcMaterialsMap/1/initialInventories/0/lotNumber)
+error: {"sources":[{"patterns":["**/*.yaml"],"type":"Include"},{"strategy":"InvalidStrategy","type":"UniquePath"}],"type":"Merge"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /engine)
+error: {"type":"InvalidType"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /engine)
+error: {"include":["/invalid-ant-pattern"]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /engine)
+error: {"dataType":"invalidDataType","display":true,"name":"toggle"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /accelerator/options/0)
+error: "invalidDataType" is not valid under any of the schemas listed in the 'anyOf' keyword (at /accelerator/options/0/dataType)
+error: "not-camel-case" does not match "^$|^[a-z][a-z0-9A-Z]*$" (at /accelerator/options/0/name)
+error: "InvalidHttpMethod" is not one of "get", "post" or 3 other candidates (at /additionalApis/0/httpMethod)
+error: "InvalidIndexType" is not one of "index" or "unique" (at /aggregateProperties/1/index)
+error: "InvalidPropertyType" is not one of "bigint.unsigned", "bigint" or 24 other candidates (at /aggregateProperties/0/type)
+error: "InvalidRelationship" is not one of "many-to-many", "many-to-one" or 3 other candidates (at /aggregateProperties/1/relationship/type)
+error: "InvalidResolveType" is not one of "query" or "mutation" (at /additionalApis/0/resolverType)
+error: "Source.*.*.*_TIMESTAMP" is not of type "object" (at /row_creation_times/column_selectors/0)
+error: null is not of type "object" (at /saved_metric_definitions/metrics/0/threshold)
+error: "DAYS" is not one of "HOURS" or "MINUTES" (at /saved_metric_definitions/metrics/0/schedule_frequency/interval_type)
+error: "tag_id" is a required property (at /tag_definitions/0)
+error: "metrics" is a required property (at /tag_deployments/0/deployments/0)
+error: "BIGCONFIG" is not valid under any of the schemas listed in the 'anyOf' keyword (at /type)
+error: {"exclude":["test_deployment"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"exclude":["test_deployment"],"include":["test_deployment2"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"include":["test_deployment"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"exclude":["test_deployment"],"flags":["invalid_flag","fix-releases"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"flags":["invalid_flag","fix-releases"],"include":["test_deployment"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"flags":["invalid_flag"]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"exclude":["abc",123,{},[]],"flags":"not an array","include":["abc",123,{},[]]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: "some value (invalid)" does not match "^[A-Za-z_][A-Za-z0-9_]*$" (at /jenkinsEnvironment/1)
+error: {"key":"chartVersion"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /output/helm/updates/0/properties/0)
+error: {"key":"something"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /output/helm/updates/1/properties/0)
+error: "invalid-name" does not match "^[A-Za-z_][A-Za-z0-9_]*$" (at /environment)
+error: "registry" is a required property (at /output/docker/publish)
+error: "repository" is a required property (at /output/helm/publish)
+error: {"key":"chartVersion"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /output/helm/updates/0/properties/0)
+error: {"key":"something"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /output/helm/updates/1/properties/0)
+error: {"branch":"^master$","credentials":"SECRET"} is not of type "array" (at /output/docker/publish)
+error: {"branch":"^master$|^release/.+$","credentials":"SECRET"} is not of type "array" (at /output/helm/publish)
+error: "unknown" is not one of "maven", "npm" or "local" (at /config/cache/items/0/type)
+error: "branch" is a required property (at /output/package/publish/0)
+error: [{"channel":"stable"}] is not of type "object" (at /output/package)
+error: {"key":"GIT_COMMIT"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /output/docker/args/0)
+error: Additional properties are not allowed ('this_is_not_allowed' was unexpected) (at /output/docker)
+error: Additional properties are not allowed ('not_allowed' was unexpected) (at /output/docker/vulnerability_scan)
+error: {"fail_fast":true,"parallel":null,"when":{"branch":"master"}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/parallel_stages)
+error: null is not of type "object" (at /stages/single_stage)
+error: null is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/single_stage)
+error: {"fail_fast":true,"steps":["one"]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/single_stage)
+error: "1" is not of type "integer" (at /config/build/checkmarx/highThreshold)
+error: "1" is not of type "integer" (at /config/build/checkmarx/mediumThreshold)
+error: "1" is not of type "integer" (at /config/build/checkmarx/lowThreshold)
+error: "invalid" is not one of "job" or "global" (at /config/build/checkmarx/exclusionsSetting)
+error: 2 is not valid under any of the schemas listed in the 'oneOf' keyword (at /config/build/commit_time_threshold)
+error: "unknown" is not one of "maven", "npm" or "local" (at /config/cache/items/0/type)
+error: 2 is not valid under any of the schemas listed in the 'oneOf' keyword (at /config/build/commit_time_threshold)
+error: "branch" is a required property (at /output/package/publish/0)
+error: [{"channel":"stable"}] is not of type "object" (at /output/package)
+error: Additional properties are not allowed ('image_name' was unexpected) (at /output/docker/images/0)
+error: "name" is a required property (at /output/docker/images/0)
+error: Additional properties are not allowed ('not_allowed' was unexpected) (at /output/docker)
+error: {"args":[{"key":"GIT_COMMIT","value":"some value"}],"name":"my-image"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /output/docker/images/0)
+error: Additional properties are not allowed ('chart_name', 'not_allowed' were unexpected) (at /output/helm/charts/0)
+error: "path" is a required property (at /output/helm/charts/0)
+error: "publish" is a required property (at /output/helm)
+error: Additional properties are not allowed ('image_name', 'this_is_not_allowed' were unexpected) (at /output/docker/images/0)
+error: "name" is a required property (at /output/docker/images/0)
+error: Additional properties are not allowed ('image_name' was unexpected) (at /output/docker/images/0)
+error: "name" is a required property (at /output/docker/images/0)
+error: {"fail_fast":true,"parallel":null,"when":{"branch":"master"}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/parallel_stages)
+error: null is not of type "object" (at /stages/parallel_stages/parallel)
+error: null is not of type "object" (at /stages/single_stage)
+error: null is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/single_stage)
+error: {"fail_fast":true,"steps":["one"]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /stages/single_stage)
+error: "1" is not of type "integer" (at /config/build/checkmarx/highThreshold)
+error: "1" is not of type "integer" (at /config/build/checkmarx/mediumThreshold)
+error: "1" is not of type "integer" (at /config/build/checkmarx/lowThreshold)
+error: "invalid" is not one of "job" or "global" (at /config/build/checkmarx/exclusionsSetting)
+error: 2 is not valid under any of the schemas listed in the 'oneOf' keyword (at /config/build/commit_time_threshold)
+error: False schema does not allow ["nginx"] (at /dependencies/1/depends-on)
+error: ["Sample","Sample"] has non-unique elements (at /cheatpaths/0/tags)
+error: "" is shorter than 1 character (at /cheatpaths/0/name)
+error: "" is shorter than 1 character (at /cheatpaths/0/path)
+error: {"$schema":"../../schemas/json/cinnamon-spice.info.json","additional":"This is not permitter","author":"JEleniel (https://github.com/JEleniel","description":"Invalid JSON Test File for http://json-schema.org/cinnamon-spice.info.json","name":"Invalid: Additional Properties are not permitted"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"$schema":"../../schemas/json/cinnamon-spice.info.json","additional":"This is not permitter","author":"JEleniel (https://github.com/JEleniel"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"$schema":"../../schemas/json/cinnamon-spice.info.json","description":"Valid JSON Test File for http://json-schema.org/cinnamon-spice.info.json","name":"Valid: All properties oneOf"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"$schema":"../../schemas/json/cinnamon-spice.info.json"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: "this_name_is valid until . or , then bye_bye" does not match "^[A-Za-z][A-Za-z[ 	
+ ﻿  ][0-9]_-]*$" (at /jobs)
+error: {"machine":{"image":"ubuntu-2204:current"},"resource_class":"windows.2xlarge"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /executors/linux-on-windows)
+error: {"bar":{"requires":[{"foo":"invalid_job_status"}]}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /workflows/test-workflow/jobs/1)
+error: null is not of type "object"
+error: "StyleDoesNotExist" is not one of "Chromium", "Google" or 14 other candidates (at /BasedOnStyle)
+error: -4 is less than the minimum of 0 (at /IndentWidth)
+error: null is not of type "object"
+error: "StyleDoesNotExist" is not one of "Chromium", "Google" or 14 other candidates (at /BasedOnStyle)
+error: -4 is less than the minimum of 0 (at /IndentWidth)
+error: {"File":"/abs/path/to/an/index.idx","Server":"my.index.server.com:50051"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /Index/External)
+error: "bindings" is a required property
+error: Additional properties are not allowed ('readOnly' was unexpected) (at /spec/template/spec/containers/0/volumeMounts/0)
+error: 1234 is not of type "string" (at /metadata/name)
+error: Additional properties are not allowed ('readOnly' was unexpected) (at /spec/template/spec/containers/0/volumeMounts/0)
+error: 1234 is not of type "string" (at /metadata/name)
+error: "8080" is not of type "integer" (at /spec/template/spec/containers/0/ports/0/containerPort)
+error: "--version" is not of type "array" (at /steps/0/args)
+error: [{"args":["--version"],"name":"hashicorp/terraform"}] is not of type "object"
+error: {"imports":null} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: null is not of type "object"
+error: {"contexts":[{"name":"Context name"}]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"contexts":[{"terms":[{"definition":"A term with an invalid schema in the definitions.yml"}]}]} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: "foo/bar.baz###!&^%" does not match "^[a-z0-9_]+/[a-z0-9_\-.]+$" (at /libraries/0)
+error: "body" is a required property
+error: "UnknownRender" is not one of "1C Enterprise", "1c enterprise" or 1770 other candidates (at /body/0/attributes/render)
+error: {"runs-on":"ubuntu-latest","steps":[{"name":"foo"},{"name":"foo","run":"foo"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/foo)
+error: {"pull_request":{"ignore-paths":["foo.yaml"]}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /on)
+error: "on" is a required property
+error: "jobs" is a required property
+error: {"env":"production","runs-on":"ubuntu-latest","steps":[{"uses":"actions/checkout@v1"},{"uses":"actions/setup-node@v1","with":{"node-version":"12"}},{"env":"NODE_ENV=${{env}}","run":"npm run build"},{"run":"npm test"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/with)
+error: {"pages":"execute"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /permissions)
+error: {"files":"read"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /permissions)
+error: 123 is not valid under any of the schemas listed in the 'oneOf' keyword (at /permissions)
+error: "speak-all" is not valid under any of the schemas listed in the 'oneOf' keyword (at /permissions)
+error: {"workflow_call":{"inputs":{"constraints":{"default":"","required":false}},"secrets":{"api_token":{"required":true}}}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /on)
+error: {"secrets":{"api_token":"${{ secrets.API_TOKEN }}"},"uses":"./.github/workflows/somefile.exe"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/build-and-publish)
+error: {"secrets":{"api_token":"${{ secrets.API_TOKEN }}"},"uses":"some-other@String.com"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/build-and-publish)
+error: {"runs-on":null,"steps":[{"run":"echo 'Hello from self-hosted ${{ runner.os }}'"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/self-hosted-custom)
+error: {"runs-on":"ubuntu-latest","steps":[{"name":"Checkout out monorepo"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/a)
+error: {"runs-on":"ubuntu-latest","steps":[{"uses":"actions/checkout@v1"},{"uses":"actions/setup-node@v1","with":"{\"node-version\":\"12\"}"},{"run":"npm run lint"},{"run":"npm test"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /jobs/with)
+error: {"workflow_dispatch":{"inputs":{"bool":{"default":"true","description":"bool","required":false,"type":"boolean"}}}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /on)
+error: {"workflow_dispatch":{"inputs":{"choice":{"description":"choice","required":false,"type":"choice"}}}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /on)
+error: {"workflow_dispatch":{"inputs":{"string":{"default":true,"description":"string","required":false,"type":"string"}}}} is not valid under any of the schemas listed in the 'oneOf' keyword (at /on)
+error: {"get":"/query/auto-map-all","post":"/query/auto-map-all","selector":"~.QueryParamsTest.Echo"} is valid under more than one of the schemas listed in the 'oneOf' keyword (at /gateway/endpoints/0)
+error: Additional properties are not allowed ('some_random_key' was unexpected)
+error: null is not of type "array" (at /hosts)
+error: Additional properties are not allowed ('extraProperty' was unexpected) (at /platform)
+error: "ALPINE_lower" does not match "^([A-Z]|[0-9]|_)+$" (at /platform/buildConfig)
+error: "license" is a required property (at /platform)
+error: "alpineB with some extra words to make it more than 30 characters" is longer than 30 characters (at /platform/name)
+error: "query" is a required property (at /resources/0/configuration)
+error: "sourceArtifactory" is a required property (at /resources/0/configuration)
+error: Additional properties are not allowed ('query1', 'sourceArtifactory2' were unexpected) (at /resources/0/configuration)
+error: Additional properties are not allowed ('sourceArtifactorys' was unexpected) (at /resources/0/configuration)
+error: "sourceArtifactory" is a required property (at /resources/0/configuration)
+error: Additional properties are not allowed ('interval1' was unexpected) (at /resources/0/configuration)
+error: "interval" is a required property (at /resources/0/configuration)
+error: "serviceName" is a required property (at /resources/0/configuration)
+error: "cityName" is a required property (at /resources/0/configuration)
+error: "siteName" is a required property (at /resources/0/configuration)
+error: "countryCodes" is a required property (at /resources/0/configuration)
+error: "sourceDistribution" is a required property (at /resources/0/configuration)
+error: Additional properties are not allowed ('cityName1', 'countryCodes1', 'serviceName1', 'siteName1', 'sourceDistribution1' were unexpected) (at /resources/0/configuration)
+error: Additional properties are not allowed ('sourceArtifactory1' was unexpected) (at /resources/0/configuration)
+error: "sourceArtifactory" is a required property (at /resources/0/configuration)
+error: "path" is a required property (at /resources/0/configuration)
+error: "sourceArtifactory" is a required property (at /resources/0/configuration)
+error: "chart" is a required property (at /resources/0/configuration)
+error: "version" is a required property (at /resources/0/configuration)
+error: "registry" is a required property (at /resources/0/configuration)
+error: "imageName" is a required property (at /resources/0/configuration)
+error: "imageTag" is a required property (at /resources/0/configuration)
+error: Additional properties are not allowed ('unwanted' was unexpected) (at /resources/0/configuration)
+error: Additional properties are not allowed ('unwanted' was unexpected) (at /resources/0/configuration)
+error: "webhookName" is a required property (at /resources/0/configuration)
+error: Additional properties are not allowed ('unwanted' was unexpected) (at /resources/0/configuration)
+error: "webhookName" is a required property (at /resources/0/configuration)
+error: "configuration" is a required property (at /resources/0)
+error: Additional properties are not allowed ('unwanted' was unexpected) (at /resources/0)
+error: "version" is a required property (at /resources/0/configuration)
+error: "sourceDistribution" is a required property (at /resources/0/configuration)
+error: {"fileLocation":"."} is not valid under any of the schemas listed in the 'anyOf' keyword (at /resources/0/configuration)
+error: null is not of type "object" (at /resources/0/configuration)
+error: "execution" is a required property (at /pipelines/0/steps/0)
+error: "releaseBundleName" is a required property (at /pipelines/0/steps/0/configuration)
+error: "releaseBundleVersion" is a required property (at /pipelines/0/steps/0/configuration)
+error: "dockerImageName" is a required property (at /pipelines/0/steps/0/configuration)
+error: "dockerImageTag" is a required property (at /pipelines/0/steps/0/configuration)
+error: "configuration" is a required property (at /pipelines/0/steps/0)
+error: "inputSteps" is a required property (at /pipelines/0/steps/0/configuration)
+error: "targetRepository" is a required property (at /pipelines/0/steps/0/configuration)
+error: "targetRepository" is a required property (at /pipelines/0/steps/0/configuration)
+error: "gradleCommand" is a required property (at /pipelines/0/steps/0/configuration)
+error: "releaseName" is a required property (at /pipelines/0/steps/0/configuration)
+error: "chartPath" is a required property (at /pipelines/0/steps/0/configuration)
+error: Additional properties are not allowed ('random' was unexpected) (at /pipelines/0/steps/0)
+error: Additional properties are not allowed ('random' was unexpected) (at /pipelines/0/steps/0)
+error: "configuration" is a required property (at /pipelines/0/steps/0)
+error: "execution" is a required property (at /pipelines/0/steps/0)
+error: "targetRepository" is a required property (at /pipelines/0/steps/0/configuration)
+error: "configuration" is a required property (at /pipelines/0/steps/0)
+error: "WrongStepName" is not one of "Bash", "CreateReleaseBundle" or 26 other candidates (at /pipelines/0/steps/0/type)
+error: "steps" is a required property (at /pipelines/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: "type" is a required property (at /resources/0)
+error: "configuration" is a required property (at /resources/0)
+error: {"_global_variables":{"is_invalid_yml":true}} is not valid under any of the schemas listed in the 'anyOf' keyword
+error: {"legacySortOptions":{"orderFirst":["Namespace"],"orderLast":["Deployment"]},"order":"fifo"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /sortOptions)
+error: "bad_value" is not one of "meta", "success" or 7 other candidates (at /skip_output/0)
+error: null is not of type "object"
+error: "notaloglevel" is not one of "all", "trace" or 6 other candidates (at /loggerLevel)
+error: "72z" is not valid under any of the schemas listed in the 'oneOf' keyword (at /collectPeriod)
+error: 1 is not of type "string" (at /otel/otel.exporter.otlp.metrics.endpoint)
+error: 2 is not of type "string" (at /otel/otel.exporter.otlp.metrics.protocol)
+error: 2 is not one of "grpc", "http/protobuf" or "noop" (at /otel/otel.exporter.otlp.metrics.protocol)
+error: null is not of type "object" (at /resourceGroups)
+error: {"type":"module"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /extra_javascript/1)
+error: "site_name" is a required property
+error: {"data":{"bad_url":"http://hello"},"id":"google-chat-123","type":"google-chat"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /notifications/1)
+error: Additional properties are not allowed ('extrafields' was unexpected) (at /probes/0)
+error: "id" is a required property (at /probes/0)
+error: {"bad_query":"response.status != 200","message":"response status message"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /probes/0/alerts/0)
+error: "url" is a required property (at /probes/0/requests/0)
+error: "1" is not of type "integer" (at /probes/0/recoveryThreshold)
+error: "version" is a required property
+error: {"required":["dimension"]} is not allowed for {"dimension":"W","type":"Switch"} (at /items/MyWrongNumberItem)
+error: "Number" was expected (at /items/MyWrongNumberItem/type)
+error: "Number" was expected (at /items/MyWrongGroupItem/group/type)
+error: {"required":["dimension"]} is not allowed for {"dimension":"W","type":"Switch"} (at /items/MyWrongGroupItem/group)
+error: {"required":["itemDimension"]} is not allowed for {"itemDimension":"W","itemType":"Switch"} (at /things/my:thing:uuid/channels/channel_1)
+error: "Number" was expected (at /things/my:thing:uuid/channels/channel_1/itemType)
+error: {"anyOf":[{"required":["kind"]},{"required":["itemType"]}]} is not allowed for {"kind":"state","type":"switch"} (at /things/my:thing:uuid/channels/channel_1)
+error: {"anyOf":[{"required":["kind"]},{"required":["itemType"]}]} is not allowed for {"itemType":"String","type":"switch"} (at /things/my:thing:uuid/channels/channel_1)
+error: {"required":["itemDimension"]} is not allowed for {"itemDimension":"String","type":"switch"} (at /things/my:thing:uuid/channels/channel_1)
+error: {"apiVersion":"srm/v1","kind":"ServiceReliabilityManifest","metadata":{"name":"invalid-duration","team":"platform","tier":"standard"},"spec":{"ownership":{"team":"platform"},"slos":{"availability":{"target":0.999},"latency":{"p99":"500 milliseconds","target":0.99}},"type":"api"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"apiVersion":"srm/v1","kind":"SLODefinition","metadata":{"name":"invalid-kind","team":"platform","tier":"standard"},"spec":{"ownership":{"team":"platform"},"slos":{"availability":{"target":0.999}},"type":"api"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"apiVersion":"srm/v1","kind":"ServiceReliabilityManifest","metadata":{"name":"invalid-service","team":"platform","tier":"standard"},"spec":{"ownership":{"team":"platform"},"slos":{"availability":{"target":99.9}},"type":"api"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"apiVersion":"srm/v1","kind":"ServiceReliabilityManifest","metadata":{"name":"my-cron-job","team":"platform","tier":"standard"},"spec":{"ownership":{"team":"platform"},"slos":{"availability":{"target":0.999}},"type":"cron"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"apiVersion":"srm/v1","kind":"ServiceReliabilityManifest","metadata":{"team":"platform","tier":"standard"},"spec":{"ownership":{"team":"platform"},"slos":{"availability":{"target":0.999}},"type":"api"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: "('', 'c3pl1', 'c3pl3')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){1}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{2}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('', '', 'RR')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('', 'C10_bdmumu', 'RR')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('', 'C10p_bdmumu', 'RR')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10_bdmumu', 'C10_bdmumu', 'II')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10_bdmumu', 'C10_bdmumu', 'RR')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10_bdmumu', 'C10p_bdmumu', 'II')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10_bdmumu', 'C10p_bdmumu', 'RR')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10p_bdmumu', 'C10p_bdmumu', 'II')" (at /data/observable_uncertainties)
+error: {"$ref":"#/definitions/stringifiedTuplePattern"} is not allowed for "('C10p_bdmumu', 'C10p_bdmumu', 'RR')" (at /data/observable_uncertainties)
+error: "oops!" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){1}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{2}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: {"properties":{"observable_central":{}},"required":["observable_central"],"type":"object"} is not allowed for {"observable_central":{"('', '')":[0.227,0.227,0.227],"('', 'phil3_11')":[7737.419,-19812.903,-19812.903],"('', 'phil3_22')":[-19812.903,7737.419,-19812.903],"('', 'phil3_33')":[0,0,27550.322],"('phil3_11', 'phil3_11')":[929672417.073,1295705157.301,1295705157.301],"('phil3_11', 'phil3_22')":[1390270692.689,1390270692.689,2591410314.602],"('phil3_11', 'phil3_33')":[0,0,-1201139621.914],"('phil3_22', 'phil3_22')":[1295705157.301,929672417.073,1295705157.301],"('phil3_22', 'phil3_33')":[0,0,-1201139621.914],"('phil3_33', 'phil3_33')":[0,0,835106881.686]},"polynomial_central":{"('', '')":[0.227,0.227,0.227],"('', 'phil3_11')":[7737.419,-19812.903,-19812.903],"('', 'phil3_22')":[-19812.903,7737.419,-19812.903],"('', 'phil3_33')":[0,0,27550.322],"('phil3_11', 'phil3_11')":[929672417.073,1295705157.301,1295705157.301],"('phil3_11', 'phil3_22')":[1390270692.689,1390270692.689,2591410314.602],"('phil3_11', 'phil3_33')":[0,0,-1201139621.914],"('phil3_22', 'phil3_22')":[1295705157.301,929672417.073,1295705157.301],"('phil3_22', 'phil3_33')":[0,0,-1201139621.914],"('phil3_33', 'phil3_33')":[0,0,835106881.686]}} (at /data)
+error: 17.5 is not of type "array" (at /data/observable_central/('', ''))
+error: {"('', '')":[0.227,0.227,0.227],"('', 'phil3_11')":[7737.419,-19812.903,-19812.903]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: "oops!" is not valid under any of the schemas listed in the 'anyOf' keyword (at /metadata/reproducibility/0/inputs/m1)
+error: {"corr":[[1.0,0.3],[0.3,1.0]],"mean":[1.0,2.0]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /metadata/reproducibility/0/inputs/('m2','m3'))
+error: {"corr":[[1.0,0.3],[0.3,1.0]],"mean":["oops!",2.0],"std":[0.1,0.1]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /metadata/reproducibility/0/inputs/('m2','m3'))
+error: 1.5 is not of type "string" (at /metadata/parameters/3)
+error: ["oops!","oops!","oops!"] is not valid under any of the schemas listed in the 'oneOf' keyword (at /metadata/scale)
+error: "oops!" is not valid under any of the schemas listed in the 'oneOf' keyword (at /metadata/scale)
+error: failed to fetch schema: https://json.schemastore.org/popxf-2.0.json: http status: 404
+error: {} is not valid under any of the schemas listed in the 'anyOf' keyword (at /data)
+error: Additional properties are not allowed ('extra' was unexpected)
+error: Additional properties are not allowed ('extra' was unexpected) (at /metadata)
+error: "basis" is a required property (at /metadata)
+error: "data" is a required property
+error: "polynomial_names" is a required property (at /metadata)
+error: "eft" is a required property (at /metadata/basis/wcxf)
+error: "expression" is a required property (at /metadata/observable_expressions/1)
+error: {"distribution_description":"Uniform distribution with boundaries $a$ and $b$.","distribution_parameters":{"a":0,"b":1}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /metadata/reproducibility/0/inputs/m4)
+error: "metadata" is a required property
+error: "polynomial_central" is a required property (at /data)
+error: {"properties":{"observable_central":{}},"required":["observable_central"],"type":"object"} is not allowed for {"observable_central":{"('', '', 'RR')":[1.013e-10],"('', 'C10_bdmumu', 'RR')":[-4.863e-11],"('', 'C10p_bdmumu', 'RR')":[4.863e-11],"('C10_bdmumu', 'C10_bdmumu', 'II')":[5.835e-12],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[5.835e-12],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[-1.167e-11],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[-1.167e-11],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[5.835e-12],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[5.835e-12]},"observable_uncertainties":{"total":{"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]}}} (at /data)
+error: "('', '', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*'[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*('[IR]'[ 	
+ ﻿  ]*,?)?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', '', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){3}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{4}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', '', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'II')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: "('C10p_bdmumu', 'C10p_bdmumu', 'RR')" does not match "^\([ 	
+ ﻿  ]*('[^']*'[ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*){4}'[^']*'([ 	
+ ﻿  ]*,[ 	
+ ﻿  ]*'[IR]{5}')?[ 	
+ ﻿  ]*,?[ 	
+ ﻿  ]*\)$" (at /data/observable_central)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: {"('', '', 'RR')":[6.052e-12],"('', 'C10_bdmumu', 'RR')":[2.859e-12],"('', 'C10p_bdmumu', 'RR')":[2.859e-12],"('C10_bdmumu', 'C10_bdmumu', 'II')":[3.414e-13],"('C10_bdmumu', 'C10_bdmumu', 'RR')":[3.414e-13],"('C10_bdmumu', 'C10p_bdmumu', 'II')":[6.827e-13],"('C10_bdmumu', 'C10p_bdmumu', 'RR')":[6.827e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'II')":[3.414e-13],"('C10p_bdmumu', 'C10p_bdmumu', 'RR')":[3.414e-13]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /data/observable_uncertainties/total)
+error: "observable_expressions" is a required property (at /metadata)
+error: "polynomial_central" is a required property (at /data)
+error: "polynomial_names" is a required property (at /metadata)
+error: "polynomial_names" is a required property (at /metadata)
+error: "scale" is a required property (at /metadata)
+error: "name" is a required property (at /metadata/reproducibility/0/tool)
+error: [] is not valid under any of the schemas listed in the 'oneOf' keyword
+error: ["...","cluster"] is not valid under any of the schemas listed in the 'anyOf' keyword (at /route/group_by)
+error: ["...","cluster"] is not valid under any of the schemas listed in the 'anyOf' keyword (at /route/routes/0/group_by)
+error: {"path":"svg/","transformer":[{"package":"vector_graphics_compiler"}]} is not valid under any of the schemas listed in the 'oneOf' keyword (at /flutter/assets/0)
+error: ["not allowed here"] is not valid under any of the schemas listed in the 'oneOf' keyword (at /executables/cowsay)
+error: "IM" does not match "[a-z0-9_]" (at /name)
+error: Additional properties are not allowed ('templeos' was unexpected) (at /platforms)
+error: "some" is not valid under any of the schemas listed in the 'oneOf' keyword (at /publish_to)
+error: null is not of type "object"
+error: "path/to/image/in/package.png" is not of type "object" (at /screenshots/1)
+error: {"changed-files":[{"any-globs-to-any-files":["compose/*","compose/**/*"]}]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /apps/0)
+error: {"changing-file":[{"any-glob-to-any-file":["compose/*","compose/**/*"]}]} is not valid under any of the schemas listed in the 'anyOf' keyword (at /apps/0)
+error: {"changed-files":[{"any-glob-to-any-file":["compose/*","compose/**/*"]}]} is not of type "array" (at /apps)
+error: {"project":"Name of the Project","solution":"Name of the Solution"} is not valid under any of the schemas listed in the 'anyOf' keyword (at /dotnet)
+error: Additional properties are not allowed ('toast' was unexpected)
+error: "true" is not of type "boolean" (at /targetCustomizations/0/doNotDeploy)
+error: Additional properties are not allowed ('toast' was unexpected)
+error: {"items":[{"condition":"fedora","id":"cf06e919-02b7-41a7-a03f-4239592f3c12","method":"package_install","name":"NTP service","params":{"name":"/bin/true \"# ${node.inventory[os][fullName]}\""}}],"method":"package_install","name":"my block","params":{"name":"htop","version":"2.3.4"}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /items/0)
+error: {"path":"./path/to/plugin.jar","type":"maven"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /plugins/0)
+error: failed to read local schema ./schemastore/src/negative_test/sil-kit-participant-configuration/ParticipantConfiguration.schema.json: No such file or directory (os error 2)
+error: Additional properties are not allowed ('SomeAdditionalField' was unexpected)
+error: Additional properties are not allowed ('EnableDomainSockets' was unexpected) (at /Middleware)
+error: 5 is not of type "object"
+error: failed to read local schema ./schemastore/src/negative_test/sil-kit-registry-configuration/Registryonfiguration.schema.json: No such file or directory (os error 2)
+error: Additional properties are not allowed ('SomeAdditionalField' was unexpected)
+error: Additional properties are not allowed ('SomeAdditionalField' was unexpected)
+error: Additional properties are not allowed ('LogFromRemotes' was unexpected) (at /Logging)
+error: Additional properties are not allowed ('LogFromRemotes' was unexpected) (at /Logging)
+error: "Remote" is not one of "File" or "Stdout" (at /Logging/Sinks/2/Type)
+error: 5 is not of type "object"
+error: Additional properties are not allowed ('refactor' was unexpected)
+error: "2.2.0" was expected (at /version)
+error: "version" is a required property
+error: "3.2.0" was expected (at /version)
+error: {"name":"can"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /can-networks/0)
+error: "version" is a required property
+error: "4.0.0" was expected (at /version)
+error: Additional properties are not allowed ('offline-config' was unexpected)
+error: "version" is a required property
+error: "4.1.0" was expected (at /version)
+error: "version" is a required property
+error: "4.2.0" was expected (at /version)
+error: "version" is a required property
+error: "1.0.0" was expected (at /version)
+error: "version" is a required property
+error: null is not of type "object"
+error: null is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger":{"node":"localhost","port":5315,"reset":true,"run":true,"type":"isystem"}},"version":1.0} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"","path-to-symbol-file":"symbols.elf"},"node":"localhost","port":1234,"run":true,"type":"gdb"}},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"gdb.exe","path-to-symbol-file":""},"node":"localhost","port":1234,"run":true,"type":"gdb"}},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"dummyPath/gdb.exe","path-to-symbol-file":"dummyPath/app.elf"},"node":"localhost","port":1234,"run":true,"type":"gdb"}},"default-debugger":"MyDebugger1","version":1.0} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"dummyPath/gdb.exe","path-to-symbol-file":"dummyPath/app.elf"},"node":"localhost","port":5315,"run":false,"type":"gdb"}},"version":1.1} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-symbol-file":"symbols.elf"},"node":"localhost","port":1234,"type":"gdb"}},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"node":"localhost","port":1234,"run":true,"type":"gdb"}},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"dummyPath/gdb.exe","path-to-symbol-file":"dummyPath/app.elf"},"node":"localhost","port":5315,"run":false,"type":"gdb"}},"version":1.1} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"gdb":{"path-to-gdb-client":"gdb.exe"},"node":"localhost","port":1234,"run":true,"type":"gdb"}},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","port":1234,"run":"ABC","type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"ABC%SDFDF":{"node":"localhost","port":5315,"type":"isystem"}},"default-debugger":"MyDebugger1","version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"":{"node":"localhost","port":5315,"type":"isystem"}},"default-debugger":"MyDebugger1","version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"isystem":{"disable-winidea-polling":true},"lauterbach":{"pack-len":512},"port":5315,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger":{"node":"localhost","port":5315,"type":"isystem"}},"default-debugger":null,"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"lauterbach":{"pack-len":2048},"node":"localhost","port":2000,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","port":1234567890,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","port":"InvalidPort","type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":{},"port":1234,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","port":5315,"type":"invalid"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{},"version":"1.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"port":5315,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: "ABC" is not of type "object"
+error: "ABC" is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"node":"localhost","port":5315,"reset":true,"run":true}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"node":"localhost","port":5315,"reset":true,"run":true,"type":"isystem"}}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"debugger1":{"SomeSetting":"BlaBlub","node":"localhost","port":5315,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"SomeSetting":"ABC","debuggers":{"debugger1":{"node":"localhost","port":5315,"type":"lauterbach"}},"version":"1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"node":"localhost","port":5315,"reset":true,"run":true,"type":"isystem"}},"version":"0.1"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"debuggers":{"MyDebugger1":{"node":"localhost","port":5315,"reset":true,"run":true,"type":"isystem"}},"version":"1.2b"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: "1.0.0" was expected (at /version)
+error: "version" is a required property
+error: {"test-fixture":"TestFixture"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"test-group":"TestGroup"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"capl-completion":"dsaf","dotnet-completion":"foobar","test-fixture":"test fixture"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"capl-preparation":"dsaf","python-preparation":"foobar","test-fixture":"test fixture"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"capl-test-case":"foo","variant-dependencies":"A == B"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"capl-test-case":"foo","variant-dependencies":5} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"id":"Python_ID","param-values":[[1.0,2.0],[3.0,4.0,5.0],[6.0]],"python-test-sequence-list":"MyPythonTestSequence"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/1)
+error: {"combinatorics":"pairwiseee","dotnet-test-case-list":"MyDotNetTestCase","id":111,"param-values":[[1,2],[3,4],[5,6]],"title":"DotNetTestCaseList"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/2)
+error: {"capl-test-case-list":"MyCAPLTestCase","combinatorics":"pairwise","id":"CAPL_ID","param-vectors":[[1,2,3],[4,5,6]],"test-case-title":"CAPL Test Case {CallIndex} {param1}","title":"CAPLTestCaseList"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/0)
+error: {"id":"Python_ID","python-test-case-list":"MyPythonTestCase"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/1)
+error: {"dotnet-test-case-list":"MyDotNetTestCase","param-values":[[1,"foo"],[2,"bar"]],"param-vectors":[[1,"foo"],[2,"bar"]],"title":"DotNetTestCaseList"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/2)
+error: {"capl-test-sequence-list":"MyCAPLTestSequence","param-vectors":[[1,2,3],[4,5,6]],"test-case-title":"CAPL Test {CallIndex} {param1}"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /test-tree/3)
+error: {"test-unit-information":{"captiooon":"MyCaption"},"version":"2.1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"version":"1.1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"test-unit-information":{"additional-information":[{"CustomerName":"X012"}]},"version":"2.0.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"test-unit-information":{"caption":"MyCaption2"}} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"test-unit-implementation":[{"source-file-path":"Source.vba"}],"version":"2.1.0"} is not valid under any of the schemas listed in the 'oneOf' keyword
+error: {"job":{"description":"invalid workspace-scheme","name":"d","run":"...","workspace-scheme":"invalid"}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /0)
+error: {"jobs":{"name":"minimal"}} is not valid under any of the schemas listed in the 'anyOf' keyword (at /0)
+error: {"foo":"bar"} is not of type "array"
+error: "#/definitions/vector::config::sink::SinkOuter<alloc::string::String>" is not a "uri-reference" (at /allOf/0/properties/sinks/additionalProperties/$ref)
+error: "#/definitions/vector::config::transform::TransformOuter<alloc::string::String>" is not a "uri-reference" (at /allOf/0/properties/transforms/additionalProperties/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /allOf/1/properties/data_dir/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /allOf/1/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/codecs::decoding::DeserializerConfig/oneOf/9/allOf/0/properties/vrl/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/core::option::Option<vector::sinks::influxdb::InfluxDb1Settings>/oneOf/1/properties/password/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>/oneOf/1/allOf/0/properties/client_metadata_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::amqp::AmqpConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::util::uri::UriSerde>" is not a "uri-reference" (at /definitions/vector::config::sink::SinkOuter<alloc::string::String>/allOf/0/properties/healthcheck/properties/uri/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::util::uri::UriSerde>" is not a "uri-reference" (at /definitions/vector::config::sink::SinkOuter<alloc::string::String>/allOf/0/properties/healthcheck_uri/$ref)
+error: "#/definitions/vector_common::id::Inputs<alloc::string::String>" is not a "uri-reference" (at /definitions/vector::config::sink::SinkOuter<alloc::string::String>/allOf/0/properties/inputs/$ref)
+error: "#/definitions/vector_common::id::Inputs<alloc::string::String>" is not a "uri-reference" (at /definitions/vector::config::transform::TransformOuter<alloc::string::String>/allOf/0/properties/inputs/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::gcp::GcpAuthConfig/properties/api_key/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::kafka::KafkaAuthConfig/properties/sasl/oneOf/1/properties/password/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::kafka::KafkaAuthConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::secrets::aws_secrets_manager::AwsSecretsManagerBackend/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::amqp::config::AmqpSinkConfig/allOf/0/properties/routing_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::appsignal::config::AppsignalConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::aws_cloudwatch_logs::config::CloudwatchLogsSinkConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::aws_cloudwatch_metrics::CloudWatchMetricsSinkConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::ConfigValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::aws_kinesis::config::KinesisSinkBaseConfig/allOf/0/properties/partition_key_field/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::aws_kinesis::config::KinesisSinkBaseConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::BulkSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::aws_s3::config::S3SinkConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::sinks::aws_s3::config::S3SinkConfig/allOf/0/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::aws_s3::config::S3SinkConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::aws_s_s::config::BaseSSSinkConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::axiom::AxiomConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::axiom::AxiomConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::BulkSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::azure_blob::config::AzureBlobSinkConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sinks::azure_blob::config::AzureBlobSinkConfig/allOf/0/properties/connection_string/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::azure_monitor_logs::config::AzureMonitorLogsConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::azure_monitor_logs::config::AzureMonitorLogsConfig/properties/time_generated_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::azure_monitor_logs::config::AzureMonitorLogsConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::clickhouse::config::ClickhouseConfig/properties/auth/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::clickhouse::config::ClickhouseConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::clickhouse::config::ClickhouseConfig/properties/database/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::clickhouse::config::ClickhouseConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::databend::config::DatabendConfig/properties/auth/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::databend::config::DatabendConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::databend::config::DatabendConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sinks::datadog::LocalDatadogCommonConfig/properties/default_api_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::datadog::LocalDatadogCommonConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::util::buffer::compression::Compression>" is not a "uri-reference" (at /definitions/vector::sinks::datadog::logs::config::DatadogLogsConfig/allOf/0/properties/compression/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::util::buffer::compression::Compression>" is not a "uri-reference" (at /definitions/vector::sinks::datadog::traces::config::DatadogTracesConfig/allOf/0/properties/compression/$ref)
+error: "#/definitions/core::option::Option<vector::aws::region::RegionOrEndpoint>" is not a "uri-reference" (at /definitions/vector::sinks::elasticsearch::config::ElasticsearchConfig/properties/aws/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::elasticsearch::config::ElasticsearchConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::elasticsearch::config::ElasticsearchConfig/properties/bulk/properties/version/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::ConfigValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::elasticsearch::config::ElasticsearchConfig/properties/id_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::elasticsearch::config::ElasticsearchConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::sinks::file::FileSinkConfig/allOf/0/properties/timezone/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::BulkSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::cloud_storage::GcsSinkConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::cloud_storage::GcsSinkConfig/allOf/0/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::cloud_storage::GcsSinkConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::pubsub::PubsubConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::stackdriver::logs::config::StackdriverConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::ConfigValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::stackdriver::logs::config::StackdriverConfig/allOf/0/properties/severity_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::stackdriver::logs::config::StackdriverConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::gcp::stackdriver::metrics::config::StackdriverConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::gcp_chronicle::chronicle_unstructured::ChronicleUnstructuredConfig/allOf/0/properties/namespace/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::gcp_chronicle::chronicle_unstructured::ChronicleUnstructuredConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::greptimedb::GreptimeDBDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::logs::config::GreptimeDBLogsConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::logs::config::GreptimeDBLogsConfig/properties/password/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::logs::config::GreptimeDBLogsConfig/properties/pipeline_version/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::logs::config::GreptimeDBLogsConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::greptimedb::GreptimeDBDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::metrics::config::GreptimeDBMetricsConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::metrics::config::GreptimeDBMetricsConfig/properties/password/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::greptimedb::metrics::config::GreptimeDBMetricsConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::http::config::HttpSinkConfig/allOf/0/properties/auth/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::http::config::HttpSinkConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::http::config::HttpSinkConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::splunk_hec::common::util::SplunkHecDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::humio::logs::HumioLogsConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::logs::HumioLogsConfig/properties/event_type/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::logs::HumioLogsConfig/properties/index/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::logs::HumioLogsConfig/properties/source/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::humio::logs::HumioLogsConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::splunk_hec::common::util::SplunkHecDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::humio::metrics::HumioMetricsConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::metrics::HumioMetricsConfig/allOf/0/properties/event_type/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::metrics::HumioMetricsConfig/allOf/0/properties/index/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::humio::metrics::HumioMetricsConfig/allOf/0/properties/source/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::humio::metrics::HumioMetricsConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/0/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/0/properties/message_key/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/0/properties/source_type_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::influxdb::InfluxDb1Settings>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/1/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::influxdb::InfluxDb2Settings>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::logs::InfluxDbLogsConfig/allOf/2/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::metrics::InfluxDbConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::influxdb::InfluxDb1Settings>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::metrics::InfluxDbConfig/allOf/1/$ref)
+error: "#/definitions/core::option::Option<vector::sinks::influxdb::InfluxDb2Settings>" is not a "uri-reference" (at /definitions/vector::sinks::influxdb::metrics::InfluxDbConfig/allOf/2/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::loki::config::LokiConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::loki::config::LokiConfig/properties/tenant_id/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::loki::config::LokiConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::mezmo::MezmoConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::mqtt::config::MqttSinkConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::nats::NatsAuthConfig>" is not a "uri-reference" (at /definitions/vector::sinks::nats::config::NatsSinkConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::nats::config::NatsSinkConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sinks::papertrail::PapertrailConfig/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::papertrail::PapertrailConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::prometheus::exporter::PrometheusExporterConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::prometheus::exporter::PrometheusExporterConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::aws::region::RegionOrEndpoint>" is not a "uri-reference" (at /definitions/vector::sinks::prometheus::remote_write::config::RemoteWriteConfig/properties/aws/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::prometheus::remote_write::config::RemoteWriteConfig/properties/tenant_id/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::prometheus::remote_write::config::RemoteWriteConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sinks::pulsar::config::PulsarSinkConfig/properties/auth/oneOf/1/properties/token/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::sinks::pulsar::config::PulsarSinkConfig/properties/partition_key_field/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::sinks::pulsar::config::PulsarSinkConfig/properties/properties_key/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::RealtimeSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::sematext::logs::SematextLogsConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sinks::socket::SocketSinkConfig/allOf/1/oneOf/0/allOf/0/allOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::socket::SocketSinkConfig/allOf/1/oneOf/0/allOf/0/allOf/0/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::splunk_hec::common::util::SplunkHecDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/index/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/source/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/sourcetype/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/timestamp_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::logs::config::HecLogsSinkConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::splunk_hec::common::util::SplunkHecDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::metrics::config::HecMetricsSinkConfig/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::metrics::config::HecMetricsSinkConfig/properties/index/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::metrics::config::HecMetricsSinkConfig/properties/source/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::metrics::config::HecMetricsSinkConfig/properties/sourcetype/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sinks::splunk_hec::metrics::config::HecMetricsSinkConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sinks::statsd::config::StatsdSinkConfig/allOf/1/oneOf/0/allOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::statsd::config::StatsdSinkConfig/allOf/1/oneOf/0/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::vector::config::VectorConfig/properties/tls/$ref)
+error: "#/definitions/vector::sinks::util::batch::BatchConfig<vector::sinks::util::batch::BulkSizeBasedDefaultBatchSettings>" is not a "uri-reference" (at /definitions/vector::sinks::webhdfs::config::WebHdfsConfig/allOf/0/properties/batch/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sinks::websocket::config::WebSocketSinkConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sinks::websocket::config::WebSocketSinkConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sources::aws_kinesis_firehose::AwsKinesisFirehoseConfig/properties/access_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::aws_kinesis_firehose::AwsKinesisFirehoseConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::multiline_config::MultilineConfig>" is not a "uri-reference" (at /definitions/vector::sources::aws_s3::AwsS3Config/allOf/0/properties/multiline/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::aws_s3::AwsS3Config/allOf/0/properties/sqs/oneOf/1/allOf/0/properties/tls_options/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::aws_s3::AwsS3Config/allOf/0/properties/tls_options/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::aws_sqs::config::AwsSqsConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::datadog_agent::DatadogAgentConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::dnstap::DnstapConfig/allOf/0/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::dnstap::DnstapConfig/allOf/1/oneOf/0/allOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::dnstap::DnstapConfig/allOf/1/oneOf/0/allOf/0/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::dnstap::DnstapConfig/allOf/1/oneOf/0/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::docker_logs::DockerLogsConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::multiline_config::MultilineConfig>" is not a "uri-reference" (at /definitions/vector::sources::docker_logs::DockerLogsConfig/properties/multiline/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::exec::ExecConfig/properties/framing/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::exec::ExecConfig/properties/working_directory/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::file::FileConfig/properties/data_dir/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::file::FileConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::multiline_config::MultilineConfig>" is not a "uri-reference" (at /definitions/vector::sources::file::FileConfig/properties/multiline/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::file::FileConfig/properties/offset_key/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::file_descriptors::file_descriptor::FileDescriptorSourceConfig/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::file_descriptors::file_descriptor::FileDescriptorSourceConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::file_descriptors::stdin::StdinConfig/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::file_descriptors::stdin::StdinConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::fluent::FluentConfig/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::fluent::FluentConfig/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::fluent::FluentConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::gcp_pubsub::PubsubConfig/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::http::auth::HttpSourceAuthConfig>" is not a "uri-reference" (at /definitions/vector::sources::heroku_logs::LogplexConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::heroku_logs::LogplexConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::host_metrics::HostMetricsConfig/properties/cgroups/oneOf/1/properties/base/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::host_metrics::HostMetricsConfig/properties/cgroups/oneOf/1/properties/base_dir/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sources::http_client::client::HttpClientConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::http_client::client::HttpClientConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::http::auth::HttpSourceAuthConfig>" is not a "uri-reference" (at /definitions/vector::sources::http_server::SimpleHttpConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::sources::http_server::SimpleHttpConfig/properties/decoding/oneOf/1/oneOf/9/allOf/0/properties/vrl/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::http_server::SimpleHttpConfig/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::http_server::SimpleHttpConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::internal_logs::InternalLogsConfig/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::internal_metrics::InternalMetricsConfig/properties/tags/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::journald::JournaldConfig/properties/data_dir/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::journald::JournaldConfig/properties/journal_directory/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::journald::JournaldConfig/properties/journalctl_path/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::kubernetes_logs::Config/properties/data_dir/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::sources::kubernetes_logs::Config/properties/ingestion_timestamp_field/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::sources::kubernetes_logs::Config/properties/kube_config_file/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::sources::kubernetes_logs::Config/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::logstash::LogstashConfig/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::logstash::LogstashConfig/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::logstash::LogstashConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::nats::NatsAuthConfig>" is not a "uri-reference" (at /definitions/vector::sources::nats::NatsSourceConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::nats::NatsSourceConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sources::nginx_metrics::NginxMetricsConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::nginx_metrics::NginxMetricsConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::opentelemetry::OpentelemetryConfig/properties/grpc/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::opentelemetry::OpentelemetryConfig/properties/http/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::http::auth::HttpSourceAuthConfig>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::pushgateway::PrometheusPushgatewayConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::pushgateway::PrometheusPushgatewayConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::sources::util::http::auth::HttpSourceAuthConfig>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::remote_write::PrometheusRemoteWriteConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::remote_write::PrometheusRemoteWriteConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector::http::Auth>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::scrape::PrometheusScrapeConfig/properties/auth/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsConfig>" is not a "uri-reference" (at /definitions/vector::sources::prometheus::scrape::PrometheusScrapeConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::redis::RedisSourceConfig/properties/redis_key/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/0/allOf/0/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/0/allOf/0/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/0/allOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/0/allOf/0/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/0/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/1/allOf/0/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/1/allOf/0/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/2/allOf/0/properties/framing/$ref)
+error: "#/definitions/core::option::Option<codecs::decoding::FramingConfig>" is not a "uri-reference" (at /definitions/vector::sources::socket::SocketConfig/allOf/0/oneOf/3/allOf/0/properties/framing/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::splunk_hec::SplunkConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_common::sensitive_string::SensitiveString>" is not a "uri-reference" (at /definitions/vector::sources::splunk_hec::SplunkConfig/properties/token/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::statsd::StatsdConfig/oneOf/0/allOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::statsd::StatsdConfig/oneOf/0/allOf/0/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::statsd::StatsdConfig/oneOf/0/allOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalValuePath>" is not a "uri-reference" (at /definitions/vector::sources::syslog::SyslogConfig/allOf/0/properties/host_key/$ref)
+error: "#/definitions/core::option::Option<vector_core::tcp::TcpKeepaliveConfig>" is not a "uri-reference" (at /definitions/vector::sources::syslog::SyslogConfig/allOf/1/oneOf/0/properties/keepalive/$ref)
+error: "#/definitions/core::option::Option<vector_core::ipallowlist::IpAllowlistConfig>" is not a "uri-reference" (at /definitions/vector::sources::syslog::SyslogConfig/allOf/1/oneOf/0/properties/permit_origin/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsSourceConfig>" is not a "uri-reference" (at /definitions/vector::sources::syslog::SyslogConfig/allOf/1/oneOf/0/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_core::tls::settings::TlsEnableableConfig>" is not a "uri-reference" (at /definitions/vector::sources::vector::VectorConfig/properties/tls/$ref)
+error: "#/definitions/core::option::Option<vector_lookup::lookup_v2::optional_path::OptionalTargetPath>" is not a "uri-reference" (at /definitions/vector::transforms::aws_ec2_metadata::Ec2Metadata/properties/namespace/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::transforms::metric_to_log::MetricToLogConfig/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector::conditions::AnyCondition>" is not a "uri-reference" (at /definitions/vector::transforms::reduce::config::ReduceConfig/properties/ends_when/$ref)
+error: "#/definitions/core::option::Option<vector::conditions::AnyCondition>" is not a "uri-reference" (at /definitions/vector::transforms::reduce::config::ReduceConfig/properties/starts_when/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector::transforms::remap::RemapConfig/properties/file/$ref)
+error: "#/definitions/core::option::Option<vrl::compiler::datetime::TimeZone>" is not a "uri-reference" (at /definitions/vector::transforms::remap::RemapConfig/properties/timezone/$ref)
+error: "#/definitions/core::option::Option<vector::conditions::AnyCondition>" is not a "uri-reference" (at /definitions/vector::transforms::sample::config::SampleConfig/properties/exclude/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::transforms::sample::config::SampleConfig/properties/group_by/$ref)
+error: "#/definitions/core::option::Option<vector::conditions::AnyCondition>" is not a "uri-reference" (at /definitions/vector::transforms::throttle::ThrottleConfig/properties/exclude/$ref)
+error: "#/definitions/core::option::Option<vector::template::Template>" is not a "uri-reference" (at /definitions/vector::transforms::throttle::ThrottleConfig/properties/key_field/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector_core::tls::settings::TlsConfig/properties/ca_file/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector_core::tls::settings::TlsConfig/properties/crt_file/$ref)
+error: "#/definitions/core::option::Option<std::path::PathBuf>" is not a "uri-reference" (at /definitions/vector_core::tls::settings::TlsConfig/properties/key_file/$ref)
+error: {"allOf":[{"properties":{"field":{"$ref":"#/definitions/vector::template::Template","description":"Name of the field in the event to generate the metric."},"name":{"$ref":"#/definitions/core::option::Option<vector::template::Template>","description":"If not specified, `field` is used as the name of the metric.","title":"Overrides the name of the counter."},"namespace":{"$ref":"#/definitions/core::option::Option<vector::template::Template>","description":"Sets the namespace for the metric."},"tags":{"additionalProperties":{"description":"This may be a single value, a `null` for a bare tag, or an array of either.","oneOf":[{"$ref":"#/definitions/core::option::Option<vector::template::Template>","description":"A single tag value."},{"description":"An array of values to give to the same tag name.","items":{"$ref":"#/definitions/core::option::Option<vector::template::Template>"},"type":"array"}],"title":"Specification of the value of a created tag."},"description":"Both keys and values can be templated, allowing you to attach dynamic tags to events.","title":"Tags to apply to the metric.","type":["object","null"]}},"required":["field"],"type":"object"},{"description":"Specification of the type of an individual metric, and any associated data.","oneOf":[{"allOf":[{"description":"Specification of a counter derived from a log event.","properties":{"increment_by_value":{"default":false,"description":"Increments the counter by the value in `field`, instead of only by `1`.","type":"boolean"},"kind":{"$ref":"#/definitions/vector_core::event::metric::MetricKind","default":"incremental","description":"Metrics can be either absolute or incremental. Absolute metrics represent a sort of \"last write wins\" scenario,\nwhere the latest absolute value seen is meant to be the actual metric value.  In contrast, and perhaps intuitively,\nincremental metrics are meant to be additive, such that we don't know what total value of the metric is, but we know\nthat we'll be adding or subtracting the given value from it.\n\nGenerally speaking, most metrics storage systems deal with incremental updates. A notable exception is Prometheus,\nwhich deals with, and expects, absolute values from clients.","title":"Metric kind."}},"type":"object"},{"properties":{"type":{"const":"counter","description":"A counter."}},"required":["type"],"type":"object"}],"description":"A counter."},{"description":"A histogram.","properties":{"type":{"const":"histogram","description":"A histogram."}},"required":["type"],"type":"object"},{"description":"A gauge.","properties":{"type":{"const":"gauge","description":"A gauge."}},"required":["type"],"type":"object"},{"description":"A set.","properties":{"type":{"const":"set","description":"A set."}},"required":["type"],"type":"object"},{"description":"A summary.","properties":{"type":{"const":"summary","description":"A summary."}},"required":["type"],"type":"object"}]}],"description":"Specification of a metric derived from a log event."} is not valid under any of the schemas listed in the 'anyOf' keyword (at /definitions/vector::transforms::log_to_metric::LogToMetricConfig/properties/metrics/items)
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: failed to fetch schema: https://www.schemastore.org/manifest: http status: 404
+error: {"macos":{"xcode":"15.4.0"},"resource_class":"macos.m1.large.gen1"} is not valid under any of the schemas listed in the 'oneOf' keyword (at /executors/macos-rc)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-1.0/./devinit.schema-1.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-2.0/./devinit.schema-2.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-3.0/./devinit.schema-3.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-4.0/./devinit.schema-4.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-5.0/./devinit.schema-3.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/devinit.schema-6.0/./devinit.schema-4.0.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/djlint/./djlint.json: No such file or directory (os error 2)
+error: failed to fetch schema: http://localhost:8000/rc3-collection-0.0.3.json: io: Connection refused
+error: failed to fetch schema: http://localhost:8000/rc3-environment-0.0.3.json: io: Connection refused
+error: failed to fetch schema: http://localhost:8000/rc3-folder-0.0.3.json: io: Connection refused
+error: failed to fetch schema: http://localhost:8000/rc3-request-0.0.3.json: io: Connection refused
+error: failed to fetch schema: http://localhost:8000/rc3-settings-0.0.3.json: io: Connection refused
+error: failed to read local schema ./schemastore/src/test/sil-kit-participant-configuration/ParticipantConfiguration.schema.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
+error: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
+error: failed to compile schema: "#/definitions/vector::config::sink::SinkOuter<alloc::string::String>" is not a "uri-reference"
+Checked 1742 files in [TIME]. 1087 error(s) found.
+exit code: 1

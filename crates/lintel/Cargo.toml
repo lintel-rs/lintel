@@ -1,0 +1,21 @@
+[package]
+name = "lintel"
+version = "0.0.1"
+edition = "2021"
+description = "Validate JSON and YAML files against JSON Schema"
+license = "MIT"
+repository = "https://github.com/lintel-rs/lintel"
+homepage = "https://github.com/lintel-rs/lintel"
+keywords = ["json-schema", "validation", "yaml", "linter", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "../../README.md"
+
+[dependencies]
+lintel-check = { path = "../lintel-check" }
+bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+miette = { version = "7", features = ["fancy"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+anyhow = "1"
+
+[dev-dependencies]
+insta = { version = "1", features = ["filters"] }

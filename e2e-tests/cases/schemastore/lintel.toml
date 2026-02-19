@@ -1,0 +1,15 @@
+root = true
+exclude = ["./schemastore/src/negative_test/**"]
+
+[rewrite]
+"http://localhost:8000/" = "//schemastore/src/schemas/json/"
+"https://json.schemastore.org/" = "//schemastore/src/schemas/json/"
+"https://www.schemastore.org/" = "//schemastore/src/schemas/json/"
+
+# vector.json uses Rust-style $ref paths (e.g. core::option::Option<...>)
+# that are not valid URI references, causing schema compilation and format
+# validation failures.
+[[override]]
+files = ["**/vector.json", "**/test/vector/*"]
+schemas = ["**/vector.json"]
+validate_formats = false

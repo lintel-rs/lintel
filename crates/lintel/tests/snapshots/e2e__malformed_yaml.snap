@@ -1,0 +1,8 @@
+---
+source: crates/lintel/tests/e2e.rs
+assertion_line: 47
+expression: text
+---
+error: did not find expected ',' or ']' at line 4 column 5, while parsing a flow sequence at line 2 column 5
+Checked 1 files in [TIME]. 1 error(s) found.
+exit code: 1
