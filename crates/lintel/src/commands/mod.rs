@@ -33,7 +33,7 @@ pub fn merge_config(args: &mut ValidateArgs) {
         .map(std::path::PathBuf::from);
 
     let cfg_result = match &search_dir {
-        Some(dir) => lintel_check::config::find_and_load(dir).map(|opt| opt.unwrap_or_default()),
+        Some(dir) => lintel_check::config::find_and_load(dir).map(Option::unwrap_or_default),
         None => lintel_check::config::load(),
     };
 

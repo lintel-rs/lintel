@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// Run the `init` command: generate a `lintel.toml` with sensible defaults.
 pub fn run() -> Result<()> {

@@ -5,6 +5,10 @@ use crate::parsers;
 /// Walk `root` respecting `.gitignore`, returning files with known config extensions.
 ///
 /// Applies `excludes` glob patterns to filter results.
+///
+/// # Errors
+///
+/// Returns an error if the directory walk encounters an I/O error.
 pub fn discover_files(root: &str, excludes: &[String]) -> Result<Vec<PathBuf>, anyhow::Error> {
     let walker = ignore::WalkBuilder::new(root)
         .hidden(false) // don't skip dotfiles (e.g. .eslintrc.json)
@@ -49,40 +53,45 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn discovers_known_extensions() {
-        let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join("a.json"), "{}").unwrap();
-        fs::write(tmp.path().join("b.yaml"), "key: val").unwrap();
-        fs::write(tmp.path().join("c.yml"), "key: val").unwrap();
-        fs::write(tmp.path().join("d.json5"), "{}").unwrap();
-        fs::write(tmp.path().join("e.jsonc"), "{}").unwrap();
-        fs::write(tmp.path().join("f.txt"), "nope").unwrap();
-        fs::write(tmp.path().join("g.nix"), "{ }").unwrap();
+    fn discovers_known_extensions() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(tmp.path().join("a.json"), "{}")?;
+        fs::write(tmp.path().join("b.yaml"), "key: val")?;
+        fs::write(tmp.path().join("c.yml"), "key: val")?;
+        fs::write(tmp.path().join("d.json5"), "{}")?;
+        fs::write(tmp.path().join("e.jsonc"), "{}")?;
+        fs::write(tmp.path().join("f.txt"), "nope")?;
+        fs::write(tmp.path().join("g.nix"), "{ }")?;
 
-        let files = discover_files(tmp.path().to_str().unwrap(), &[]).unwrap();
+        let root = tmp.path().to_str().expect("temp dir should be valid UTF-8");
+        let files = discover_files(root, &[])?;
         assert_eq!(files.len(), 5);
         assert!(files.iter().all(|f| parsers::detect_format(f).is_some()));
+        Ok(())
     }
 
     #[test]
-    fn respects_exclude_patterns() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn respects_exclude_patterns() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("vendor");
-        fs::create_dir_all(&sub).unwrap();
-        fs::write(tmp.path().join("a.json"), "{}").unwrap();
-        fs::write(sub.join("b.json"), "{}").unwrap();
+        fs::create_dir_all(&sub)?;
+        fs::write(tmp.path().join("a.json"), "{}")?;
+        fs::write(sub.join("b.json"), "{}")?;
 
-        let files =
-            discover_files(tmp.path().to_str().unwrap(), &["**/vendor/**".to_string()]).unwrap();
+        let root = tmp.path().to_str().expect("temp dir should be valid UTF-8");
+        let files = discover_files(root, &["**/vendor/**".to_string()])?;
         assert_eq!(files.len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn discovers_dotfiles() {
-        let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join(".eslintrc.json"), "{}").unwrap();
+    fn discovers_dotfiles() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(tmp.path().join(".eslintrc.json"), "{}")?;
 
-        let files = discover_files(tmp.path().to_str().unwrap(), &[]).unwrap();
+        let root = tmp.path().to_str().expect("temp dir should be valid UTF-8");
+        let files = discover_files(root, &[])?;
         assert_eq!(files.len(), 1);
+        Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -46,9 +46,9 @@ pub struct Config {
     #[serde(default)]
     pub schemas: HashMap<String, String>,
 
-    /// Additional schema catalog URLs to fetch alongside SchemaStore.
+    /// Additional schema catalog URLs to fetch alongside `SchemaStore`.
     /// Each URL should point to a JSON file with the same format as
-    /// the SchemaStore catalog (`{"schemas": [...]}`).
+    /// the `SchemaStore` catalog (`{"schemas": [...]}`).
     #[serde(default)]
     pub registries: Vec<String>,
 
@@ -121,10 +121,10 @@ impl Config {
                         .iter()
                         .any(|pat| glob_match::glob_match(pat, uri))
                 });
-            if file_match || schema_match {
-                if let Some(val) = ov.validate_formats {
-                    return val;
-                }
+            if (file_match || schema_match)
+                && let Some(val) = ov.validate_formats
+            {
+                return val;
             }
         }
         true
@@ -134,7 +134,10 @@ impl Config {
 /// Apply rewrite rules to a schema URI. If the URI starts with any key in
 /// `rewrites`, that prefix is replaced with the corresponding value.
 /// The longest matching prefix wins.
-pub fn apply_rewrites(uri: &str, rewrites: &HashMap<String, String>) -> String {
+pub fn apply_rewrites<S: ::std::hash::BuildHasher>(
+    uri: &str,
+    rewrites: &HashMap<String, String, S>,
+) -> String {
     let mut best_match: Option<(&str, &str)> = None;
     for (from, to) in rewrites {
         if uri.starts_with(from.as_str())
@@ -160,6 +163,10 @@ pub fn resolve_double_slash(uri: &str, config_dir: &Path) -> String {
 }
 
 /// Generate the JSON Schema for `lintel.toml` as a `serde_json::Value`.
+///
+/// # Panics
+///
+/// Panics if the schema cannot be serialized to JSON (should never happen).
 pub fn schema() -> Value {
     serde_json::to_value(schema_for!(Config)).expect("schema serialization cannot fail")
 }
@@ -183,6 +190,10 @@ pub fn find_config_path(start_dir: &Path) -> Option<PathBuf> {
 /// Search for `lintel.toml` files starting from `start_dir`, walking up.
 /// Merges all configs found until one with `root = true` is hit (inclusive).
 /// Returns the merged config, or `None` if no config file was found.
+///
+/// # Errors
+///
+/// Returns an error if a config file exists but cannot be read or parsed.
 pub fn find_and_load(start_dir: &Path) -> Result<Option<Config>, anyhow::Error> {
     let mut configs: Vec<Config> = Vec::new();
     let mut dir = start_dir.to_path_buf();
@@ -217,6 +228,10 @@ pub fn find_and_load(start_dir: &Path) -> Result<Option<Config>, anyhow::Error> 
 }
 
 /// Load config from the current working directory (walking upward).
+///
+/// # Errors
+///
+/// Returns an error if a config file exists but cannot be read or parsed.
 pub fn load() -> Result<Config, anyhow::Error> {
     let cwd = std::env::current_dir()?;
     Ok(find_and_load(&cwd)?.unwrap_or_default())
@@ -228,102 +243,106 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn loads_config_from_directory() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn loads_config_from_directory() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
             r#"exclude = ["testdata/**"]"#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(tmp.path()).unwrap().unwrap();
+        let config = find_and_load(tmp.path())?.expect("config should exist");
         assert_eq!(config.exclude, vec!["testdata/**"]);
+        Ok(())
     }
 
     #[test]
-    fn walks_up_to_find_config() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn walks_up_to_find_config() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("a/b/c");
-        fs::create_dir_all(&sub).unwrap();
-        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["vendor/**"]"#).unwrap();
+        fs::create_dir_all(&sub)?;
+        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["vendor/**"]"#)?;
 
-        let config = find_and_load(&sub).unwrap().unwrap();
+        let config = find_and_load(&sub)?.expect("config should exist");
         assert_eq!(config.exclude, vec!["vendor/**"]);
+        Ok(())
     }
 
     #[test]
-    fn returns_none_when_no_config() {
-        let tmp = tempfile::tempdir().unwrap();
-        let config = find_and_load(tmp.path()).unwrap();
+    fn returns_none_when_no_config() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
+        let config = find_and_load(tmp.path())?;
         assert!(config.is_none());
+        Ok(())
     }
 
     #[test]
-    fn empty_config_is_valid() {
-        let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join("lintel.toml"), "").unwrap();
+    fn empty_config_is_valid() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(tmp.path().join("lintel.toml"), "")?;
 
-        let config = find_and_load(tmp.path()).unwrap().unwrap();
+        let config = find_and_load(tmp.path())?.expect("config should exist");
         assert!(config.exclude.is_empty());
         assert!(config.rewrite.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn rejects_unknown_fields() {
-        let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join("lintel.toml"), "bogus = true").unwrap();
+    fn rejects_unknown_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(tmp.path().join("lintel.toml"), "bogus = true")?;
 
         let result = find_and_load(tmp.path());
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn loads_rewrite_rules() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn loads_rewrite_rules() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
             r#"
 [rewrite]
 "http://localhost:8000/" = "//schemastore/src/"
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(tmp.path()).unwrap().unwrap();
+        let config = find_and_load(tmp.path())?.expect("config should exist");
         assert_eq!(
             config.rewrite.get("http://localhost:8000/"),
             Some(&"//schemastore/src/".to_string())
         );
+        Ok(())
     }
 
     // --- root = true ---
 
     #[test]
-    fn root_true_stops_walk() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn root_true_stops_walk() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
-        fs::create_dir_all(&sub).unwrap();
+        fs::create_dir_all(&sub)?;
 
         // Parent config
-        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["parent/**"]"#).unwrap();
+        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["parent/**"]"#)?;
 
         // Child config with root = true
         fs::write(
             sub.join("lintel.toml"),
             "root = true\nexclude = [\"child/**\"]",
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(&sub).unwrap().unwrap();
+        let config = find_and_load(&sub)?.expect("config should exist");
         assert_eq!(config.exclude, vec!["child/**"]);
         // Parent's "parent/**" should NOT be included
+        Ok(())
     }
 
     #[test]
-    fn merges_parent_without_root() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn merges_parent_without_root() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
-        fs::create_dir_all(&sub).unwrap();
+        fs::create_dir_all(&sub)?;
 
         // Parent config
         fs::write(
@@ -334,8 +353,7 @@ exclude = ["parent/**"]
 [rewrite]
 "http://parent/" = "//parent/"
 "#,
-        )
-        .unwrap();
+        )?;
 
         // Child config (no root = true)
         fs::write(
@@ -346,10 +364,9 @@ exclude = ["child/**"]
 [rewrite]
 "http://child/" = "//child/"
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(&sub).unwrap().unwrap();
+        let config = find_and_load(&sub)?.expect("config should exist");
         // Child excludes come first, then parent
         assert_eq!(config.exclude, vec!["child/**", "parent/**"]);
         // Both rewrite rules present
@@ -361,13 +378,14 @@ exclude = ["child/**"]
             config.rewrite.get("http://parent/"),
             Some(&"//parent/".to_string())
         );
+        Ok(())
     }
 
     #[test]
-    fn child_rewrite_wins_on_conflict() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn child_rewrite_wins_on_conflict() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
-        fs::create_dir_all(&sub).unwrap();
+        fs::create_dir_all(&sub)?;
 
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -375,8 +393,7 @@ exclude = ["child/**"]
 [rewrite]
 "http://example/" = "//parent-value/"
 "#,
-        )
-        .unwrap();
+        )?;
 
         fs::write(
             sub.join("lintel.toml"),
@@ -384,14 +401,14 @@ exclude = ["child/**"]
 [rewrite]
 "http://example/" = "//child-value/"
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(&sub).unwrap().unwrap();
+        let config = find_and_load(&sub)?.expect("config should exist");
         assert_eq!(
             config.rewrite.get("http://example/"),
             Some(&"//child-value/".to_string())
         );
+        Ok(())
     }
 
     // --- apply_rewrites ---
@@ -456,8 +473,8 @@ exclude = ["child/**"]
     // --- Override parsing ---
 
     #[test]
-    fn parses_override_blocks() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn parses_override_blocks() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
             r#"
@@ -469,31 +486,31 @@ validate_formats = false
 files = ["schemas/other.json"]
 validate_formats = true
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(tmp.path()).unwrap().unwrap();
+        let config = find_and_load(tmp.path())?.expect("config should exist");
         assert_eq!(config.overrides.len(), 2);
         assert_eq!(config.overrides[0].files, vec!["schemas/vector.json"]);
         assert_eq!(config.overrides[0].validate_formats, Some(false));
         assert_eq!(config.overrides[1].validate_formats, Some(true));
+        Ok(())
     }
 
     #[test]
-    fn override_validate_formats_defaults_to_none() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn override_validate_formats_defaults_to_none() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
             r#"
 [[override]]
 files = ["schemas/vector.json"]
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(tmp.path()).unwrap().unwrap();
+        let config = find_and_load(tmp.path())?.expect("config should exist");
         assert_eq!(config.overrides.len(), 1);
         assert_eq!(config.overrides[0].validate_formats, None);
+        Ok(())
     }
 
     // --- should_validate_formats ---
@@ -550,8 +567,10 @@ files = ["schemas/vector.json"]
             }],
             ..Default::default()
         };
-        assert!(!config
-            .should_validate_formats("any.toml", &["https://json.schemastore.org/vector.json"]));
+        assert!(
+            !config
+                .should_validate_formats("any.toml", &["https://json.schemastore.org/vector.json"])
+        );
     }
 
     #[test]
@@ -648,10 +667,10 @@ files = ["schemas/vector.json"]
     // --- Override merge behavior ---
 
     #[test]
-    fn merge_overrides_child_first() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn merge_overrides_child_first() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
-        fs::create_dir_all(&sub).unwrap();
+        fs::create_dir_all(&sub)?;
 
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -660,8 +679,7 @@ files = ["schemas/vector.json"]
 files = ["schemas/**"]
 validate_formats = true
 "#,
-        )
-        .unwrap();
+        )?;
 
         fs::write(
             sub.join("lintel.toml"),
@@ -670,15 +688,15 @@ validate_formats = true
 files = ["schemas/vector.json"]
 validate_formats = false
 "#,
-        )
-        .unwrap();
+        )?;
 
-        let config = find_and_load(&sub).unwrap().unwrap();
+        let config = find_and_load(&sub)?.expect("config should exist");
         // Child override comes first, then parent
         assert_eq!(config.overrides.len(), 2);
         assert_eq!(config.overrides[0].files, vec!["schemas/vector.json"]);
         assert_eq!(config.overrides[0].validate_formats, Some(false));
         assert_eq!(config.overrides[1].files, vec!["schemas/**"]);
         assert_eq!(config.overrides[1].validate_formats, Some(true));
+        Ok(())
     }
 }

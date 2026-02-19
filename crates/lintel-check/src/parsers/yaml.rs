@@ -18,7 +18,7 @@ impl Parser for YamlParser {
             content.into()
         };
         serde_yaml::from_str(&clean).map_err(|e| {
-            let offset = e.location().map(|loc| loc.index()).unwrap_or(0);
+            let offset = e.location().map_or(0, |loc| loc.index());
             ParseDiagnostic {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),

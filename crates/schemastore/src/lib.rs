@@ -8,10 +8,10 @@ use alloc::vec::Vec;
 
 use serde::Deserialize;
 
-/// The URL of the SchemaStore catalog.
+/// The URL of the `SchemaStore` catalog.
 pub const CATALOG_URL: &str = "https://www.schemastore.org/api/json/catalog.json";
 
-/// The deserialized SchemaStore catalog.
+/// The deserialized `SchemaStore` catalog.
 #[derive(Debug, Deserialize)]
 pub struct Catalog {
     pub schemas: Vec<SchemaEntry>,
@@ -26,7 +26,11 @@ pub struct SchemaEntry {
     pub file_match: Vec<String>,
 }
 
-/// Parse a SchemaStore catalog from a `serde_json::Value`.
+/// Parse a `SchemaStore` catalog from a `serde_json::Value`.
+///
+/// # Errors
+///
+/// Returns an error if the value does not match the expected catalog schema.
 pub fn parse_catalog(value: serde_json::Value) -> Result<Catalog, serde_json::Error> {
     serde_json::from_value(value)
 }
@@ -90,6 +94,8 @@ mod tests {
     extern crate std;
 
     use super::*;
+    use std::boxed::Box;
+    use std::error::Error;
 
     fn test_catalog() -> Catalog {
         Catalog {
@@ -151,9 +157,11 @@ mod tests {
         let catalog = test_catalog();
         let compiled = CompiledCatalog::compile(&catalog);
 
-        assert!(compiled
-            .find_schema("unknown.json", "unknown.json")
-            .is_none());
+        assert!(
+            compiled
+                .find_schema("unknown.json", "unknown.json")
+                .is_none()
+        );
     }
 
     #[test]
@@ -161,9 +169,11 @@ mod tests {
         let catalog = test_catalog();
         let compiled = CompiledCatalog::compile(&catalog);
 
-        assert!(compiled
-            .find_schema("no-match.json", "no-match.json")
-            .is_none());
+        assert!(
+            compiled
+                .find_schema("no-match.json", "no-match.json")
+                .is_none()
+        );
     }
 
     fn github_workflow_catalog() -> Catalog {
@@ -213,11 +223,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_catalog_from_json() {
+    fn parse_catalog_from_json() -> Result<(), Box<dyn Error>> {
         let json = r#"{"schemas":[{"name":"test","url":"https://example.com/s.json","fileMatch":["*.json"]}]}"#;
-        let value: serde_json::Value = serde_json::from_str(json).unwrap();
-        let catalog = parse_catalog(value).unwrap();
+        let value: serde_json::Value = serde_json::from_str(json)?;
+        let catalog = parse_catalog(value)?;
         assert_eq!(catalog.schemas.len(), 1);
         assert_eq!(catalog.schemas[0].name, "test");
+        Ok(())
     }
 }

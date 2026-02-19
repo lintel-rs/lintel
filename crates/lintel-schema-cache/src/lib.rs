@@ -19,6 +19,9 @@ pub enum CacheStatus {
 
 /// Trait for fetching content over HTTP.
 pub trait HttpClient: Clone + Send + Sync + 'static {
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot be read.
     fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>>;
 }
 
@@ -54,6 +57,11 @@ impl<C: HttpClient> SchemaCache<C> {
     ///
     /// Returns the parsed schema and a [`CacheStatus`] indicating whether the
     /// result came from the disk cache, the network, or caching was disabled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the schema cannot be fetched from the network,
+    /// read from disk cache, or parsed as JSON.
     pub fn fetch(&self, uri: &str) -> Result<(Value, CacheStatus), Box<dyn Error + Send + Sync>> {
         // Check cache first
         if let Some(ref cache_dir) = self.cache_dir {
@@ -164,20 +172,21 @@ mod tests {
     }
 
     #[test]
-    fn fetch_no_cache_dir() {
+    fn fetch_no_cache_dir() -> Result<(), Box<dyn Error + Send + Sync>> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
-        let (val, status) = cache.fetch("https://example.com/s.json").unwrap();
+        let (val, status) = cache.fetch("https://example.com/s.json")?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
         assert_eq!(status, CacheStatus::Disabled);
+        Ok(())
     }
 
     #[test]
-    fn fetch_cold_cache() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn fetch_cold_cache() -> Result<(), Box<dyn Error + Send + Sync>> {
+        let tmp = tempfile::tempdir()?;
         let client = mock(&[("https://example.com/s.json", r#"{"type":"string"}"#)]);
         let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json").unwrap();
+        let (val, status) = cache.fetch("https://example.com/s.json")?;
         assert_eq!(val, serde_json::json!({"type": "string"}));
         assert_eq!(status, CacheStatus::Miss);
 
@@ -185,21 +194,23 @@ mod tests {
         let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
         let cache_path = tmp.path().join(format!("{hash}.json"));
         assert!(cache_path.exists());
+        Ok(())
     }
 
     #[test]
-    fn fetch_warm_cache() {
-        let tmp = tempfile::tempdir().unwrap();
+    fn fetch_warm_cache() -> Result<(), Box<dyn Error + Send + Sync>> {
+        let tmp = tempfile::tempdir()?;
         let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
         let cache_path = tmp.path().join(format!("{hash}.json"));
-        fs::write(&cache_path, r#"{"type":"number"}"#).unwrap();
+        fs::write(&cache_path, r#"{"type":"number"}"#)?;
 
         // Client has no entries — if it were called, it would error
         let client = mock(&[]);
         let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json").unwrap();
+        let (val, status) = cache.fetch("https://example.com/s.json")?;
         assert_eq!(val, serde_json::json!({"type": "number"}));
         assert_eq!(status, CacheStatus::Hit);
+        Ok(())
     }
 
     #[test]
@@ -217,23 +228,23 @@ mod tests {
     }
 
     #[test]
-    fn retrieve_trait_delegates() {
+    fn retrieve_trait_delegates() -> Result<(), Box<dyn Error + Send + Sync>> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
-        let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse().unwrap();
-        let val = jsonschema::Retrieve::retrieve(&cache, &uri).unwrap();
+        let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
+        let val = jsonschema::Retrieve::retrieve(&cache, &uri)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn async_retrieve_trait_delegates() {
+    async fn async_retrieve_trait_delegates() -> Result<(), Box<dyn Error + Send + Sync>> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
-        let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse().unwrap();
-        let val = jsonschema::AsyncRetrieve::retrieve(&cache, &uri)
-            .await
-            .unwrap();
+        let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
+        let val = jsonschema::AsyncRetrieve::retrieve(&cache, &uri).await?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
+        Ok(())
     }
 
     #[test]

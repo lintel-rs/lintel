@@ -76,10 +76,7 @@ impl Parser for MarkdownParser {
         // Try YAML frontmatter first (---)
         if let Some((frontmatter, offset)) = extract_yaml_frontmatter(content) {
             return serde_yaml::from_str(frontmatter).map_err(|e| {
-                let span = e
-                    .location()
-                    .map(|loc| offset + loc.index())
-                    .unwrap_or(offset);
+                let span = e.location().map_or(offset, |loc| offset + loc.index());
                 ParseDiagnostic {
                     src: miette::NamedSource::new(file_name, content.to_string()),
                     span: span.into(),
@@ -91,7 +88,7 @@ impl Parser for MarkdownParser {
         // Try TOML frontmatter (+++)
         if let Some((frontmatter, offset)) = extract_toml_frontmatter(content) {
             let toml_value: toml::Value = toml::from_str(frontmatter).map_err(|e| {
-                let span = e.span().map(|s| offset + s.start).unwrap_or(offset);
+                let span = e.span().map_or(offset, |s| offset + s.start);
                 ParseDiagnostic {
                     src: miette::NamedSource::new(file_name, content.to_string()),
                     span: span.into(),
@@ -146,25 +143,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_yaml_frontmatter() {
+    fn parse_yaml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
         let content = "---\nname: test\ndescription: hello\n---\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
         assert_eq!(val["description"], "hello");
+        Ok(())
     }
 
     #[test]
-    fn parse_toml_frontmatter() {
+    fn parse_toml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
         let content = "+++\nname = \"test\"\n+++\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
+        Ok(())
     }
 
     #[test]
-    fn no_frontmatter_returns_null() {
+    fn no_frontmatter_returns_null() -> Result<(), Box<dyn std::error::Error>> {
         let content = "# Just a heading\nSome text\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert!(val.is_null());
+        Ok(())
     }
 
     #[test]
@@ -183,43 +183,48 @@ mod tests {
     }
 
     #[test]
-    fn yaml_frontmatter_with_leading_html_comment() {
+    fn yaml_frontmatter_with_leading_html_comment() -> Result<(), Box<dyn std::error::Error>> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n---\nname: test\n---\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
+        Ok(())
     }
 
     #[test]
-    fn toml_frontmatter_with_leading_html_comment() {
+    fn toml_frontmatter_with_leading_html_comment() -> Result<(), Box<dyn std::error::Error>> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n+++\nname = \"test\"\n+++\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
+        Ok(())
     }
 
     #[test]
-    fn html_comment_schema_plus_yaml_frontmatter() {
+    fn html_comment_schema_plus_yaml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n---\nname: researcher\n---\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "researcher");
         let uri = MarkdownParser.extract_schema_uri(content, &val);
         assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
+        Ok(())
     }
 
     #[test]
-    fn multiple_html_comments_before_frontmatter() {
+    fn multiple_html_comments_before_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
         let content = "<!-- comment 1 -->\n<!-- comment 2 -->\n---\nname: test\n---\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
+        Ok(())
     }
 
     #[test]
-    fn yaml_frontmatter_with_complex_values() {
+    fn yaml_frontmatter_with_complex_values() -> Result<(), Box<dyn std::error::Error>> {
         let content = "---\nname: my-skill\nallowed-tools:\n  - Bash\n  - Read\n---\n# Body\n";
-        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "my-skill");
         assert!(val["allowed-tools"].is_array());
+        Ok(())
     }
 }

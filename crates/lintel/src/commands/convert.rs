@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::{ConvertArgs, OutputFormat};
@@ -16,7 +16,7 @@ fn detect_input_format(path: &Path) -> Option<&'static str> {
     }
 }
 
-/// Parse input file to serde_json::Value.
+/// Parse input file to `serde_json::Value`.
 fn parse_input(content: &str, format: &str) -> Result<Value> {
     match format {
         "json" => serde_json::from_str(content).context("failed to parse JSON"),

@@ -10,7 +10,7 @@ pub struct TomlParser;
 impl Parser for TomlParser {
     fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
         let toml_value: toml::Value = toml::from_str(content).map_err(|e| {
-            let offset = e.span().map(|s| s.start).unwrap_or(0);
+            let offset = e.span().map_or(0, |s| s.start);
             ParseDiagnostic {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),

@@ -33,6 +33,9 @@ pub enum FileFormat {
 /// Implementations must produce a [`ParseDiagnostic`] with an accurate source
 /// span when parsing fails.
 pub trait Parser {
+    /// # Errors
+    ///
+    /// Returns a [`ParseDiagnostic`] with an accurate source span when parsing fails.
     fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic>;
 
     /// Extract the `$schema` URI from file content and/or parsed value.
@@ -267,39 +270,42 @@ mod tests {
     // --- parser_for round-trip ---
 
     #[test]
-    fn parser_for_json_parses() {
+    fn parser_for_json_parses() -> Result<(), Box<dyn std::error::Error>> {
         let p = parser_for(FileFormat::Json);
-        let val = p.parse(r#"{"key":"value"}"#, "test.json").unwrap();
+        let val = p.parse(r#"{"key":"value"}"#, "test.json")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
+        Ok(())
     }
 
     #[test]
-    fn parser_for_yaml_parses() {
+    fn parser_for_yaml_parses() -> Result<(), Box<dyn std::error::Error>> {
         let p = parser_for(FileFormat::Yaml);
-        let val = p.parse("key: value\n", "test.yaml").unwrap();
+        let val = p.parse("key: value\n", "test.yaml")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
+        Ok(())
     }
 
     #[test]
-    fn parser_for_json5_parses() {
+    fn parser_for_json5_parses() -> Result<(), Box<dyn std::error::Error>> {
         let p = parser_for(FileFormat::Json5);
-        let val = p.parse(r#"{key: "value"}"#, "test.json5").unwrap();
+        let val = p.parse(r#"{key: "value"}"#, "test.json5")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
+        Ok(())
     }
 
     #[test]
-    fn parser_for_jsonc_parses() {
+    fn parser_for_jsonc_parses() -> Result<(), Box<dyn std::error::Error>> {
         let p = parser_for(FileFormat::Jsonc);
-        let val = p
-            .parse(r#"{"key": "value" /* comment */}"#, "test.jsonc")
-            .unwrap();
+        let val = p.parse(r#"{"key": "value" /* comment */}"#, "test.jsonc")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
+        Ok(())
     }
 
     #[test]
-    fn parser_for_toml_parses() {
+    fn parser_for_toml_parses() -> Result<(), Box<dyn std::error::Error>> {
         let p = parser_for(FileFormat::Toml);
-        let val = p.parse("key = \"value\"\n", "test.toml").unwrap();
+        let val = p.parse("key = \"value\"\n", "test.toml")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
+        Ok(())
     }
 }

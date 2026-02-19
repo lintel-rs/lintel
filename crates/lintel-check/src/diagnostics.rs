@@ -58,7 +58,7 @@ pub struct FileDiagnostic {
 
 /// Try to find the byte offset of a JSON pointer path segment in the source text.
 ///
-/// For an instance_path like `/properties/name`, searches for the last segment `name`
+/// For an `instance_path` like `/properties/name`, searches for the last segment `name`
 /// as a JSON key (`"name"`) or YAML key (`name:`). Falls back to 0 if not found.
 pub fn find_instance_path_offset(content: &str, instance_path: &str) -> usize {
     if instance_path.is_empty() || instance_path == "/" {

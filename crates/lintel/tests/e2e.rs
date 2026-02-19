@@ -28,7 +28,7 @@ fn snapshot_output(output: &Output) -> String {
 macro_rules! e2e_test {
     ($name:ident) => {
         #[test]
-        #[ignore]
+        #[ignore = "requires built binary and e2e fixtures"]
         fn $name() {
             let case = stringify!($name).replace('_', "-");
             let output = run_lintel_ci(&case);

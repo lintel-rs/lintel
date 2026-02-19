@@ -1,4 +1,4 @@
 // Re-export from lintel-schema-cache for backwards compatibility.
 pub use lintel_schema_cache::{
-    default_cache_dir, CacheStatus, HttpClient, SchemaCache, UreqClient,
+    CacheStatus, HttpClient, SchemaCache, UreqClient, default_cache_dir,
 };

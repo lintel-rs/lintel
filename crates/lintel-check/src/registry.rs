@@ -39,12 +39,16 @@ pub fn resolve_urls(url: &str) -> Vec<String> {
 /// The URL is first resolved via [`resolve_urls`] to expand shorthand
 /// notations like `github:org/repo`. For GitHub shorthands without an
 /// explicit branch, both `main` and `master` are tried.
+///
+/// # Errors
+///
+/// Returns an error if none of the resolved URLs can be fetched or parsed.
 pub fn fetch<C: HttpClient>(
     cache: &SchemaCache<C>,
     url: &str,
 ) -> Result<Catalog, Box<dyn std::error::Error + Send + Sync>> {
     let urls = resolve_urls(url);
-    let mut last_err = None;
+    let mut last_err: Option<Box<dyn std::error::Error + Send + Sync>> = None;
     for resolved in &urls {
         match cache.fetch(resolved) {
             Ok((value, _status)) => {
@@ -54,7 +58,7 @@ pub fn fetch<C: HttpClient>(
             Err(e) => last_err = Some(e),
         }
     }
-    Err(last_err.unwrap())
+    Err(last_err.unwrap_or_else(|| "no URLs to try".into()))
 }
 
 #[cfg(test)]
