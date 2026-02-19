@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lintel-rs/lintel/compare/lintel-v0.0.1...lintel-v0.0.2) - 2026-02-19
+
+### Other
+
+- Add logo to README
+- Extract lintel-config crate with build-time schema generation
+- Fix clippy pedantic warnings and deny unwrap_used
+- Add clippy::pedantic lint to workspace
+
 ## [0.0.1](https://github.com/lintel-rs/lintel/releases/tag/lintel-v0.0.1) - 2026-02-19
 
 ### Other
