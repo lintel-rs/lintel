@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
 use bpaf::Bpaf;
+use tracing_subscriber::prelude::*;
 
 mod commands;
 
@@ -218,6 +219,24 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Set up tracing subscriber controlled by LINTEL_LOG env var.
+    // e.g. LINTEL_LOG=info or LINTEL_LOG=lintel=debug,lintel_check=trace
+    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
+        tracing_subscriber::registry()
+            .with(
+                tracing_tree::HierarchicalLayer::new(2)
+                    .with_targets(true)
+                    .with_bracketed_fields(true)
+                    .with_indent_lines(true)
+                    .with_verbose_exit(true)
+                    .with_verbose_entry(true)
+                    .with_timer(tracing_tree::time::Uptime::default())
+                    .with_writer(std::io::stderr),
+            )
+            .with(filter)
+            .init();
+    }
+
     miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()

@@ -89,6 +89,7 @@ impl<C: HttpClient> SchemaCache<C> {
     ///
     /// Returns an error if the schema cannot be fetched from the network,
     /// read from disk cache, or parsed as JSON.
+    #[tracing::instrument(skip(self), fields(status))]
     pub async fn fetch(
         &self,
         uri: &str,
@@ -101,11 +102,13 @@ impl<C: HttpClient> SchemaCache<C> {
             let cache_path = cache_dir.join(format!("{hash}.json"));
             if cache_path.exists() && !self.is_expired(&cache_path) {
                 let content = fs::read_to_string(&cache_path)?;
+                tracing::Span::current().record("status", "cache_hit");
                 return Ok((serde_json::from_str(&content)?, CacheStatus::Hit));
             }
         }
 
         // Fetch from network
+        tracing::Span::current().record("status", "network_fetch");
         let body = self.client.get(uri).await?;
         let value: Value = serde_json::from_str(&body)?;
 

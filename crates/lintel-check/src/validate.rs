@@ -137,6 +137,7 @@ struct ParsedFile {
 /// Locate `lintel.toml`, load the full config, and return the config directory.
 /// Returns `(config, config_dir, config_path)`.  When no config is found or
 /// cwd is unavailable the config is default and `config_path` is `None`.
+#[tracing::instrument(skip_all)]
 fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
     let start_dir = match search_dir {
         Some(d) => d.to_path_buf(),
@@ -163,6 +164,7 @@ fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<Pa
 // ---------------------------------------------------------------------------
 
 /// Collect input files from globs/directories, applying exclude filters.
+#[tracing::instrument(skip_all, fields(glob_count = globs.len(), exclude_count = exclude.len()))]
 fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
     if globs.is_empty() {
         return discover::discover_files(".", exclude);
@@ -262,6 +264,8 @@ fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat,
 
 /// Parse each file, extract its schema URI, apply rewrites, and group by
 /// resolved schema URI.
+#[tracing::instrument(skip_all, fields(file_count = files.len()))]
+#[allow(clippy::too_many_lines)]
 fn parse_and_group_files(
     files: &[PathBuf],
     args: &ValidateArgs,
@@ -271,8 +275,12 @@ fn parse_and_group_files(
     errors: &mut Vec<LintError>,
 ) -> BTreeMap<String, Vec<ParsedFile>> {
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
+    let mut read_time = std::time::Duration::ZERO;
+    let mut parse_time = std::time::Duration::ZERO;
+    let mut catalog_time = std::time::Duration::ZERO;
 
     for path in files {
+        let t = std::time::Instant::now();
         let content = match fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
@@ -283,6 +291,7 @@ fn parse_and_group_files(
                 continue;
             }
         };
+        read_time += t.elapsed();
 
         let path_str = path.display().to_string();
         let file_name = path
@@ -294,16 +303,19 @@ fn parse_and_group_files(
 
         // For unrecognized extensions, only proceed if a catalog or config mapping matches.
         if detected_format.is_none() {
+            let t = std::time::Instant::now();
             let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
                 || compiled_catalogs
                     .iter()
                     .any(|cat| cat.find_schema(&path_str, file_name).is_some());
+            catalog_time += t.elapsed();
             if !has_match {
                 continue;
             }
         }
 
         // Parse the file content.
+        let t = std::time::Instant::now();
         let (parser, instance): (Box<dyn Parser>, Value) = if let Some(fmt) = detected_format {
             // Known format — parse with detected/overridden format.
             let parser = parsers::parser_for(fmt);
@@ -337,6 +349,8 @@ fn parse_and_group_files(
             }
         };
 
+        parse_time += t.elapsed();
+
         // Skip markdown files with no frontmatter
         if instance.is_null() {
             continue;
@@ -346,6 +360,7 @@ fn parse_and_group_files(
         // 1. Inline $schema / YAML modeline (always wins)
         // 2. Custom schema mappings from lintel.toml [schemas]
         // 3. Catalog matching (SchemaStore + additional registries)
+        let t = std::time::Instant::now();
         let schema_uri = parser
             .extract_schema_uri(&content, &instance)
             .or_else(|| {
@@ -359,6 +374,7 @@ fn parse_and_group_files(
                     .find_map(|cat| cat.find_schema(&path_str, file_name))
                     .map(str::to_string)
             });
+        catalog_time += t.elapsed();
         let Some(schema_uri) = schema_uri else {
             continue;
         };
@@ -389,6 +405,16 @@ fn parse_and_group_files(
                 instance,
                 original_schema_uri,
             });
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        tracing::info!(
+            read_ms = read_time.as_millis() as u64,
+            parse_ms = parse_time.as_millis() as u64,
+            catalog_ms = catalog_time.as_millis() as u64,
+            "parse_and_group breakdown"
+        );
     }
 
     schema_groups
@@ -506,6 +532,7 @@ fn push_error_pairs(
 
 /// Validate all files in a group against an already-compiled validator and store
 /// results in the validation cache.
+#[tracing::instrument(skip_all, fields(schema_uri, file_count = group.len()))]
 #[allow(clippy::too_many_arguments)]
 fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
@@ -557,6 +584,7 @@ pub async fn run<C: HttpClient>(args: &ValidateArgs, client: C) -> Result<Valida
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
+#[tracing::instrument(skip_all, name = "validate")]
 #[allow(clippy::too_many_lines)]
 pub async fn run_with<C: HttpClient>(
     args: &ValidateArgs,
@@ -576,12 +604,16 @@ pub async fn run_with<C: HttpClient>(
 
     let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
+    tracing::info!(file_count = files.len(), "collected files");
 
     let mut compiled_catalogs = Vec::new();
 
     if !args.no_catalog {
+        let catalog_span = tracing::info_span!("fetch_catalogs").entered();
+
         // Fetch all catalogs in parallel using JoinSet.
         // Each task returns (label, result) so error messages stay specific.
+        #[allow(clippy::items_after_statements)]
         type CatalogResult = (
             String,
             Result<CompiledCatalog, Box<dyn std::error::Error + Send + Sync>>,
@@ -627,6 +659,8 @@ pub async fn run_with<C: HttpClient>(
                 Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
             }
         }
+
+        drop(catalog_span);
     }
 
     let mut errors: Vec<LintError> = Vec::new();
@@ -646,6 +680,11 @@ pub async fn run_with<C: HttpClient>(
         &compiled_catalogs,
         &mut errors,
     );
+    tracing::info!(
+        schema_count = schema_groups.len(),
+        total_files = schema_groups.values().map(Vec::len).sum::<usize>(),
+        "grouped files by schema"
+    );
 
     // Create validation cache
     let vcache = validation_cache::ValidationCache::new(
@@ -659,28 +698,42 @@ pub async fn run_with<C: HttpClient>(
         .filter(|uri| uri.starts_with("http://") || uri.starts_with("https://"))
         .collect();
 
-    let mut schema_tasks = tokio::task::JoinSet::new();
-    for uri in remote_uris {
-        let r = retriever.clone();
-        let u = uri.clone();
-        schema_tasks.spawn(async move {
-            let result = r.fetch(&u).await;
-            (u, result)
-        });
-    }
+    let prefetched = {
+        let _prefetch_span =
+            tracing::info_span!("prefetch_schemas", count = remote_uris.len()).entered();
 
-    let mut prefetched: HashMap<String, Result<(Value, CacheStatus), String>> = HashMap::new();
-    while let Some(result) = schema_tasks.join_next().await {
-        match result {
-            Ok((uri, fetch_result)) => {
-                prefetched.insert(uri, fetch_result.map_err(|e| e.to_string()));
-            }
-            Err(e) => eprintln!("warning: schema prefetch task failed: {e}"),
+        let mut schema_tasks = tokio::task::JoinSet::new();
+        for uri in remote_uris {
+            let r = retriever.clone();
+            let u = uri.clone();
+            schema_tasks.spawn(async move {
+                let result = r.fetch(&u).await;
+                (u, result)
+            });
         }
-    }
+
+        let mut prefetched: HashMap<String, Result<(Value, CacheStatus), String>> = HashMap::new();
+        while let Some(result) = schema_tasks.join_next().await {
+            match result {
+                Ok((uri, fetch_result)) => {
+                    prefetched.insert(uri, fetch_result.map_err(|e| e.to_string()));
+                }
+                Err(e) => eprintln!("warning: schema prefetch task failed: {e}"),
+            }
+        }
+
+        prefetched
+    };
 
     // Phase 2: Compile each schema once and validate all matching files
     for (schema_uri, group) in &schema_groups {
+        let _group_span = tracing::info_span!(
+            "schema_group",
+            schema = schema_uri.as_str(),
+            files = group.len(),
+        )
+        .entered();
+
         // If ANY file in the group matches a `validate_formats = false` override,
         // disable format validation for the whole group (they share one compiled validator).
         let validate_formats = group.iter().all(|pf| {
@@ -705,24 +758,33 @@ pub async fn run_with<C: HttpClient>(
         // Split the group into validation cache hits and misses.
         let mut cache_misses: Vec<&ParsedFile> = Vec::new();
 
-        for pf in group {
-            let (cached, vcache_status) =
-                vcache.lookup(&pf.content, &schema_value, validate_formats);
+        {
+            let _vcache_span = tracing::debug_span!("validation_cache_lookup").entered();
+            for pf in group {
+                let (cached, vcache_status) =
+                    vcache.lookup(&pf.content, &schema_value, validate_formats);
 
-            if let Some(cached_errors) = cached {
-                push_error_pairs(pf, &cached_errors, &mut errors);
-                let cf = CheckedFile {
-                    path: pf.path.clone(),
-                    schema: schema_uri.clone(),
-                    cache_status,
-                    validation_cache_status: Some(vcache_status),
-                };
-                on_check(&cf);
-                checked.push(cf);
-            } else {
-                cache_misses.push(pf);
+                if let Some(cached_errors) = cached {
+                    push_error_pairs(pf, &cached_errors, &mut errors);
+                    let cf = CheckedFile {
+                        path: pf.path.clone(),
+                        schema: schema_uri.clone(),
+                        cache_status,
+                        validation_cache_status: Some(vcache_status),
+                    };
+                    on_check(&cf);
+                    checked.push(cf);
+                } else {
+                    cache_misses.push(pf);
+                }
             }
         }
+
+        tracing::info!(
+            cache_hits = group.len() - cache_misses.len(),
+            cache_misses = cache_misses.len(),
+            "validation cache"
+        );
 
         // If all files hit the validation cache, skip schema compilation entirely.
         if cache_misses.is_empty() {
@@ -730,38 +792,41 @@ pub async fn run_with<C: HttpClient>(
         }
 
         // Compile the schema for cache misses.
-        let validator = match jsonschema::async_options()
-            .with_retriever(retriever.clone())
-            .should_validate_formats(validate_formats)
-            .build(&schema_value)
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                // When format validation is disabled and the compilation error
-                // is a uri-reference issue (e.g. Rust-style $ref paths in
-                // vector.json), skip validation silently.
-                if !validate_formats && e.to_string().contains("uri-reference") {
-                    mark_group_checked(
+        let validator = {
+            let _compile_span = tracing::info_span!("compile_schema").entered();
+            match jsonschema::async_options()
+                .with_retriever(retriever.clone())
+                .should_validate_formats(validate_formats)
+                .build(&schema_value)
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    // When format validation is disabled and the compilation error
+                    // is a uri-reference issue (e.g. Rust-style $ref paths in
+                    // vector.json), skip validation silently.
+                    if !validate_formats && e.to_string().contains("uri-reference") {
+                        mark_group_checked(
+                            schema_uri,
+                            cache_status,
+                            Some(ValidationCacheStatus::Miss),
+                            &cache_misses,
+                            &mut checked,
+                            &mut on_check,
+                        );
+                        continue;
+                    }
+                    report_group_error(
+                        &format!("failed to compile schema: {e}"),
                         schema_uri,
                         cache_status,
-                        Some(ValidationCacheStatus::Miss),
                         &cache_misses,
+                        &mut errors,
                         &mut checked,
                         &mut on_check,
                     );
                     continue;
                 }
-                report_group_error(
-                    &format!("failed to compile schema: {e}"),
-                    schema_uri,
-                    cache_status,
-                    &cache_misses,
-                    &mut errors,
-                    &mut checked,
-                    &mut on_check,
-                );
-                continue;
             }
         };
 
