@@ -38,6 +38,20 @@ pub struct Config {
     #[serde(default)]
     pub exclude: Vec<String>,
 
+    /// Custom schema mappings. Keys are glob patterns matching file paths;
+    /// values are schema URLs to use for those files.
+    ///
+    /// These take priority over catalog matching but are overridden by
+    /// inline `$schema` properties and YAML modeline comments.
+    #[serde(default)]
+    pub schemas: HashMap<String, String>,
+
+    /// Additional schema catalog URLs to fetch alongside SchemaStore.
+    /// Each URL should point to a JSON file with the same format as
+    /// the SchemaStore catalog (`{"schemas": [...]}`).
+    #[serde(default)]
+    pub registries: Vec<String>,
+
     /// Schema URI rewrite rules. Keys are prefixes to match; values are
     /// replacements. For example, `"http://localhost:8000/" = "//schemas/"`
     /// rewrites any schema URI starting with `http://localhost:8000/` so that
@@ -53,15 +67,39 @@ pub struct Config {
 impl Config {
     /// Merge a parent config into this one.  Child values take priority:
     /// - `exclude`: parent entries are appended (child entries come first)
+    /// - `schemas`: parent entries are added only if the key is not already present
+    /// - `registries`: parent entries are appended (deduped)
     /// - `rewrite`: parent entries are added only if the key is not already present
     /// - `root` is not inherited
     fn merge_parent(&mut self, parent: Config) {
         self.exclude.extend(parent.exclude);
+        for (k, v) in parent.schemas {
+            self.schemas.entry(k).or_insert(v);
+        }
+        for url in parent.registries {
+            if !self.registries.contains(&url) {
+                self.registries.push(url);
+            }
+        }
         for (k, v) in parent.rewrite {
             self.rewrite.entry(k).or_insert(v);
         }
         // Child overrides come first (higher priority), then parent overrides.
         self.overrides.extend(parent.overrides);
+    }
+
+    /// Find a custom schema mapping for the given file path.
+    ///
+    /// Matches against the `[schemas]` table using glob patterns.
+    /// Returns the schema URL if a match is found.
+    pub fn find_schema_mapping(&self, path: &str, file_name: &str) -> Option<&str> {
+        let path = path.strip_prefix("./").unwrap_or(path);
+        for (pattern, url) in &self.schemas {
+            if glob_match::glob_match(pattern, path) || glob_match::glob_match(pattern, file_name) {
+                return Some(url);
+            }
+        }
+        None
     }
 
     /// Check whether format validation should be enabled for a given file.

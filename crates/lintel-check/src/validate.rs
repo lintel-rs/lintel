@@ -235,7 +235,7 @@ fn parse_and_group_files(
     args: &ValidateArgs,
     config: &config::Config,
     config_dir: &Path,
-    compiled_catalog: &Option<CompiledCatalog>,
+    compiled_catalogs: &[CompiledCatalog],
     errors: &mut Vec<LintError>,
 ) -> BTreeMap<String, Vec<ParsedFile>> {
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
@@ -266,9 +266,9 @@ fn parse_and_group_files(
             Err(parse_err) => {
                 // Only attempt JSONC fallback for .json files that match a catalog entry.
                 let should_try_jsonc = format == FileFormat::Json
-                    && compiled_catalog
-                        .as_ref()
-                        .is_some_and(|cat| cat.find_schema(&path_str, file_name).is_some());
+                    && compiled_catalogs
+                        .iter()
+                        .any(|cat| cat.find_schema(&path_str, file_name).is_some());
 
                 if !should_try_jsonc {
                     errors.push(LintError::Parse(parse_err));
@@ -289,13 +289,28 @@ fn parse_and_group_files(
             }
         };
 
-        // Extract $schema from content, or fall back to catalog lookup.
-        let schema_uri = parser.extract_schema_uri(&content, &instance).or_else(|| {
-            compiled_catalog
-                .as_ref()
-                .and_then(|cat| cat.find_schema(&path_str, file_name))
-                .map(str::to_string)
-        });
+        // Skip markdown files with no frontmatter
+        if instance.is_null() {
+            continue;
+        }
+
+        // Schema resolution priority:
+        // 1. Inline $schema / YAML modeline (always wins)
+        // 2. Custom schema mappings from lintel.toml [schemas]
+        // 3. Catalog matching (SchemaStore + additional registries)
+        let schema_uri = parser
+            .extract_schema_uri(&content, &instance)
+            .or_else(|| {
+                config
+                    .find_schema_mapping(&path_str, file_name)
+                    .map(str::to_string)
+            })
+            .or_else(|| {
+                compiled_catalogs
+                    .iter()
+                    .find_map(|cat| cat.find_schema(&path_str, file_name))
+                    .map(str::to_string)
+            });
         let Some(schema_uri) = schema_uri else {
             continue;
         };
@@ -477,17 +492,36 @@ pub async fn run_with<C: HttpClient>(
     let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
 
-    let compiled_catalog = if args.no_catalog {
-        None
-    } else {
-        match catalog::fetch_catalog(&retriever) {
-            Ok(cat) => Some(CompiledCatalog::compile(&cat)),
+    let mut compiled_catalogs = Vec::new();
+
+    if !args.no_catalog {
+        // Default Lintel catalog (github:lintel-rs/catalog)
+        match catalog::fetch_registry(&retriever, catalog::DEFAULT_REGISTRY) {
+            Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
             Err(e) => {
-                eprintln!("warning: failed to fetch SchemaStore catalog: {e}");
-                None
+                eprintln!(
+                    "warning: failed to fetch default catalog {}: {e}",
+                    catalog::DEFAULT_REGISTRY
+                );
             }
         }
-    };
+        // SchemaStore catalog
+        match catalog::fetch_catalog(&retriever) {
+            Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
+            Err(e) => {
+                eprintln!("warning: failed to fetch SchemaStore catalog: {e}");
+            }
+        }
+        // Additional registries from lintel.toml
+        for registry_url in &config.registries {
+            match catalog::fetch_registry(&retriever, registry_url) {
+                Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
+                Err(e) => {
+                    eprintln!("warning: failed to fetch registry {registry_url}: {e}");
+                }
+            }
+        }
+    }
 
     let mut errors: Vec<LintError> = Vec::new();
     let mut checked: Vec<CheckedFile> = Vec::new();
@@ -503,7 +537,7 @@ pub async fn run_with<C: HttpClient>(
         args,
         &config,
         &config_dir,
-        &compiled_catalog,
+        &compiled_catalogs,
         &mut errors,
     );
 

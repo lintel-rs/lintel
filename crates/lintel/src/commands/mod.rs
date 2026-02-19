@@ -1,5 +1,8 @@
 pub mod check;
 pub mod ci;
+pub mod completions;
+pub mod convert;
+pub mod init;
 
 use lintel_check::retriever::CacheStatus;
 use lintel_check::validate::CheckedFile;

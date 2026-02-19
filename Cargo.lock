@@ -1134,7 +1134,10 @@ dependencies = [
  "insta",
  "lintel-check",
  "miette",
+ "serde_json",
+ "serde_yaml",
  "tokio",
+ "toml",
 ]
 
 [[package]]

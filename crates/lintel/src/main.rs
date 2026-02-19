@@ -11,6 +11,7 @@ pub enum FileFormat {
     Jsonc,
     Toml,
     Yaml,
+    Markdown,
 }
 
 impl core::str::FromStr for FileFormat {
@@ -22,8 +23,9 @@ impl core::str::FromStr for FileFormat {
             "jsonc" => Ok(Self::Jsonc),
             "toml" => Ok(Self::Toml),
             "yaml" => Ok(Self::Yaml),
+            "markdown" | "md" => Ok(Self::Markdown),
             _ => Err(format!(
-                "unknown format '{s}', expected: json, json5, jsonc, toml, yaml"
+                "unknown format '{s}', expected: json, json5, jsonc, toml, yaml, markdown"
             )),
         }
     }
@@ -37,6 +39,7 @@ impl From<FileFormat> for lintel_check::parsers::FileFormat {
             FileFormat::Jsonc => lintel_check::parsers::FileFormat::Jsonc,
             FileFormat::Toml => lintel_check::parsers::FileFormat::Toml,
             FileFormat::Yaml => lintel_check::parsers::FileFormat::Yaml,
+            FileFormat::Markdown => lintel_check::parsers::FileFormat::Markdown,
         }
     }
 }
@@ -99,6 +102,61 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputFormat {
+    Json,
+    Yaml,
+    Toml,
+}
+
+impl core::str::FromStr for OutputFormat {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "json" => Ok(Self::Json),
+            "yaml" => Ok(Self::Yaml),
+            "toml" => Ok(Self::Toml),
+            _ => Err(format!(
+                "unknown output format '{s}', expected: json, yaml, toml"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Bpaf)]
+pub struct ConvertArgs {
+    /// Output format
+    #[bpaf(long("to"), argument("FORMAT"))]
+    pub to: OutputFormat,
+
+    /// Input file to convert
+    #[bpaf(positional("FILE"))]
+    pub file: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+}
+
+impl core::str::FromStr for Shell {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bash" => Ok(Self::Bash),
+            "zsh" => Ok(Self::Zsh),
+            "fish" => Ok(Self::Fish),
+            "powershell" => Ok(Self::PowerShell),
+            _ => Err(format!(
+                "unknown shell '{s}', expected: bash, zsh, fish, powershell"
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Bpaf)]
 enum Commands {
     #[bpaf(command("check"))]
@@ -113,6 +171,22 @@ enum Commands {
     CI(
         #[bpaf(external(cli_options), hide_usage)] CliOptions,
         #[bpaf(external(validate_args))] ValidateArgs,
+    ),
+
+    #[bpaf(command("init"))]
+    /// Create a lintel.toml configuration file
+    Init,
+
+    #[bpaf(command("convert"))]
+    /// Convert between JSON, YAML, and TOML formats
+    Convert(#[bpaf(external(convert_args))] ConvertArgs),
+
+    #[bpaf(command("completions"))]
+    /// Generate shell completions
+    Completions(
+        /// Shell to generate completions for
+        #[bpaf(positional("SHELL"))]
+        Shell,
     ),
 
     #[bpaf(command("version"))]
@@ -150,6 +224,18 @@ async fn main() -> ExitCode {
                 cli_options.verbose,
             )
             .await
+        }
+        Commands::Init => match commands::init::run() {
+            Ok(()) => return ExitCode::SUCCESS,
+            Err(e) => Err(e),
+        },
+        Commands::Convert(args) => match commands::convert::run(&args) {
+            Ok(()) => return ExitCode::SUCCESS,
+            Err(e) => Err(e),
+        },
+        Commands::Completions(shell) => {
+            commands::completions::run(shell);
+            return ExitCode::SUCCESS;
         }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));

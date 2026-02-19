@@ -1,7 +1,18 @@
-{ pkgs, lib, config, inputs, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
 {
-  packages = [ pkgs.git pkgs.secretspec ];
+  packages = [
+    pkgs.git
+    pkgs.secretspec
+    pkgs.nixfmt
+    pkgs.nodePackages.prettier
+  ];
 
   languages.rust.enable = true;
 
@@ -16,6 +27,8 @@
       settings.denyWarnings = true;
     };
     rustfmt.enable = true;
+    nixfmt.enable = true;
+    prettier.enable = true;
   };
 
   # See full reference at https://devenv.sh/reference/options/

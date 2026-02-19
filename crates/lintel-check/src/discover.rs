@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-const KNOWN_EXTENSIONS: &[&str] = &["json", "jsonc", "json5", "toml", "yaml", "yml"];
+const KNOWN_EXTENSIONS: &[&str] = &["json", "jsonc", "json5", "toml", "yaml", "yml", "md", "mdx"];
 
 /// Walk `root` respecting `.gitignore`, returning files with known config extensions.
 ///

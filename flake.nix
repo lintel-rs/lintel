@@ -21,7 +21,15 @@
         pkgs = nixpkgs.legacyPackages.${system};
         craneLib = crane.mkLib pkgs;
 
-        src = craneLib.cleanCargoSource ./.;
+        src =
+          let
+            inherit (pkgs) lib;
+            testdataFilter = path: _type: (lib.hasInfix "testdata" path);
+          in
+          lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type: (craneLib.filterCargoSources path type) || (testdataFilter path type);
+          };
 
         commonArgs = {
           inherit src;
@@ -47,6 +55,23 @@
         packages = {
           inherit lintel;
           default = lintel;
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          docker = pkgs.dockerTools.buildLayeredImage {
+            name = "ghcr.io/lintel-rs/lintel";
+            tag = "latest";
+            contents = [
+              lintel
+              pkgs.cacert
+            ];
+            config = {
+              Entrypoint = [ "${lintel}/bin/lintel" ];
+              Labels = {
+                "org.opencontainers.image.source" = "https://github.com/lintel-rs/lintel";
+                "org.opencontainers.image.description" = "Validate JSON, YAML, and TOML files against JSON Schema";
+              };
+            };
+          };
         };
 
         apps.default = flake-utils.lib.mkApp {

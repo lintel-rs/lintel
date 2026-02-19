@@ -1,6 +1,7 @@
 mod json;
 mod json5;
 mod jsonc;
+mod markdown;
 mod toml_parser;
 mod yaml;
 
@@ -13,6 +14,7 @@ use crate::diagnostics::ParseDiagnostic;
 pub use self::json::JsonParser;
 pub use self::json5::Json5Parser;
 pub use self::jsonc::JsoncParser;
+pub use self::markdown::MarkdownParser;
 pub use self::toml_parser::TomlParser;
 pub use self::yaml::YamlParser;
 
@@ -23,6 +25,7 @@ pub enum FileFormat {
     Jsonc,
     Toml,
     Yaml,
+    Markdown,
 }
 
 /// Parse file content into a `serde_json::Value`.
@@ -52,6 +55,7 @@ pub fn detect_format(path: &Path) -> FileFormat {
         Some("json5") => FileFormat::Json5,
         Some("jsonc") => FileFormat::Jsonc,
         Some("toml") => FileFormat::Toml,
+        Some("md" | "mdx") => FileFormat::Markdown,
         _ => FileFormat::Json,
     }
 }
@@ -64,6 +68,7 @@ pub fn parser_for(format: FileFormat) -> Box<dyn Parser> {
         FileFormat::Jsonc => Box::new(JsoncParser),
         FileFormat::Toml => Box::new(TomlParser),
         FileFormat::Yaml => Box::new(YamlParser),
+        FileFormat::Markdown => Box::new(MarkdownParser),
     }
 }
 

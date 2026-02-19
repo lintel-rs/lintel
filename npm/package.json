@@ -1,0 +1,38 @@
+{
+  "name": "lintel-rs",
+  "version": "0.0.1",
+  "description": "Schema validation for your entire repo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lintel-rs/lintel"
+  },
+  "homepage": "https://github.com/lintel-rs/lintel",
+  "keywords": [
+    "json-schema",
+    "validation",
+    "yaml",
+    "toml",
+    "linter",
+    "config"
+  ],
+  "bin": {
+    "lintel": "bin/lintel"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
