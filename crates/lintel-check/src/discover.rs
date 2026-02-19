@@ -53,7 +53,7 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn discovers_known_extensions() -> Result<(), Box<dyn std::error::Error>> {
+    fn discovers_known_extensions() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(tmp.path().join("a.json"), "{}")?;
         fs::write(tmp.path().join("b.yaml"), "key: val")?;
@@ -71,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn respects_exclude_patterns() -> Result<(), Box<dyn std::error::Error>> {
+    fn respects_exclude_patterns() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("vendor");
         fs::create_dir_all(&sub)?;
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn discovers_dotfiles() -> Result<(), Box<dyn std::error::Error>> {
+    fn discovers_dotfiles() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(tmp.path().join(".eslintrc.json"), "{}")?;
 

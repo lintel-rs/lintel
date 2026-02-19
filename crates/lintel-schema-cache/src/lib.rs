@@ -171,22 +171,28 @@ mod tests {
         assert_ne!(a, b);
     }
 
+    /// Convert a `Box<dyn Error + Send + Sync>` to `anyhow::Error`.
+    #[allow(clippy::needless_pass_by_value)]
+    fn boxerr(e: Box<dyn Error + Send + Sync>) -> anyhow::Error {
+        anyhow::anyhow!("{e}")
+    }
+
     #[test]
-    fn fetch_no_cache_dir() -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn fetch_no_cache_dir() -> anyhow::Result<()> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
-        let (val, status) = cache.fetch("https://example.com/s.json")?;
+        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
         assert_eq!(status, CacheStatus::Disabled);
         Ok(())
     }
 
     #[test]
-    fn fetch_cold_cache() -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn fetch_cold_cache() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let client = mock(&[("https://example.com/s.json", r#"{"type":"string"}"#)]);
         let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json")?;
+        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "string"}));
         assert_eq!(status, CacheStatus::Miss);
 
@@ -198,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn fetch_warm_cache() -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn fetch_warm_cache() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let hash = SchemaCache::<MockClient>::hash_uri("https://example.com/s.json");
         let cache_path = tmp.path().join(format!("{hash}.json"));
@@ -207,7 +213,7 @@ mod tests {
         // Client has no entries — if it were called, it would error
         let client = mock(&[]);
         let cache = SchemaCache::new(Some(tmp.path().to_path_buf()), client);
-        let (val, status) = cache.fetch("https://example.com/s.json")?;
+        let (val, status) = cache.fetch("https://example.com/s.json").map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "number"}));
         assert_eq!(status, CacheStatus::Hit);
         Ok(())
@@ -228,21 +234,23 @@ mod tests {
     }
 
     #[test]
-    fn retrieve_trait_delegates() -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn retrieve_trait_delegates() -> anyhow::Result<()> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
         let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
-        let val = jsonschema::Retrieve::retrieve(&cache, &uri)?;
+        let val = jsonschema::Retrieve::retrieve(&cache, &uri).map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
         Ok(())
     }
 
     #[tokio::test]
-    async fn async_retrieve_trait_delegates() -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn async_retrieve_trait_delegates() -> anyhow::Result<()> {
         let client = mock(&[("https://example.com/s.json", r#"{"type":"object"}"#)]);
         let cache = SchemaCache::new(None, client);
         let uri: jsonschema::Uri<String> = "https://example.com/s.json".parse()?;
-        let val = jsonschema::AsyncRetrieve::retrieve(&cache, &uri).await?;
+        let val = jsonschema::AsyncRetrieve::retrieve(&cache, &uri)
+            .await
+            .map_err(boxerr)?;
         assert_eq!(val, serde_json::json!({"type": "object"}));
         Ok(())
     }

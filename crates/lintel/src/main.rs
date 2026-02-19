@@ -263,10 +263,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cli_parses_check_basic_args() -> Result<(), String> {
+    fn cli_parses_check_basic_args() -> anyhow::Result<()> {
         let cli = cli()
             .run_inner(&["check", "*.json"])
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, args) => {
                 assert_eq!(args.globs, vec!["*.json"]);
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_parses_check_all_options() -> Result<(), String> {
+    fn cli_parses_check_all_options() -> anyhow::Result<()> {
         let cli = cli()
             .run_inner(&[
                 "check",
@@ -299,7 +299,7 @@ mod tests {
                 "--format",
                 "jsonc",
             ])
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, args) => {
                 assert_eq!(args.globs, vec!["*.json", "**/*.json"]);
@@ -315,8 +315,10 @@ mod tests {
     }
 
     #[test]
-    fn cli_check_no_globs_is_valid() -> Result<(), String> {
-        let cli = cli().run_inner(&["check"]).map_err(|e| format!("{e:?}"))?;
+    fn cli_check_no_globs_is_valid() -> anyhow::Result<()> {
+        let cli = cli()
+            .run_inner(&["check"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, args) => {
                 assert!(args.globs.is_empty());
@@ -327,10 +329,10 @@ mod tests {
     }
 
     #[test]
-    fn cli_parses_ci_subcommand() -> Result<(), String> {
+    fn cli_parses_ci_subcommand() -> anyhow::Result<()> {
         let cli = cli()
             .run_inner(&["ci", "*.json", "--no-catalog"])
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::CI(_, args) => {
                 assert_eq!(args.globs, vec!["*.json"]);
@@ -342,10 +344,10 @@ mod tests {
     }
 
     #[test]
-    fn cli_verbose_short_after_subcommand() -> Result<(), String> {
+    fn cli_verbose_short_after_subcommand() -> anyhow::Result<()> {
         let parsed = cli()
             .run_inner(&["check", "-v", "*.json"])
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
             Commands::Check(cli_options, args) => {
                 assert!(cli_options.verbose);
@@ -357,10 +359,10 @@ mod tests {
     }
 
     #[test]
-    fn cli_verbose_long_after_subcommand() -> Result<(), String> {
+    fn cli_verbose_long_after_subcommand() -> anyhow::Result<()> {
         let parsed = cli()
             .run_inner(&["check", "--verbose"])
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
             Commands::Check(cli_options, _) => {
                 assert!(cli_options.verbose);

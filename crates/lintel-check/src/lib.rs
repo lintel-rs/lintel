@@ -1,7 +1,7 @@
 #![allow(unused_assignments)] // thiserror/miette derive macros trigger false positives
 
 pub mod catalog;
-pub mod config;
+pub use lintel_config as config;
 pub mod diagnostics;
 pub mod discover;
 pub mod parsers;

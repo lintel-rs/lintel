@@ -243,7 +243,7 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn loads_config_from_directory() -> Result<(), Box<dyn std::error::Error>> {
+    fn loads_config_from_directory() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -256,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn walks_up_to_find_config() -> Result<(), Box<dyn std::error::Error>> {
+    fn walks_up_to_find_config() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("a/b/c");
         fs::create_dir_all(&sub)?;
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_none_when_no_config() -> Result<(), Box<dyn std::error::Error>> {
+    fn returns_none_when_no_config() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let config = find_and_load(tmp.path())?;
         assert!(config.is_none());
@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_config_is_valid() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_config_is_valid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(tmp.path().join("lintel.toml"), "")?;
 
@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_fields() -> Result<(), Box<dyn std::error::Error>> {
+    fn rejects_unknown_fields() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(tmp.path().join("lintel.toml"), "bogus = true")?;
 
@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn loads_rewrite_rules() -> Result<(), Box<dyn std::error::Error>> {
+    fn loads_rewrite_rules() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -318,7 +318,7 @@ mod tests {
     // --- root = true ---
 
     #[test]
-    fn root_true_stops_walk() -> Result<(), Box<dyn std::error::Error>> {
+    fn root_true_stops_walk() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
         fs::create_dir_all(&sub)?;
@@ -339,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn merges_parent_without_root() -> Result<(), Box<dyn std::error::Error>> {
+    fn merges_parent_without_root() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
         fs::create_dir_all(&sub)?;
@@ -382,7 +382,7 @@ exclude = ["child/**"]
     }
 
     #[test]
-    fn child_rewrite_wins_on_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    fn child_rewrite_wins_on_conflict() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
         fs::create_dir_all(&sub)?;
@@ -473,7 +473,7 @@ exclude = ["child/**"]
     // --- Override parsing ---
 
     #[test]
-    fn parses_override_blocks() -> Result<(), Box<dyn std::error::Error>> {
+    fn parses_override_blocks() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -497,7 +497,7 @@ validate_formats = true
     }
 
     #[test]
-    fn override_validate_formats_defaults_to_none() -> Result<(), Box<dyn std::error::Error>> {
+    fn override_validate_formats_defaults_to_none() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
@@ -667,7 +667,7 @@ files = ["schemas/vector.json"]
     // --- Override merge behavior ---
 
     #[test]
-    fn merge_overrides_child_first() -> Result<(), Box<dyn std::error::Error>> {
+    fn merge_overrides_child_first() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("child");
         fs::create_dir_all(&sub)?;

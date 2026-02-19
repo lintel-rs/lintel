@@ -1103,9 +1103,9 @@ dependencies = [
  "json5",
  "jsonc-parser",
  "jsonschema",
+ "lintel-config",
  "lintel-schema-cache",
  "miette",
- "schemars",
  "schemastore",
  "serde",
  "serde_json",
@@ -1117,9 +1117,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-config"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "glob-match",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "lintel-schema-cache"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "dirs",
  "jsonschema",
@@ -1708,6 +1722,7 @@ dependencies = [
 name = "schemastore"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "glob-match",
  "serde",
  "serde_json",

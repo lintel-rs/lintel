@@ -94,8 +94,6 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use std::boxed::Box;
-    use std::error::Error;
 
     fn test_catalog() -> Catalog {
         Catalog {
@@ -223,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_catalog_from_json() -> Result<(), Box<dyn Error>> {
+    fn parse_catalog_from_json() -> anyhow::Result<()> {
         let json = r#"{"schemas":[{"name":"test","url":"https://example.com/s.json","fileMatch":["*.json"]}]}"#;
         let value: serde_json::Value = serde_json::from_str(json)?;
         let catalog = parse_catalog(value)?;

@@ -270,7 +270,7 @@ mod tests {
     // --- parser_for round-trip ---
 
     #[test]
-    fn parser_for_json_parses() -> Result<(), Box<dyn std::error::Error>> {
+    fn parser_for_json_parses() -> anyhow::Result<()> {
         let p = parser_for(FileFormat::Json);
         let val = p.parse(r#"{"key":"value"}"#, "test.json")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn parser_for_yaml_parses() -> Result<(), Box<dyn std::error::Error>> {
+    fn parser_for_yaml_parses() -> anyhow::Result<()> {
         let p = parser_for(FileFormat::Yaml);
         let val = p.parse("key: value\n", "test.yaml")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn parser_for_json5_parses() -> Result<(), Box<dyn std::error::Error>> {
+    fn parser_for_json5_parses() -> anyhow::Result<()> {
         let p = parser_for(FileFormat::Json5);
         let val = p.parse(r#"{key: "value"}"#, "test.json5")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn parser_for_jsonc_parses() -> Result<(), Box<dyn std::error::Error>> {
+    fn parser_for_jsonc_parses() -> anyhow::Result<()> {
         let p = parser_for(FileFormat::Jsonc);
         let val = p.parse(r#"{"key": "value" /* comment */}"#, "test.jsonc")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));
@@ -302,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn parser_for_toml_parses() -> Result<(), Box<dyn std::error::Error>> {
+    fn parser_for_toml_parses() -> anyhow::Result<()> {
         let p = parser_for(FileFormat::Toml);
         let val = p.parse("key = \"value\"\n", "test.toml")?;
         assert_eq!(val, serde_json::json!({"key": "value"}));

@@ -143,7 +143,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_yaml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
+    fn parse_yaml_frontmatter() -> anyhow::Result<()> {
         let content = "---\nname: test\ndescription: hello\n---\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_toml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
+    fn parse_toml_frontmatter() -> anyhow::Result<()> {
         let content = "+++\nname = \"test\"\n+++\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn no_frontmatter_returns_null() -> Result<(), Box<dyn std::error::Error>> {
+    fn no_frontmatter_returns_null() -> anyhow::Result<()> {
         let content = "# Just a heading\nSome text\n";
         let val = MarkdownParser.parse(content, "test.md")?;
         assert!(val.is_null());
@@ -183,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_frontmatter_with_leading_html_comment() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_frontmatter_with_leading_html_comment() -> anyhow::Result<()> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n---\nname: test\n---\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn toml_frontmatter_with_leading_html_comment() -> Result<(), Box<dyn std::error::Error>> {
+    fn toml_frontmatter_with_leading_html_comment() -> anyhow::Result<()> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n+++\nname = \"test\"\n+++\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn html_comment_schema_plus_yaml_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
+    fn html_comment_schema_plus_yaml_frontmatter() -> anyhow::Result<()> {
         let content =
             "<!-- $schema: https://example.com/s.json -->\n---\nname: researcher\n---\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_html_comments_before_frontmatter() -> Result<(), Box<dyn std::error::Error>> {
+    fn multiple_html_comments_before_frontmatter() -> anyhow::Result<()> {
         let content = "<!-- comment 1 -->\n<!-- comment 2 -->\n---\nname: test\n---\n";
         let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "test");
@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_frontmatter_with_complex_values() -> Result<(), Box<dyn std::error::Error>> {
+    fn yaml_frontmatter_with_complex_values() -> anyhow::Result<()> {
         let content = "---\nname: my-skill\nallowed-tools:\n  - Bash\n  - Read\n---\n# Body\n";
         let val = MarkdownParser.parse(content, "test.md")?;
         assert_eq!(val["name"], "my-skill");

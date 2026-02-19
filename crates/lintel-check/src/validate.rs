@@ -200,7 +200,11 @@ fn validate_config(
     let content = fs::read_to_string(config_path)?;
     let config_value: Value = toml::from_str(&content)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {e}", config_path.display()))?;
-    let schema_value = config::schema();
+    let schema_value: Value = serde_json::from_str(include_str!(concat!(
+        env!("OUT_DIR"),
+        "/lintel-config.schema.json"
+    )))
+    .context("failed to parse embedded lintel config schema")?;
     if let Ok(validator) = jsonschema::options().build(&schema_value) {
         let path_str = config_path.display().to_string();
         for error in validator.iter_errors(&config_value) {
@@ -729,7 +733,7 @@ mod tests {
     // --- Directory scanning tests ---
 
     #[tokio::test]
-    async fn no_matching_files() -> Result<(), Box<dyn std::error::Error>> {
+    async fn no_matching_files() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
@@ -747,7 +751,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dir_all_valid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn dir_all_valid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests"]);
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -755,7 +759,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dir_all_invalid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn dir_all_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["negative_tests"]);
         let result = run(&c, schema_mock()).await?;
         assert!(result.has_errors());
@@ -763,7 +767,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dir_mixed_valid_and_invalid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn dir_mixed_valid_and_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "negative_tests"]);
         let result = run(&c, schema_mock()).await?;
         assert!(result.has_errors());
@@ -771,7 +775,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dir_no_schemas_skipped() -> Result<(), Box<dyn std::error::Error>> {
+    async fn dir_no_schemas_skipped() -> anyhow::Result<()> {
         let c = args_for_dirs(&["no_schema"]);
         let result = run(&c, mock(&[])).await?;
         assert!(!result.has_errors());
@@ -779,7 +783,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dir_valid_with_no_schema_files() -> Result<(), Box<dyn std::error::Error>> {
+    async fn dir_valid_with_no_schema_files() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "no_schema"]);
         let result = run(&c, schema_mock()).await?;
         assert!(!result.has_errors());
@@ -789,7 +793,7 @@ mod tests {
     // --- Directory as positional arg ---
 
     #[tokio::test]
-    async fn directory_arg_discovers_files() -> Result<(), Box<dyn std::error::Error>> {
+    async fn directory_arg_discovers_files() -> anyhow::Result<()> {
         let dir = testdata().join("positive_tests");
         let c = ValidateArgs {
             globs: vec![dir.to_string_lossy().to_string()],
@@ -807,7 +811,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn multiple_directory_args() -> Result<(), Box<dyn std::error::Error>> {
+    async fn multiple_directory_args() -> anyhow::Result<()> {
         let pos_dir = testdata().join("positive_tests");
         let no_schema_dir = testdata().join("no_schema");
         let c = ValidateArgs {
@@ -828,7 +832,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mix_directory_and_glob_args() -> Result<(), Box<dyn std::error::Error>> {
+    async fn mix_directory_and_glob_args() -> anyhow::Result<()> {
         let dir = testdata().join("positive_tests");
         let glob_pattern = testdata()
             .join("no_schema")
@@ -850,7 +854,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_json_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+    async fn malformed_json_parse_error() -> anyhow::Result<()> {
         let base = testdata().join("malformed");
         let c = ValidateArgs {
             globs: vec![base.join("*.json").to_string_lossy().to_string()],
@@ -867,7 +871,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_yaml_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+    async fn malformed_yaml_parse_error() -> anyhow::Result<()> {
         let base = testdata().join("malformed");
         let c = ValidateArgs {
             globs: vec![base.join("*.yaml").to_string_lossy().to_string()],
@@ -886,7 +890,7 @@ mod tests {
     // --- Exclude filter ---
 
     #[tokio::test]
-    async fn exclude_filters_files_in_dir() -> Result<(), Box<dyn std::error::Error>> {
+    async fn exclude_filters_files_in_dir() -> anyhow::Result<()> {
         let base = testdata().join("negative_tests");
         let c = ValidateArgs {
             globs: scenario_globs(&["positive_tests", "negative_tests"]),
@@ -909,7 +913,7 @@ mod tests {
     // --- Cache options ---
 
     #[tokio::test]
-    async fn custom_cache_dir() -> Result<(), Box<dyn std::error::Error>> {
+    async fn custom_cache_dir() -> anyhow::Result<()> {
         let cache_tmp = tempfile::tempdir()?;
         let c = ValidateArgs {
             globs: scenario_globs(&["positive_tests"]),
@@ -932,7 +936,7 @@ mod tests {
     // --- Local schema ---
 
     #[tokio::test]
-    async fn json_valid_with_local_schema() -> Result<(), Box<dyn std::error::Error>> {
+    async fn json_valid_with_local_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, SCHEMA)?;
@@ -962,7 +966,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn yaml_valid_with_local_schema() -> Result<(), Box<dyn std::error::Error>> {
+    async fn yaml_valid_with_local_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, SCHEMA)?;
@@ -992,7 +996,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_local_schema_errors() -> Result<(), Box<dyn std::error::Error>> {
+    async fn missing_local_schema_errors() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let f = tmp.path().join("ref.json");
         fs::write(&f, r#"{"$schema":"/nonexistent/schema.json"}"#)?;
@@ -1015,7 +1019,7 @@ mod tests {
     // --- JSON5 / JSONC tests ---
 
     #[tokio::test]
-    async fn json5_valid_with_schema() -> Result<(), Box<dyn std::error::Error>> {
+    async fn json5_valid_with_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, SCHEMA)?;
@@ -1049,7 +1053,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn jsonc_valid_with_schema() -> Result<(), Box<dyn std::error::Error>> {
+    async fn jsonc_valid_with_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, SCHEMA)?;
@@ -1107,7 +1111,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn catalog_matches_github_workflow_valid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn catalog_matches_github_workflow_valid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
@@ -1142,7 +1146,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn catalog_matches_github_workflow_invalid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn catalog_matches_github_workflow_invalid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
@@ -1174,7 +1178,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn auto_discover_finds_github_workflows() -> Result<(), Box<dyn std::error::Error>> {
+    async fn auto_discover_finds_github_workflows() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
@@ -1215,7 +1219,7 @@ mod tests {
     // --- TOML tests ---
 
     #[tokio::test]
-    async fn toml_valid_with_schema() -> Result<(), Box<dyn std::error::Error>> {
+    async fn toml_valid_with_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, SCHEMA)?;
@@ -1247,8 +1251,7 @@ mod tests {
     // --- Rewrite rules + // resolution ---
 
     #[tokio::test]
-    async fn rewrite_rule_with_double_slash_resolves_schema()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn rewrite_rule_with_double_slash_resolves_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
 
         let schemas_dir = tmp.path().join("schemas");
@@ -1287,8 +1290,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn double_slash_schema_resolves_relative_to_config()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn double_slash_schema_resolves_relative_to_config() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
 
         let schemas_dir = tmp.path().join("schemas");
@@ -1328,7 +1330,7 @@ mod tests {
     }"#;
 
     #[tokio::test]
-    async fn format_errors_reported_without_override() -> Result<(), Box<dyn std::error::Error>> {
+    async fn format_errors_reported_without_override() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, FORMAT_SCHEMA)?;
@@ -1361,7 +1363,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn format_errors_suppressed_with_override() -> Result<(), Box<dyn std::error::Error>> {
+    async fn format_errors_suppressed_with_override() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let schema_path = tmp.path().join("schema.json");
         fs::write(&schema_path, FORMAT_SCHEMA)?;
@@ -1406,8 +1408,7 @@ validate_formats = false
     // --- Unrecognized extension handling ---
 
     #[tokio::test]
-    async fn unrecognized_extension_skipped_without_catalog()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn unrecognized_extension_skipped_without_catalog() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         fs::write(tmp.path().join("config.nix"), r#"{"name":"hello"}"#)?;
 
@@ -1428,8 +1429,7 @@ validate_formats = false
     }
 
     #[tokio::test]
-    async fn unrecognized_extension_parsed_when_catalog_matches()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn unrecognized_extension_parsed_when_catalog_matches() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         // File has .cfg extension (unrecognized) but content is valid JSON
         fs::write(
@@ -1469,8 +1469,7 @@ validate_formats = false
     }
 
     #[tokio::test]
-    async fn unrecognized_extension_unparseable_skipped() -> Result<(), Box<dyn std::error::Error>>
-    {
+    async fn unrecognized_extension_unparseable_skipped() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         // File matches catalog but content isn't parseable by any format
         fs::write(
@@ -1505,8 +1504,7 @@ validate_formats = false
     }
 
     #[tokio::test]
-    async fn unrecognized_extension_invalid_against_schema()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn unrecognized_extension_invalid_against_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         // File has .cfg extension, content is valid JSON but fails schema validation
         fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#)?;
