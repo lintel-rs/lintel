@@ -3,7 +3,6 @@
 {
   packages = with pkgs; [
     git
-    secretspec
   ];
 
   languages.rust.enable = true;
