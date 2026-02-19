@@ -48,15 +48,16 @@ pub trait Parser {
     }
 }
 
-/// Detect file format from extension. Defaults to JSON for unknown extensions.
-pub fn detect_format(path: &Path) -> FileFormat {
+/// Detect file format from extension. Returns `None` for unrecognized extensions.
+pub fn detect_format(path: &Path) -> Option<FileFormat> {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("yaml" | "yml") => FileFormat::Yaml,
-        Some("json5") => FileFormat::Json5,
-        Some("jsonc") => FileFormat::Jsonc,
-        Some("toml") => FileFormat::Toml,
-        Some("md" | "mdx") => FileFormat::Markdown,
-        _ => FileFormat::Json,
+        Some("json") => Some(FileFormat::Json),
+        Some("yaml" | "yml") => Some(FileFormat::Yaml),
+        Some("json5") => Some(FileFormat::Json5),
+        Some("jsonc") => Some(FileFormat::Jsonc),
+        Some("toml") => Some(FileFormat::Toml),
+        Some("md" | "mdx") => Some(FileFormat::Markdown),
+        _ => None,
     }
 }
 
@@ -92,34 +93,41 @@ mod tests {
 
     #[test]
     fn detect_format_json() {
-        assert_eq!(detect_format(Path::new("foo.json")), FileFormat::Json);
+        assert_eq!(detect_format(Path::new("foo.json")), Some(FileFormat::Json));
     }
 
     #[test]
     fn detect_format_yaml() {
-        assert_eq!(detect_format(Path::new("foo.yaml")), FileFormat::Yaml);
-        assert_eq!(detect_format(Path::new("foo.yml")), FileFormat::Yaml);
+        assert_eq!(detect_format(Path::new("foo.yaml")), Some(FileFormat::Yaml));
+        assert_eq!(detect_format(Path::new("foo.yml")), Some(FileFormat::Yaml));
     }
 
     #[test]
     fn detect_format_json5() {
-        assert_eq!(detect_format(Path::new("foo.json5")), FileFormat::Json5);
+        assert_eq!(
+            detect_format(Path::new("foo.json5")),
+            Some(FileFormat::Json5)
+        );
     }
 
     #[test]
     fn detect_format_jsonc() {
-        assert_eq!(detect_format(Path::new("foo.jsonc")), FileFormat::Jsonc);
+        assert_eq!(
+            detect_format(Path::new("foo.jsonc")),
+            Some(FileFormat::Jsonc)
+        );
     }
 
     #[test]
     fn detect_format_toml() {
-        assert_eq!(detect_format(Path::new("foo.toml")), FileFormat::Toml);
+        assert_eq!(detect_format(Path::new("foo.toml")), Some(FileFormat::Toml));
     }
 
     #[test]
-    fn detect_format_unknown_defaults_to_json() {
-        assert_eq!(detect_format(Path::new("foo.txt")), FileFormat::Json);
-        assert_eq!(detect_format(Path::new("foo")), FileFormat::Json);
+    fn detect_format_unknown_returns_none() {
+        assert_eq!(detect_format(Path::new("foo.txt")), None);
+        assert_eq!(detect_format(Path::new("foo")), None);
+        assert_eq!(detect_format(Path::new("devenv.nix")), None);
     }
 
     // --- extract_schema_uri via trait ---

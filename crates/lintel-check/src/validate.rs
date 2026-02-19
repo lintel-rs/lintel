@@ -13,6 +13,7 @@ use crate::diagnostics::{
 };
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
+use crate::registry;
 use crate::retriever::{default_cache_dir, CacheStatus, HttpClient, SchemaCache};
 
 pub struct ValidateArgs {
@@ -228,6 +229,23 @@ fn validate_config(
 // Phase 1: Parse files and resolve schema URIs
 // ---------------------------------------------------------------------------
 
+/// Try parsing content with each known format, returning the first success.
+///
+/// JSONC is tried first (superset of JSON, handles comments), then YAML and
+/// TOML which cover the most common config formats, followed by the rest.
+fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
+    use parsers::FileFormat::*;
+    const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
+
+    for fmt in FORMATS {
+        let parser = parsers::parser_for(fmt);
+        if let Ok(val) = parser.parse(content, file_name) {
+            return Some((fmt, val));
+        }
+    }
+    None
+}
+
 /// Parse each file, extract its schema URI, apply rewrites, and group by
 /// resolved schema URI.
 fn parse_and_group_files(
@@ -252,40 +270,56 @@ fn parse_and_group_files(
             }
         };
 
-        let mut format = args.format.unwrap_or_else(|| parsers::detect_format(path));
-        let mut parser = parsers::parser_for(format);
         let path_str = path.display().to_string();
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(&path_str);
 
-        // Parse with detected format, falling back to JSONC for catalog-matched .json files.
-        let instance = match parser.parse(&content, &path_str) {
-            Ok(val) => val,
-            Err(parse_err) => {
-                // Only attempt JSONC fallback for .json files that match a catalog entry.
-                let should_try_jsonc = format == FileFormat::Json
-                    && compiled_catalogs
-                        .iter()
-                        .any(|cat| cat.find_schema(&path_str, file_name).is_some());
+        let detected_format = args.format.or_else(|| parsers::detect_format(path));
 
-                if !should_try_jsonc {
-                    errors.push(LintError::Parse(parse_err));
-                    continue;
-                }
+        // For unrecognized extensions, only proceed if a catalog or config mapping matches.
+        if detected_format.is_none() {
+            let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
+                || compiled_catalogs
+                    .iter()
+                    .any(|cat| cat.find_schema(&path_str, file_name).is_some());
+            if !has_match {
+                continue;
+            }
+        }
 
-                match JsoncParser.parse(&content, &path_str) {
-                    Ok(val) => {
-                        format = FileFormat::Jsonc;
-                        parser = parsers::parser_for(format);
-                        val
-                    }
-                    Err(jsonc_err) => {
-                        errors.push(LintError::Parse(jsonc_err));
+        // Parse the file content.
+        let (parser, instance): (Box<dyn Parser>, Value) = if let Some(fmt) = detected_format {
+            // Known format — parse with detected/overridden format.
+            let parser = parsers::parser_for(fmt);
+            match parser.parse(&content, &path_str) {
+                Ok(val) => (parser, val),
+                Err(parse_err) => {
+                    // JSONC fallback for .json files that match a catalog entry.
+                    if fmt == FileFormat::Json
+                        && compiled_catalogs
+                            .iter()
+                            .any(|cat| cat.find_schema(&path_str, file_name).is_some())
+                    {
+                        match JsoncParser.parse(&content, &path_str) {
+                            Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
+                            Err(jsonc_err) => {
+                                errors.push(LintError::Parse(jsonc_err));
+                                continue;
+                            }
+                        }
+                    } else {
+                        errors.push(LintError::Parse(parse_err));
                         continue;
                     }
                 }
+            }
+        } else {
+            // Unrecognized extension with catalog/config match — try all parsers.
+            match try_parse_all(&content, &path_str) {
+                Some((fmt, val)) => (parsers::parser_for(fmt), val),
+                None => continue,
             }
         };
 
@@ -496,12 +530,12 @@ pub async fn run_with<C: HttpClient>(
 
     if !args.no_catalog {
         // Default Lintel catalog (github:lintel-rs/catalog)
-        match catalog::fetch_registry(&retriever, catalog::DEFAULT_REGISTRY) {
+        match registry::fetch(&retriever, registry::DEFAULT_REGISTRY) {
             Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
             Err(e) => {
                 eprintln!(
                     "warning: failed to fetch default catalog {}: {e}",
-                    catalog::DEFAULT_REGISTRY
+                    registry::DEFAULT_REGISTRY
                 );
             }
         }
@@ -514,7 +548,7 @@ pub async fn run_with<C: HttpClient>(
         }
         // Additional registries from lintel.toml
         for registry_url in &config.registries {
-            match catalog::fetch_registry(&retriever, registry_url) {
+            match registry::fetch(&retriever, registry_url) {
                 Ok(cat) => compiled_catalogs.push(CompiledCatalog::compile(&cat)),
                 Err(e) => {
                     eprintln!("warning: failed to fetch registry {registry_url}: {e}");
@@ -1344,5 +1378,138 @@ validate_formats = false
             !result.has_errors(),
             "expected no errors with validate_formats = false override"
         );
+    }
+
+    // --- Unrecognized extension handling ---
+
+    #[tokio::test]
+    async fn unrecognized_extension_skipped_without_catalog() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("config.nix"), r#"{"name":"hello"}"#).unwrap();
+
+        let pattern = tmp.path().join("config.nix").to_string_lossy().to_string();
+        let c = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            no_cache: true,
+            no_catalog: true,
+            format: None,
+            config_dir: Some(tmp.path().to_path_buf()),
+        };
+        let result = run(&c, mock(&[])).await.unwrap();
+        assert!(!result.has_errors());
+        assert_eq!(result.files_checked(), 0);
+    }
+
+    #[tokio::test]
+    async fn unrecognized_extension_parsed_when_catalog_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        // File has .cfg extension (unrecognized) but content is valid JSON
+        fs::write(
+            tmp.path().join("myapp.cfg"),
+            r#"{"name":"hello","on":"push","jobs":{"build":{}}}"#,
+        )
+        .unwrap();
+
+        let catalog_json = r#"{"schemas":[{
+            "name": "MyApp Config",
+            "url": "https://example.com/myapp.schema.json",
+            "fileMatch": ["*.cfg"]
+        }]}"#;
+        let schema =
+            r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
+
+        let pattern = tmp.path().join("myapp.cfg").to_string_lossy().to_string();
+        let client = mock(&[
+            (
+                "https://www.schemastore.org/api/json/catalog.json",
+                catalog_json,
+            ),
+            ("https://example.com/myapp.schema.json", schema),
+        ]);
+        let c = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            no_cache: true,
+            no_catalog: false,
+            format: None,
+            config_dir: Some(tmp.path().to_path_buf()),
+        };
+        let result = run(&c, client).await.unwrap();
+        assert!(!result.has_errors());
+        assert_eq!(result.files_checked(), 1);
+    }
+
+    #[tokio::test]
+    async fn unrecognized_extension_unparseable_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        // File matches catalog but content isn't parseable by any format
+        fs::write(
+            tmp.path().join("myapp.cfg"),
+            "{ pkgs, ... }: { packages = [ pkgs.git ]; }",
+        )
+        .unwrap();
+
+        let catalog_json = r#"{"schemas":[{
+            "name": "MyApp Config",
+            "url": "https://example.com/myapp.schema.json",
+            "fileMatch": ["*.cfg"]
+        }]}"#;
+
+        let pattern = tmp.path().join("myapp.cfg").to_string_lossy().to_string();
+        let client = mock(&[(
+            "https://www.schemastore.org/api/json/catalog.json",
+            catalog_json,
+        )]);
+        let c = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            no_cache: true,
+            no_catalog: false,
+            format: None,
+            config_dir: Some(tmp.path().to_path_buf()),
+        };
+        let result = run(&c, client).await.unwrap();
+        assert!(!result.has_errors());
+        assert_eq!(result.files_checked(), 0);
+    }
+
+    #[tokio::test]
+    async fn unrecognized_extension_invalid_against_schema() {
+        let tmp = tempfile::tempdir().unwrap();
+        // File has .cfg extension, content is valid JSON but fails schema validation
+        fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#).unwrap();
+
+        let catalog_json = r#"{"schemas":[{
+            "name": "MyApp Config",
+            "url": "https://example.com/myapp.schema.json",
+            "fileMatch": ["*.cfg"]
+        }]}"#;
+        let schema =
+            r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
+
+        let pattern = tmp.path().join("myapp.cfg").to_string_lossy().to_string();
+        let client = mock(&[
+            (
+                "https://www.schemastore.org/api/json/catalog.json",
+                catalog_json,
+            ),
+            ("https://example.com/myapp.schema.json", schema),
+        ]);
+        let c = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            no_cache: true,
+            no_catalog: false,
+            format: None,
+            config_dir: Some(tmp.path().to_path_buf()),
+        };
+        let result = run(&c, client).await.unwrap();
+        assert!(result.has_errors());
+        assert_eq!(result.files_checked(), 1);
     }
 }

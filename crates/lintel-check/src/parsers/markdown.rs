@@ -6,10 +6,30 @@ use super::Parser;
 
 pub struct MarkdownParser;
 
+/// Skip leading whitespace and HTML comments (`<!-- ... -->`).
+/// Returns the remaining content and the byte offset into the original string.
+fn skip_html_comments(content: &str) -> (&str, usize) {
+    let mut s = content.trim_start();
+    let mut offset = content.len() - s.len();
+
+    while s.starts_with("<!--") {
+        if let Some(end) = s.find("-->") {
+            let after = &s[end + 3..];
+            let trimmed = after.trim_start();
+            offset += s.len() - trimmed.len();
+            s = trimmed;
+        } else {
+            // Unclosed comment — stop skipping
+            break;
+        }
+    }
+
+    (s, offset)
+}
+
 /// Extract YAML frontmatter delimited by `---`.
 fn extract_yaml_frontmatter(content: &str) -> Option<(&str, usize)> {
-    let trimmed = content.trim_start();
-    let offset = content.len() - trimmed.len();
+    let (trimmed, offset) = skip_html_comments(content);
 
     if !trimmed.starts_with("---") {
         return None;
@@ -32,8 +52,7 @@ fn extract_yaml_frontmatter(content: &str) -> Option<(&str, usize)> {
 
 /// Extract TOML frontmatter delimited by `+++`.
 fn extract_toml_frontmatter(content: &str) -> Option<(&str, usize)> {
-    let trimmed = content.trim_start();
-    let offset = content.len() - trimmed.len();
+    let (trimmed, offset) = skip_html_comments(content);
 
     if !trimmed.starts_with("+++") {
         return None;
@@ -161,6 +180,39 @@ mod tests {
         let val = serde_json::json!({"name": "test"});
         let uri = MarkdownParser.extract_schema_uri(content, &val);
         assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
+    }
+
+    #[test]
+    fn yaml_frontmatter_with_leading_html_comment() {
+        let content =
+            "<!-- $schema: https://example.com/s.json -->\n---\nname: test\n---\n# Body\n";
+        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        assert_eq!(val["name"], "test");
+    }
+
+    #[test]
+    fn toml_frontmatter_with_leading_html_comment() {
+        let content =
+            "<!-- $schema: https://example.com/s.json -->\n+++\nname = \"test\"\n+++\n# Body\n";
+        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        assert_eq!(val["name"], "test");
+    }
+
+    #[test]
+    fn html_comment_schema_plus_yaml_frontmatter() {
+        let content =
+            "<!-- $schema: https://example.com/s.json -->\n---\nname: researcher\n---\n# Body\n";
+        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        assert_eq!(val["name"], "researcher");
+        let uri = MarkdownParser.extract_schema_uri(content, &val);
+        assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
+    }
+
+    #[test]
+    fn multiple_html_comments_before_frontmatter() {
+        let content = "<!-- comment 1 -->\n<!-- comment 2 -->\n---\nname: test\n---\n";
+        let val = MarkdownParser.parse(content, "test.md").unwrap();
+        assert_eq!(val["name"], "test");
     }
 
     #[test]

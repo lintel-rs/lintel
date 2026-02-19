@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-const KNOWN_EXTENSIONS: &[&str] = &["json", "jsonc", "json5", "toml", "yaml", "yml", "md", "mdx"];
+use crate::parsers;
 
 /// Walk `root` respecting `.gitignore`, returning files with known config extensions.
 ///
@@ -20,8 +20,7 @@ pub fn discover_files(root: &str, excludes: &[String]) -> Result<Vec<PathBuf>, a
         if !path.is_file() {
             continue;
         }
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if !KNOWN_EXTENSIONS.contains(&ext) {
+        if parsers::detect_format(path).is_none() {
             continue;
         }
         if is_excluded(path, excludes) {
@@ -58,13 +57,11 @@ mod tests {
         fs::write(tmp.path().join("d.json5"), "{}").unwrap();
         fs::write(tmp.path().join("e.jsonc"), "{}").unwrap();
         fs::write(tmp.path().join("f.txt"), "nope").unwrap();
+        fs::write(tmp.path().join("g.nix"), "{ }").unwrap();
 
         let files = discover_files(tmp.path().to_str().unwrap(), &[]).unwrap();
         assert_eq!(files.len(), 5);
-        assert!(files.iter().all(|f| {
-            let ext = f.extension().unwrap().to_str().unwrap();
-            KNOWN_EXTENSIONS.contains(&ext)
-        }));
+        assert!(files.iter().all(|f| parsers::detect_format(f).is_some()));
     }
 
     #[test]
