@@ -1,6 +1,9 @@
 <div align="center">
 
-# Lintel
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lintel-rs/lintel/master/assets/logo.png">
+  <img src="https://raw.githubusercontent.com/lintel-rs/lintel/master/assets/logo.png" alt="Lintel" width="300">
+</picture>
 
 **Fast, multi-format JSON Schema linter for all your config files.**
 
