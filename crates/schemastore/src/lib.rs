@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::format;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -36,39 +36,86 @@ pub fn parse_catalog(value: serde_json::Value) -> Result<Catalog, serde_json::Er
 }
 
 /// Compiled catalog for fast filename matching.
+///
+/// Uses a three-tier lookup to avoid brute-force glob matching:
+/// 1. **Exact filename** — O(log n) `BTreeMap` lookup for bare filenames
+/// 2. **Extension-indexed patterns** — only test patterns sharing the file's extension
+/// 3. **Fallback patterns** — brute-force for patterns that can't be indexed
 pub struct CompiledCatalog {
-    /// Each entry is (list of glob patterns, schema URL).
-    entries: Vec<(Vec<String>, String)>,
+    /// Tier 1: exact filename → schema URL.
+    exact_filename: BTreeMap<String, String>,
+    /// Tier 2: file extension → list of (glob pattern, schema URL).
+    extension_patterns: BTreeMap<String, Vec<(String, String)>>,
+    /// Tier 3: patterns that can't be classified into the above tiers.
+    fallback_patterns: Vec<(String, String)>,
+}
+
+/// Returns `true` if the pattern is a bare filename (no glob meta-characters or path separators).
+fn is_bare_filename(pattern: &str) -> bool {
+    !pattern.contains('/')
+        && !pattern.contains('*')
+        && !pattern.contains('?')
+        && !pattern.contains('[')
+}
+
+/// Try to extract a file extension from a glob pattern.
+///
+/// Looks for the last `.ext` segment where `ext` is alphanumeric (e.g. `.yml`, `.json`).
+/// Returns `None` for patterns like `*` or `Dockerfile` with no extension.
+fn extract_extension(pattern: &str) -> Option<&str> {
+    let file_part = pattern.rsplit('/').next().unwrap_or(pattern);
+    let dot_pos = file_part.rfind('.')?;
+    let ext = &file_part[dot_pos..];
+    // Only index clean extensions (no glob chars inside the extension)
+    if ext.contains('*') || ext.contains('?') || ext.contains('[') {
+        return None;
+    }
+    // Map back to the original pattern slice
+    let offset = pattern.len() - file_part.len() + dot_pos;
+    Some(&pattern[offset..])
 }
 
 impl CompiledCatalog {
-    /// Compile a catalog into a matcher.
+    /// Compile a catalog into a tiered matcher.
     ///
     /// Entries with no `fileMatch` patterns are skipped.
-    /// Bare filename patterns (no `/` or `*`) are expanded to also match
-    /// as `**/{pattern}` so they work with full paths.
+    /// Bare filename patterns are stored in an exact-match `BTreeMap`.
+    /// Patterns with a deterministic extension are indexed by that extension.
+    /// Everything else goes into the fallback tier.
     pub fn compile(catalog: &Catalog) -> Self {
-        let mut entries = Vec::new();
+        let mut exact_filename: BTreeMap<String, String> = BTreeMap::new();
+        let mut extension_patterns: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+        let mut fallback_patterns: Vec<(String, String)> = Vec::new();
+
         for schema in &catalog.schemas {
-            if schema.file_match.is_empty() {
-                continue;
-            }
-            let mut patterns = Vec::new();
             for pattern in &schema.file_match {
                 if pattern.starts_with('!') {
                     continue;
                 }
-                patterns.push(pattern.clone());
-                // Bare filenames: also match nested paths
-                if !pattern.contains('/') && !pattern.contains('*') {
-                    patterns.push(format!("**/{pattern}"));
+
+                if is_bare_filename(pattern) {
+                    // Tier 1: exact filename match
+                    exact_filename
+                        .entry(pattern.clone())
+                        .or_insert_with(|| schema.url.clone());
+                } else if let Some(ext) = extract_extension(pattern) {
+                    // Tier 2: extension-indexed glob pattern
+                    extension_patterns
+                        .entry(ext.to_ascii_lowercase())
+                        .or_default()
+                        .push((pattern.clone(), schema.url.clone()));
+                } else {
+                    // Tier 3: fallback
+                    fallback_patterns.push((pattern.clone(), schema.url.clone()));
                 }
             }
-            if !patterns.is_empty() {
-                entries.push((patterns, schema.url.clone()));
-            }
         }
-        Self { entries }
+
+        Self {
+            exact_filename,
+            extension_patterns,
+            fallback_patterns,
+        }
     }
 
     /// Find the schema URL for a given file path.
@@ -76,15 +123,32 @@ impl CompiledCatalog {
     /// `path` is the full path string, `file_name` is the basename.
     /// Returns the first matching schema URL, or `None`.
     pub fn find_schema(&self, path: &str, file_name: &str) -> Option<&str> {
-        for (patterns, url) in &self.entries {
-            for pattern in patterns {
-                if glob_match::glob_match(pattern, path)
-                    || glob_match::glob_match(pattern, file_name)
-                {
-                    return Some(url);
+        // Tier 1: exact filename lookup
+        if let Some(url) = self.exact_filename.get(file_name) {
+            return Some(url);
+        }
+
+        // Tier 2: extension-indexed patterns
+        if let Some(dot_pos) = file_name.rfind('.') {
+            let ext = &file_name[dot_pos..];
+            if let Some(patterns) = self.extension_patterns.get(&ext.to_ascii_lowercase()) {
+                for (pattern, url) in patterns {
+                    if glob_match::glob_match(pattern, path)
+                        || glob_match::glob_match(pattern, file_name)
+                    {
+                        return Some(url);
+                    }
                 }
             }
         }
+
+        // Tier 3: fallback patterns
+        for (pattern, url) in &self.fallback_patterns {
+            if glob_match::glob_match(pattern, path) || glob_match::glob_match(pattern, file_name) {
+                return Some(url);
+            }
+        }
+
         None
     }
 }

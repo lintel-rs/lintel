@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Default TTL for cached schemas (12 hours).
@@ -60,6 +62,8 @@ pub struct SchemaCache<C: HttpClient = ReqwestClient> {
     client: C,
     skip_read: bool,
     ttl: Option<Duration>,
+    /// In-memory cache shared across all clones via `Arc`.
+    memory_cache: Arc<Mutex<HashMap<String, Value>>>,
 }
 
 impl<C: HttpClient> SchemaCache<C> {
@@ -74,6 +78,7 @@ impl<C: HttpClient> SchemaCache<C> {
             client,
             skip_read,
             ttl,
+            memory_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -89,12 +94,26 @@ impl<C: HttpClient> SchemaCache<C> {
     ///
     /// Returns an error if the schema cannot be fetched from the network,
     /// read from disk cache, or parsed as JSON.
+    #[allow(clippy::missing_panics_doc)] // Mutex poisoning is unreachable
     #[tracing::instrument(skip(self), fields(status))]
     pub async fn fetch(
         &self,
         uri: &str,
     ) -> Result<(Value, CacheStatus), Box<dyn Error + Send + Sync>> {
-        // Check cache first (unless skip_read is set)
+        // Check in-memory cache first (unless skip_read is set)
+        if !self.skip_read
+            && let Some(value) = self
+                .memory_cache
+                .lock()
+                .expect("memory cache poisoned")
+                .get(uri)
+                .cloned()
+        {
+            tracing::Span::current().record("status", "memory_hit");
+            return Ok((value, CacheStatus::Hit));
+        }
+
+        // Check disk cache (unless skip_read is set)
         if !self.skip_read
             && let Some(ref cache_dir) = self.cache_dir
         {
@@ -102,8 +121,13 @@ impl<C: HttpClient> SchemaCache<C> {
             let cache_path = cache_dir.join(format!("{hash}.json"));
             if cache_path.exists() && !self.is_expired(&cache_path) {
                 let content = fs::read_to_string(&cache_path)?;
+                let value: Value = serde_json::from_str(&content)?;
+                self.memory_cache
+                    .lock()
+                    .expect("memory cache poisoned")
+                    .insert(uri.to_string(), value.clone());
                 tracing::Span::current().record("status", "cache_hit");
-                return Ok((serde_json::from_str(&content)?, CacheStatus::Hit));
+                return Ok((value, CacheStatus::Hit));
             }
         }
 
@@ -112,8 +136,14 @@ impl<C: HttpClient> SchemaCache<C> {
         let body = self.client.get(uri).await?;
         let value: Value = serde_json::from_str(&body)?;
 
+        // Populate in-memory cache
+        self.memory_cache
+            .lock()
+            .expect("memory cache poisoned")
+            .insert(uri.to_string(), value.clone());
+
         let status = if let Some(ref cache_dir) = self.cache_dir {
-            // Write to cache
+            // Write to disk cache
             fs::create_dir_all(cache_dir)?;
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
@@ -173,7 +203,6 @@ impl<C: HttpClient> jsonschema::AsyncRetrieve for SchemaCache<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[derive(Clone)]
     struct MockClient(HashMap<String, String>);
