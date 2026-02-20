@@ -1,7 +1,7 @@
 # $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel-benchmark"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 description = "Benchmarking harness for Lintel — runs validation against real-world repos and records timing results"
 repository.workspace = true

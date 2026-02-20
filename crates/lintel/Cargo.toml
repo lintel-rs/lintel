@@ -1,7 +1,7 @@
 # $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
 authors.workspace = true
 description = "Validate JSON and YAML files against JSON Schema"
@@ -13,7 +13,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 lintel-annotate = { version = "0.0.2", path = "../lintel-annotate" }
-lintel-check = { version = "0.0.2", path = "../lintel-check" }
+lintel-check = { version = "0.0.3", path = "../lintel-check" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
 humantime = "2"
 miette = { version = "7", features = ["fancy"] }
