@@ -1497,7 +1497,7 @@ mod tests {
         fs::write(
             &f,
             format!(
-                "# $schema: {}\nname = \"hello\"\n",
+                "# :schema {}\nname = \"hello\"\n",
                 schema_path.to_string_lossy()
             ),
         )?;

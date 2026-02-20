@@ -27,6 +27,16 @@ impl Parser for YamlParser {
         })
     }
 
+    fn annotate(&self, content: &str, schema_url: &str) -> Option<String> {
+        Some(format!(
+            "# yaml-language-server: $schema={schema_url}\n{content}"
+        ))
+    }
+
+    fn strip_annotation(&self, content: &str) -> String {
+        strip_yaml_modeline(content)
+    }
+
     fn extract_schema_uri(&self, content: &str, value: &Value) -> Option<String> {
         // First check for yaml-language-server modeline in leading comments
         if let Some(uri) = extract_yaml_modeline_schema(content) {
@@ -38,6 +48,37 @@ impl Parser for YamlParser {
             .and_then(Value::as_str)
             .map(String::from)
     }
+}
+
+/// Remove the `# yaml-language-server: $schema=URL` modeline from leading comments.
+fn strip_yaml_modeline(content: &str) -> String {
+    let mut offset = 0;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            offset += line.len() + 1;
+            continue;
+        }
+        if !trimmed.starts_with('#') {
+            break;
+        }
+        if let Some(after_hash) = trimmed.strip_prefix('#') {
+            let after_hash = after_hash.trim();
+            if let Some(rest) = after_hash.strip_prefix("yaml-language-server:")
+                && rest.trim().starts_with("$schema=")
+            {
+                let line_end = offset + line.len();
+                let remove_end = if content.as_bytes().get(line_end) == Some(&b'\n') {
+                    line_end + 1
+                } else {
+                    line_end
+                };
+                return format!("{}{}", &content[..offset], &content[remove_end..]);
+            }
+        }
+        offset += line.len() + 1;
+    }
+    content.to_string()
 }
 
 /// Extract schema URI from `# yaml-language-server: $schema=URL` comment.

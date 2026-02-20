@@ -33,4 +33,12 @@ impl Parser for JsoncParser {
                 message: "empty JSONC document".to_string(),
             })
     }
+
+    fn annotate(&self, content: &str, schema_url: &str) -> Option<String> {
+        Some(super::annotate_json_content(content, schema_url))
+    }
+
+    fn strip_annotation(&self, content: &str) -> String {
+        super::strip_json_schema_property(content)
+    }
 }
