@@ -1,7 +1,7 @@
 # $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel-config"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors.workspace = true
 description = "Configuration types and loader for Lintel (lintel.toml)"

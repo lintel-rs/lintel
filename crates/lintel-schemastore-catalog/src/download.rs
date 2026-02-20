@@ -4,6 +4,10 @@ use std::path::Path;
 use futures::stream::{self, StreamExt};
 use tracing::{debug, warn};
 
+/// Maximum schema file size we'll download (10 MiB). Schemas larger than this
+/// are skipped and the catalog retains the original upstream URL.
+const MAX_SCHEMA_SIZE: u64 = 10 * 1024 * 1024;
+
 /// Download a set of schemas concurrently and write them to `output_dir`.
 ///
 /// Returns the set of filenames that were successfully written.
@@ -43,10 +47,36 @@ pub async fn download_schemas(
 }
 
 /// Download a single schema, validate it is parseable JSON, and write to disk.
+///
+/// Schemas whose `Content-Length` exceeds [`MAX_SCHEMA_SIZE`] are skipped so
+/// that very large files (e.g. 50+ MiB data-model schemas) don't bloat the
+/// mirror repository. The catalog will retain the original upstream URL for
+/// any skipped schema.
 async fn download_one(client: &reqwest::Client, url: &str, path: &Path) -> anyhow::Result<()> {
     debug!(url = %url, "fetching schema");
     let resp = client.get(url).send().await?.error_for_status()?;
+
+    // Check Content-Length before reading the body.
+    if let Some(len) = resp.content_length()
+        && len > MAX_SCHEMA_SIZE
+    {
+        anyhow::bail!(
+            "schema too large ({} MiB, limit {} MiB)",
+            len / (1024 * 1024),
+            MAX_SCHEMA_SIZE / (1024 * 1024),
+        );
+    }
+
     let text = resp.text().await?;
+
+    // Guard against servers that omit Content-Length.
+    if text.len() as u64 > MAX_SCHEMA_SIZE {
+        anyhow::bail!(
+            "schema too large ({} MiB, limit {} MiB)",
+            text.len() / (1024 * 1024),
+            MAX_SCHEMA_SIZE / (1024 * 1024),
+        );
+    }
 
     // Validate that the response is valid JSON
     let _: serde_json::Value = serde_json::from_str(&text)
