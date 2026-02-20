@@ -1,4 +1,3 @@
-# $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel-reporters"
 version = "0.0.2"

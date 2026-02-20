@@ -1,4 +1,3 @@
-# $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [workspace]
 members = ["crates/*"]
 resolver = "2"
