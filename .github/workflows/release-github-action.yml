@@ -3,6 +3,7 @@ name: Release GitHub Action
 on:
   push:
     tags: ["lintel-github-action-v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
