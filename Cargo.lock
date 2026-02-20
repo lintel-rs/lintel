@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "lintel"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1201,6 +1201,7 @@ dependencies = [
  "humantime",
  "insta",
  "jsonschema-explain",
+ "lintel-annotate",
  "lintel-check",
  "miette",
  "schemastore",
@@ -1214,8 +1215,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-annotate"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "glob",
+ "glob-match",
+ "humantime",
+ "lintel-check",
+ "rayon",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tree",
+]
+
+[[package]]
 name = "lintel-benchmark"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1226,7 +1244,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1255,7 +1273,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "glob-match",
@@ -1268,7 +1286,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1284,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schemastore-catalog"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1302,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validation-cache"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1310,6 +1328,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2078,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "globset",

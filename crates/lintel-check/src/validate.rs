@@ -14,7 +14,7 @@ use crate::diagnostics::{
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
-use crate::retriever::{CacheStatus, HttpClient, SchemaCache, default_cache_dir};
+use crate::retriever::{CacheStatus, HttpClient, SchemaCache, ensure_cache_dir};
 use crate::validation_cache::{self, ValidationCacheStatus};
 
 pub struct ValidateArgs {
@@ -545,7 +545,7 @@ fn push_error_pairs(
 /// results in the validation cache.
 #[tracing::instrument(skip_all, fields(schema_uri, file_count = group.len()))]
 #[allow(clippy::too_many_arguments)]
-fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
+async fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
     schema_uri: &str,
     schema_hash: &str,
@@ -564,7 +564,9 @@ fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
             .map(|error| (error.instance_path().to_string(), error.to_string()))
             .collect();
 
-        vcache.store(&pf.content, schema_hash, validate_formats, &file_errors);
+        vcache
+            .store(&pf.content, schema_hash, validate_formats, &file_errors)
+            .await;
         push_error_pairs(pf, &file_errors, errors);
 
         let cf = CheckedFile {
@@ -668,10 +670,14 @@ pub async fn run_with<C: HttpClient>(
     client: C,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<ValidateResult> {
-    let cache_dir = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(default_cache_dir, PathBuf::from);
+    let cache_dir = match &args.cache_dir {
+        Some(dir) => {
+            let path = PathBuf::from(dir);
+            let _ = fs::create_dir_all(&path);
+            path
+        }
+        None => ensure_cache_dir(),
+    };
     let retriever = SchemaCache::new(
         Some(cache_dir),
         client.clone(),
@@ -710,7 +716,7 @@ pub async fn run_with<C: HttpClient>(
 
     // Create validation cache
     let vcache = validation_cache::ValidationCache::new(
-        validation_cache::default_cache_dir(),
+        validation_cache::ensure_cache_dir(),
         args.force_validation,
     );
 
@@ -797,8 +803,9 @@ pub async fn run_with<C: HttpClient>(
 
         let t = std::time::Instant::now();
         for pf in group {
-            let (cached, vcache_status) =
-                vcache.lookup(&pf.content, &schema_hash, validate_formats);
+            let (cached, vcache_status) = vcache
+                .lookup(&pf.content, &schema_hash, validate_formats)
+                .await;
 
             if let Some(cached_errors) = cached {
                 push_error_pairs(pf, &cached_errors, &mut errors);
@@ -880,7 +887,8 @@ pub async fn run_with<C: HttpClient>(
             &mut errors,
             &mut checked,
             &mut on_check,
-        );
+        )
+        .await;
         validate_time += t.elapsed();
     }
 
@@ -1508,7 +1516,7 @@ mod tests {
         fs::write(
             &f,
             format!(
-                "# $schema: {}\nname = \"hello\"\n",
+                "# :schema {}\nname = \"hello\"\n",
                 schema_path.to_string_lossy()
             ),
         )?;

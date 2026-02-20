@@ -1,9 +1,14 @@
+# $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [workspace]
 members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
 edition = "2024"
+repository = "https://github.com/lintel-rs/lintel"
+license = "Apache-2.0"
+authors = ["Ian Macalinao <me@ianm.com>"]
+homepage = "https://github.com/lintel-rs/lintel"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -1,21 +1,22 @@
+# $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
-authors = ["Ian Macalinao <me@ianm.com>"]
+authors.workspace = true
 description = "Validate JSON and YAML files against JSON Schema"
-license = "Apache-2.0"
-repository = "https://github.com/lintel-rs/lintel"
-homepage = "https://github.com/lintel-rs/lintel"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 keywords = ["json-schema", "validation", "yaml", "linter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
-readme = "../../README.md"
 
 [dependencies]
-lintel-check = { version = "0.0.2", path = "../lintel-check" }
 jsonschema-explain = { version = "0.1.0", path = "../jsonschema-explain" }
-schemastore = { version = "0.0.2", path = "../schemastore" }
-bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+lintel-annotate = { version = "0.0.2", path = "../lintel-annotate" }
+lintel-check = { version = "0.0.3", path = "../lintel-check" }
+schemastore = { version = "0.0.3", path = "../schemastore" }
+bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
 glob-match = "0.2"
 humantime = "2"
 miette = { version = "7", features = ["fancy"] }

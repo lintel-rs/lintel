@@ -19,6 +19,9 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
@@ -44,6 +47,9 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:

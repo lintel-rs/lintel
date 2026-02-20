@@ -1,5 +1,16 @@
 # lintel-config
 
+[![Crates.io][crates-badge]][crates-url]
+[![docs.rs][docs-badge]][docs-url]
+[![License][license-badge]][license-url]
+
+[crates-badge]: https://img.shields.io/crates/v/lintel-config.svg
+[crates-url]: https://crates.io/crates/lintel-config
+[docs-badge]: https://docs.rs/lintel-config/badge.svg
+[docs-url]: https://docs.rs/lintel-config
+[license-badge]: https://img.shields.io/crates/l/lintel-config.svg
+[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+
 Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel). Defines the `lintel.toml` schema, parses config files, and provides utilities for schema URI rewriting and path resolution.
 
 ## Features

@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{HttpClient, SchemaCache, default_cache_dir};
+use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
 use lintel_check::validate;
 use schemastore::SchemaMatch;
 
@@ -85,7 +85,7 @@ pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
     let cache_dir = args
         .cache_dir
         .as_ref()
-        .map_or_else(default_cache_dir, PathBuf::from);
+        .map_or_else(ensure_cache_dir, PathBuf::from);
     let retriever = SchemaCache::new(Some(cache_dir), client, false, ttl);
 
     // Load config

@@ -178,27 +178,11 @@ pub struct ConvertArgs {
     pub file: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Shell {
-    Bash,
-    Zsh,
-    Fish,
-    PowerShell,
-}
-
-impl core::str::FromStr for Shell {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "bash" => Ok(Self::Bash),
-            "zsh" => Ok(Self::Zsh),
-            "fish" => Ok(Self::Fish),
-            "powershell" => Ok(Self::PowerShell),
-            _ => Err(format!(
-                "unknown shell '{s}', expected: bash, zsh, fish, powershell"
-            )),
-        }
-    }
+#[derive(Debug, Clone, Bpaf)]
+pub struct AnnotateFlags {
+    /// Update existing annotations with latest catalog resolutions
+    #[bpaf(long("update"), switch, fallback(false))]
+    pub update: bool,
 }
 
 #[derive(Debug, Clone, Bpaf)]
@@ -229,12 +213,12 @@ enum Commands {
     /// Convert between JSON, YAML, and TOML formats
     Convert(#[bpaf(external(convert_args))] ConvertArgs),
 
-    #[bpaf(command("completions"))]
-    /// Generate shell completions
-    Completions(
-        /// Shell to generate completions for
-        #[bpaf(positional("SHELL"))]
-        Shell,
+    #[bpaf(command("annotate"))]
+    /// Add schema annotations to files
+    Annotate(
+        #[bpaf(external(cli_options), hide_usage)] CliOptions,
+        #[bpaf(external(annotate_flags))] AnnotateFlags,
+        #[bpaf(external(validate_args))] ValidateArgs,
     ),
 
     #[bpaf(command("version"))]
@@ -294,6 +278,15 @@ async fn main() -> ExitCode {
         Commands::Identify(args) => {
             commands::identify::run(args, lintel_check::retriever::ReqwestClient::default()).await
         }
+        Commands::Annotate(cli_options, flags, mut args) => {
+            commands::annotate::run(
+                &mut args,
+                lintel_check::retriever::ReqwestClient::default(),
+                cli_options.verbose,
+                flags.update,
+            )
+            .await
+        }
         Commands::Init => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
@@ -302,10 +295,6 @@ async fn main() -> ExitCode {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
-        Commands::Completions(shell) => {
-            commands::completions::run(shell);
-            return ExitCode::SUCCESS;
-        }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
