@@ -12,8 +12,8 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 jsonschema-explain = { version = "0.1.0", path = "../jsonschema-explain" }
-lintel-annotate = { version = "0.0.2", path = "../lintel-annotate" }
-lintel-check = { version = "0.0.3", path = "../lintel-check" }
+lintel-annotate = { version = "0.0.3", path = "../lintel-annotate" }
+lintel-check = { version = "0.0.4", path = "../lintel-check" }
 lintel-reporters = { version = "0.0.2", path = "../lintel-reporters" }
 schemastore = { version = "0.0.3", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
