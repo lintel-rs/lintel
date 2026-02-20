@@ -1273,6 +1273,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-schemastore-catalog"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "futures",
+ "reqwest 0.12.28",
+ "schemastore",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tree",
+]
+
+[[package]]
 name = "lintel-validation-cache"
 version = "0.0.1"
 dependencies = [

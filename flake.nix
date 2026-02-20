@@ -1,5 +1,5 @@
 {
-  description = "Lintel - Validate JSON and YAML files against JSON Schema";
+  description = "Fast, multi-format JSON Schema linter for all your config files";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -31,21 +31,8 @@
             filter = path: type: (craneLib.filterCargoSources path type) || (testdataFilter path type);
           };
 
-        commonArgs = {
-          inherit src;
-          pname = "lintel";
-          version = "0.0.1";
-          strictDeps = true;
-        };
-
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-        lintel = craneLib.buildPackage (
-          commonArgs
-          // {
-            inherit cargoArtifacts;
-          }
-        );
+        packages' = import ./nix/packages.nix { inherit craneLib pkgs src; };
+        inherit (packages') lintel lintel-schemastore-catalog;
       in
       {
         checks = {
@@ -53,25 +40,11 @@
         };
 
         packages = {
-          inherit lintel;
+          inherit lintel lintel-schemastore-catalog;
           default = lintel;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          docker = pkgs.dockerTools.buildLayeredImage {
-            name = "ghcr.io/lintel-rs/lintel";
-            tag = "latest";
-            contents = [
-              lintel
-              pkgs.cacert
-            ];
-            config = {
-              Entrypoint = [ "${lintel}/bin/lintel" ];
-              Labels = {
-                "org.opencontainers.image.source" = "https://github.com/lintel-rs/lintel";
-                "org.opencontainers.image.description" = "Validate JSON, YAML, and TOML files against JSON Schema";
-              };
-            };
-          };
+          docker = import ./nix/docker.nix { inherit pkgs lintel; };
         };
 
         apps.default = flake-utils.lib.mkApp {
