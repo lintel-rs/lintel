@@ -2,14 +2,13 @@
 name = "schemastore"
 version = "0.0.2"
 edition.workspace = true
-authors = ["Ian Macalinao <me@ianm.com>"]
+authors.workspace = true
 description = "Fetch and match files against the SchemaStore catalog"
-license = "Apache-2.0"
-repository = "https://github.com/lintel-rs/lintel"
-homepage = "https://github.com/lintel-rs/lintel"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 keywords = ["json-schema", "schemastore", "validation"]
 categories = ["development-tools"]
-readme = "README.md"
 
 [lints]
 workspace = true
