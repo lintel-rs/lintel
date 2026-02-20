@@ -11,7 +11,7 @@ keywords = ["json-schema", "validation", "yaml", "linter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-lintel-annotate = { version = "0.0.2", path = "../lintel-annotate" }
+lintel-annotate = { version = "0.0.3", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.4", path = "../lintel-check" }
 lintel-reporters = { version = "0.0.2", path = "../lintel-reporters" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
