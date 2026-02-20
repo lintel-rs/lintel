@@ -32,15 +32,15 @@
           };
 
         packages' = import ./nix/packages.nix { inherit craneLib pkgs src; };
-        inherit (packages') lintel lintel-schemastore-catalog;
+        inherit (packages') lintel lintel-schemastore-catalog lintel-github-action;
       in
       {
         checks = {
-          inherit lintel;
+          inherit lintel lintel-github-action;
         };
 
         packages = {
-          inherit lintel lintel-schemastore-catalog;
+          inherit lintel lintel-schemastore-catalog lintel-github-action;
           default = lintel;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {

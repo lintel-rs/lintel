@@ -56,6 +56,27 @@ pub struct FileDiagnostic {
     pub message: String,
 }
 
+/// Convert a byte offset into 1-based (line, column).
+///
+/// Returns `(1, 1)` if the offset is 0 or the content is empty.
+pub fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
+    let offset = offset.min(content.len());
+    let mut line = 1;
+    let mut col = 1;
+    for (i, ch) in content.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
 /// Try to find the byte offset of a JSON pointer path segment in the source text.
 ///
 /// For an `instance_path` like `/properties/name`, searches for the last segment `name`
@@ -91,4 +112,44 @@ pub fn find_instance_path_offset(content: &str, instance_path: &str) -> usize {
     }
 
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offset_zero_returns_line_one_col_one() {
+        assert_eq!(offset_to_line_col("hello", 0), (1, 1));
+    }
+
+    #[test]
+    fn offset_within_first_line() {
+        assert_eq!(offset_to_line_col("hello world", 5), (1, 6));
+    }
+
+    #[test]
+    fn offset_at_second_line() {
+        assert_eq!(offset_to_line_col("ab\ncd\nef", 3), (2, 1));
+    }
+
+    #[test]
+    fn offset_middle_of_second_line() {
+        assert_eq!(offset_to_line_col("ab\ncd\nef", 4), (2, 2));
+    }
+
+    #[test]
+    fn offset_at_third_line() {
+        assert_eq!(offset_to_line_col("ab\ncd\nef", 6), (3, 1));
+    }
+
+    #[test]
+    fn offset_past_end_clamps() {
+        assert_eq!(offset_to_line_col("ab\ncd", 100), (2, 3));
+    }
+
+    #[test]
+    fn empty_content() {
+        assert_eq!(offset_to_line_col("", 0), (1, 1));
+    }
 }
