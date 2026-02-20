@@ -107,30 +107,104 @@ impl Report {
         writeln!(f, "cargo run --release --package lintel-benchmark -- run")?;
         writeln!(f, "```")?;
         writeln!(f)?;
-        writeln!(f, "### Commands used")?;
+        writeln!(f, "### Exact commands")?;
         writeln!(f)?;
-        writeln!(f, "| Tool | Single file command | Multi-file command |")?;
-        writeln!(f, "|------|--------------------|--------------------|")?;
+        writeln!(f, "#### Single file")?;
+        writeln!(f)?;
+        writeln!(f, "```sh")?;
+        writeln!(f, "# lintel (auto-discovers schema)")?;
+        writeln!(f, "lintel check benchmarks/fixtures/package.json")?;
         writeln!(
             f,
-            "| lintel | `lintel check <file>` | `lintel check <dir>` |"
+            "lintel check --force-validation benchmarks/fixtures/package.json"
+        )?;
+        writeln!(f, "lintel check --force benchmarks/fixtures/package.json")?;
+        writeln!(f)?;
+        writeln!(f, "# check-jsonschema")?;
+        writeln!(
+            f,
+            "check-jsonschema --schemafile https://json.schemastore.org/package.json benchmarks/fixtures/package.json"
+        )?;
+        writeln!(f)?;
+        writeln!(f, "# ajv-cli")?;
+        writeln!(
+            f,
+            "ajv validate -s https://json.schemastore.org/package.json -d benchmarks/fixtures/package.json"
+        )?;
+        writeln!(f)?;
+        writeln!(f, "# pajv")?;
+        writeln!(
+            f,
+            "pajv validate -s https://json.schemastore.org/package.json -d benchmarks/fixtures/package.json"
+        )?;
+        writeln!(f)?;
+        writeln!(f, "# jv")?;
+        writeln!(
+            f,
+            "jv https://json.schemastore.org/package.json benchmarks/fixtures/package.json"
+        )?;
+        writeln!(f, "```")?;
+        writeln!(f)?;
+        writeln!(f, "#### Multiple files")?;
+        writeln!(f)?;
+        writeln!(f, "```sh")?;
+        writeln!(
+            f,
+            "# lintel (validates entire directory, auto-discovers schemas)"
+        )?;
+        writeln!(f, "lintel check benchmarks/fixtures/")?;
+        writeln!(f)?;
+        writeln!(f, "# Other tools require one invocation per schema:")?;
+        writeln!(
+            f,
+            "check-jsonschema --schemafile https://json.schemastore.org/package.json benchmarks/fixtures/package.json"
         )?;
         writeln!(
             f,
-            "| check-jsonschema | `check-jsonschema --schemafile <url> <file>` | `check-jsonschema --schemafile <url> <file1> <file2> ...` |"
+            "check-jsonschema --schemafile https://json.schemastore.org/tsconfig.json benchmarks/fixtures/tsconfig.json"
         )?;
         writeln!(
             f,
-            "| ajv-cli | `ajv validate -s <url> -d <file>` | `ajv validate -s <schema> -d <file1> -d <file2> ...` |"
+            "check-jsonschema --schemafile https://json.schemastore.org/github-workflow.json benchmarks/fixtures/github-ci.yml"
+        )?;
+        writeln!(f, "```")?;
+        writeln!(f)?;
+        writeln!(f, "#### SchemaStore repo")?;
+        writeln!(f)?;
+        writeln!(f, "```sh")?;
+        writeln!(
+            f,
+            "# lintel (validates entire src/ tree, auto-discovers schemas)"
+        )?;
+        writeln!(f, "lintel check benchmarks/.schemastore/src/")?;
+        writeln!(f)?;
+        writeln!(
+            f,
+            "# Other tools: for each schema in src/schemas/json/*.json,"
         )?;
         writeln!(
             f,
-            "| pajv | `pajv validate -s <url> -d <file>` | `pajv validate -s <schema> -d <file1> -d <file2> ...` |"
+            "# validate its corresponding test files in src/test/<name>/."
+        )?;
+        writeln!(f, "# Example for one schema:")?;
+        writeln!(
+            f,
+            "check-jsonschema --schemafile src/schemas/json/github-workflow.json src/test/github-workflow/*.yml"
         )?;
         writeln!(
             f,
-            "| jv | `jv <schema> <file>` | `jv <schema> <file1> <file2> ...` |"
+            "ajv validate -s src/schemas/json/github-workflow.json -d src/test/github-workflow/workflow.yml"
         )?;
+        writeln!(
+            f,
+            "pajv validate -s src/schemas/json/github-workflow.json -d src/test/github-workflow/workflow.yml"
+        )?;
+        writeln!(
+            f,
+            "jv src/schemas/json/github-workflow.json src/test/github-workflow/workflow.yml"
+        )?;
+        writeln!(f, "# ... repeated for all 550 schemas")?;
+        writeln!(f, "```")?;
         writeln!(f)?;
         writeln!(f, "### Configuration")?;
         writeln!(f)?;

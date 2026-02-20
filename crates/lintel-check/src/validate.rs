@@ -262,10 +262,140 @@ fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat,
     None
 }
 
-/// Parse each file, extract its schema URI, apply rewrites, and group by
-/// resolved schema URI.
+/// Result of processing a single file: either a parsed file with its schema URI,
+/// a lint error, or nothing (file was skipped).
+enum FileResult {
+    Parsed {
+        schema_uri: String,
+        parsed: ParsedFile,
+    },
+    Error(LintError),
+    Skip,
+}
+
+/// Process a single file: read, parse, resolve schema URI.
+fn process_one_file(
+    path: &Path,
+    format_override: Option<FileFormat>,
+    config: &config::Config,
+    config_dir: &Path,
+    compiled_catalogs: &[CompiledCatalog],
+) -> FileResult {
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            return FileResult::Error(LintError::File(FileDiagnostic {
+                path: path.display().to_string(),
+                message: format!("failed to read: {e}"),
+            }));
+        }
+    };
+
+    let path_str = path.display().to_string();
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&path_str);
+
+    let detected_format = format_override.or_else(|| parsers::detect_format(path));
+
+    // For unrecognized extensions, only proceed if a catalog or config mapping matches.
+    if detected_format.is_none() {
+        let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
+            || compiled_catalogs
+                .iter()
+                .any(|cat| cat.find_schema(&path_str, file_name).is_some());
+        if !has_match {
+            return FileResult::Skip;
+        }
+    }
+
+    // Parse the file content.
+    let (parser, instance): (Box<dyn Parser>, Value) = if let Some(fmt) = detected_format {
+        let parser = parsers::parser_for(fmt);
+        match parser.parse(&content, &path_str) {
+            Ok(val) => (parser, val),
+            Err(parse_err) => {
+                // JSONC fallback for .json files that match a catalog entry.
+                if fmt == FileFormat::Json
+                    && compiled_catalogs
+                        .iter()
+                        .any(|cat| cat.find_schema(&path_str, file_name).is_some())
+                {
+                    match JsoncParser.parse(&content, &path_str) {
+                        Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
+                        Err(jsonc_err) => return FileResult::Error(LintError::Parse(jsonc_err)),
+                    }
+                } else {
+                    return FileResult::Error(LintError::Parse(parse_err));
+                }
+            }
+        }
+    } else {
+        match try_parse_all(&content, &path_str) {
+            Some((fmt, val)) => (parsers::parser_for(fmt), val),
+            None => return FileResult::Skip,
+        }
+    };
+
+    // Skip markdown files with no frontmatter
+    if instance.is_null() {
+        return FileResult::Skip;
+    }
+
+    // Schema resolution priority:
+    // 1. Inline $schema / YAML modeline (always wins)
+    // 2. Custom schema mappings from lintel.toml [schemas]
+    // 3. Catalog matching (SchemaStore + additional registries)
+    let schema_uri = parser
+        .extract_schema_uri(&content, &instance)
+        .or_else(|| {
+            config
+                .find_schema_mapping(&path_str, file_name)
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            compiled_catalogs
+                .iter()
+                .find_map(|cat| cat.find_schema(&path_str, file_name))
+                .map(str::to_string)
+        });
+
+    let Some(schema_uri) = schema_uri else {
+        return FileResult::Skip;
+    };
+
+    // Keep original URI for override matching (before rewrites)
+    let original_schema_uri = schema_uri.clone();
+
+    // Apply rewrite rules, then resolve // paths relative to lintel.toml
+    let schema_uri = config::apply_rewrites(&schema_uri, &config.rewrite);
+    let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
+
+    // Resolve relative local paths against the file's parent directory.
+    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+    let schema_uri = if is_remote {
+        schema_uri
+    } else {
+        path.parent()
+            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
+            .unwrap_or(schema_uri)
+    };
+
+    FileResult::Parsed {
+        schema_uri,
+        parsed: ParsedFile {
+            path: path_str,
+            content,
+            instance,
+            original_schema_uri,
+        },
+    }
+}
+
+/// Parse each file in parallel, extract its schema URI, apply rewrites, and
+/// group by resolved schema URI.
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
-#[allow(clippy::too_many_lines)]
 fn parse_and_group_files(
     files: &[PathBuf],
     args: &ValidateArgs,
@@ -274,147 +404,22 @@ fn parse_and_group_files(
     compiled_catalogs: &[CompiledCatalog],
     errors: &mut Vec<LintError>,
 ) -> BTreeMap<String, Vec<ParsedFile>> {
+    use rayon::prelude::*;
+
+    let results: Vec<FileResult> = files
+        .par_iter()
+        .map(|path| process_one_file(path, args.format, config, config_dir, compiled_catalogs))
+        .collect();
+
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
-    let mut read_time = std::time::Duration::ZERO;
-    let mut parse_time = std::time::Duration::ZERO;
-    let mut catalog_time = std::time::Duration::ZERO;
-
-    for path in files {
-        let t = std::time::Instant::now();
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(e) => {
-                errors.push(LintError::File(FileDiagnostic {
-                    path: path.display().to_string(),
-                    message: format!("failed to read: {e}"),
-                }));
-                continue;
+    for result in results {
+        match result {
+            FileResult::Parsed { schema_uri, parsed } => {
+                schema_groups.entry(schema_uri).or_default().push(parsed);
             }
-        };
-        read_time += t.elapsed();
-
-        let path_str = path.display().to_string();
-        let file_name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&path_str);
-
-        let detected_format = args.format.or_else(|| parsers::detect_format(path));
-
-        // For unrecognized extensions, only proceed if a catalog or config mapping matches.
-        if detected_format.is_none() {
-            let t = std::time::Instant::now();
-            let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
-                || compiled_catalogs
-                    .iter()
-                    .any(|cat| cat.find_schema(&path_str, file_name).is_some());
-            catalog_time += t.elapsed();
-            if !has_match {
-                continue;
-            }
+            FileResult::Error(e) => errors.push(e),
+            FileResult::Skip => {}
         }
-
-        // Parse the file content.
-        let t = std::time::Instant::now();
-        let (parser, instance): (Box<dyn Parser>, Value) = if let Some(fmt) = detected_format {
-            // Known format — parse with detected/overridden format.
-            let parser = parsers::parser_for(fmt);
-            match parser.parse(&content, &path_str) {
-                Ok(val) => (parser, val),
-                Err(parse_err) => {
-                    // JSONC fallback for .json files that match a catalog entry.
-                    if fmt == FileFormat::Json
-                        && compiled_catalogs
-                            .iter()
-                            .any(|cat| cat.find_schema(&path_str, file_name).is_some())
-                    {
-                        match JsoncParser.parse(&content, &path_str) {
-                            Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
-                            Err(jsonc_err) => {
-                                errors.push(LintError::Parse(jsonc_err));
-                                continue;
-                            }
-                        }
-                    } else {
-                        errors.push(LintError::Parse(parse_err));
-                        continue;
-                    }
-                }
-            }
-        } else {
-            // Unrecognized extension with catalog/config match — try all parsers.
-            match try_parse_all(&content, &path_str) {
-                Some((fmt, val)) => (parsers::parser_for(fmt), val),
-                None => continue,
-            }
-        };
-
-        parse_time += t.elapsed();
-
-        // Skip markdown files with no frontmatter
-        if instance.is_null() {
-            continue;
-        }
-
-        // Schema resolution priority:
-        // 1. Inline $schema / YAML modeline (always wins)
-        // 2. Custom schema mappings from lintel.toml [schemas]
-        // 3. Catalog matching (SchemaStore + additional registries)
-        let t = std::time::Instant::now();
-        let schema_uri = parser
-            .extract_schema_uri(&content, &instance)
-            .or_else(|| {
-                config
-                    .find_schema_mapping(&path_str, file_name)
-                    .map(str::to_string)
-            })
-            .or_else(|| {
-                compiled_catalogs
-                    .iter()
-                    .find_map(|cat| cat.find_schema(&path_str, file_name))
-                    .map(str::to_string)
-            });
-        catalog_time += t.elapsed();
-        let Some(schema_uri) = schema_uri else {
-            continue;
-        };
-
-        // Keep original URI for override matching (before rewrites)
-        let original_schema_uri = schema_uri.clone();
-
-        // Apply rewrite rules, then resolve // paths relative to lintel.toml
-        let schema_uri = config::apply_rewrites(&schema_uri, &config.rewrite);
-        let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
-
-        // Resolve relative local paths against the file's parent directory.
-        let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
-        let schema_uri = if is_remote {
-            schema_uri
-        } else {
-            path.parent()
-                .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
-                .unwrap_or(schema_uri)
-        };
-
-        schema_groups
-            .entry(schema_uri)
-            .or_default()
-            .push(ParsedFile {
-                path: path_str,
-                content,
-                instance,
-                original_schema_uri,
-            });
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    {
-        tracing::info!(
-            read_ms = read_time.as_millis() as u64,
-            parse_ms = parse_time.as_millis() as u64,
-            catalog_ms = catalog_time.as_millis() as u64,
-            "parse_and_group breakdown"
-        );
     }
 
     schema_groups
@@ -427,10 +432,11 @@ fn parse_and_group_files(
 /// Fetch a schema by URI, returning its parsed JSON and cache status.
 ///
 /// For remote URIs, checks the prefetched map first; for local URIs, reads
-/// from disk.
+/// from disk (with in-memory caching to avoid redundant I/O for shared schemas).
 fn fetch_schema_from_prefetched(
     schema_uri: &str,
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
+    local_cache: &mut HashMap<String, Value>,
     group: &[ParsedFile],
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
@@ -444,12 +450,17 @@ fn fetch_schema_from_prefetched(
             Some(Err(e)) => Err(format!("failed to fetch schema: {schema_uri}: {e}")),
             None => Err(format!("schema not prefetched: {schema_uri}")),
         }
+    } else if let Some(cached) = local_cache.get(schema_uri) {
+        Ok((cached.clone(), None))
     } else {
         fs::read_to_string(schema_uri)
             .map_err(|e| format!("failed to read local schema {schema_uri}: {e}"))
             .and_then(|content| {
                 serde_json::from_str::<Value>(&content)
-                    .map(|v| (v, None))
+                    .map(|v| {
+                        local_cache.insert(schema_uri.to_string(), v.clone());
+                        (v, None)
+                    })
                     .map_err(|e| format!("failed to parse local schema {schema_uri}: {e}"))
             })
     };
@@ -537,7 +548,7 @@ fn push_error_pairs(
 fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
     schema_uri: &str,
-    schema_value: &Value,
+    schema_hash: &str,
     validate_formats: bool,
     cache_status: Option<CacheStatus>,
     group: &[P],
@@ -553,7 +564,7 @@ fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
             .map(|error| (error.instance_path().to_string(), error.to_string()))
             .collect();
 
-        vcache.store(&pf.content, schema_value, validate_formats, &file_errors);
+        vcache.store(&pf.content, schema_hash, validate_formats, &file_errors);
         push_error_pairs(pf, &file_errors, errors);
 
         let cf = CheckedFile {
@@ -726,8 +737,15 @@ pub async fn run_with<C: HttpClient>(
     };
 
     // Phase 2: Compile each schema once and validate all matching files
+    let mut local_schema_cache: HashMap<String, Value> = HashMap::new();
+    let mut fetch_time = std::time::Duration::ZERO;
+    let mut hash_time = std::time::Duration::ZERO;
+    let mut vcache_time = std::time::Duration::ZERO;
+    let mut compile_time = std::time::Duration::ZERO;
+    let mut validate_time = std::time::Duration::ZERO;
+
     for (schema_uri, group) in &schema_groups {
-        let _group_span = tracing::info_span!(
+        let _group_span = tracing::debug_span!(
             "schema_group",
             schema = schema_uri.as_str(),
             files = group.len(),
@@ -742,45 +760,52 @@ pub async fn run_with<C: HttpClient>(
         });
 
         // Remote schemas were prefetched in parallel above; local schemas are
-        // read from disk here. We need the schema value both for the validation
-        // cache key and for compilation.
+        // read from disk here (with in-memory caching).
+        let t = std::time::Instant::now();
         let Some((schema_value, cache_status)) = fetch_schema_from_prefetched(
             schema_uri,
             &prefetched,
+            &mut local_schema_cache,
             group,
             &mut errors,
             &mut checked,
             &mut on_check,
         ) else {
+            fetch_time += t.elapsed();
             continue;
         };
+        fetch_time += t.elapsed();
+
+        // Pre-compute schema hash once for the entire group.
+        let t = std::time::Instant::now();
+        let schema_hash = validation_cache::schema_hash(&schema_value);
+        hash_time += t.elapsed();
 
         // Split the group into validation cache hits and misses.
         let mut cache_misses: Vec<&ParsedFile> = Vec::new();
 
-        {
-            let _vcache_span = tracing::debug_span!("validation_cache_lookup").entered();
-            for pf in group {
-                let (cached, vcache_status) =
-                    vcache.lookup(&pf.content, &schema_value, validate_formats);
+        let t = std::time::Instant::now();
+        for pf in group {
+            let (cached, vcache_status) =
+                vcache.lookup(&pf.content, &schema_hash, validate_formats);
 
-                if let Some(cached_errors) = cached {
-                    push_error_pairs(pf, &cached_errors, &mut errors);
-                    let cf = CheckedFile {
-                        path: pf.path.clone(),
-                        schema: schema_uri.clone(),
-                        cache_status,
-                        validation_cache_status: Some(vcache_status),
-                    };
-                    on_check(&cf);
-                    checked.push(cf);
-                } else {
-                    cache_misses.push(pf);
-                }
+            if let Some(cached_errors) = cached {
+                push_error_pairs(pf, &cached_errors, &mut errors);
+                let cf = CheckedFile {
+                    path: pf.path.clone(),
+                    schema: schema_uri.clone(),
+                    cache_status,
+                    validation_cache_status: Some(vcache_status),
+                };
+                on_check(&cf);
+                checked.push(cf);
+            } else {
+                cache_misses.push(pf);
             }
         }
+        vcache_time += t.elapsed();
 
-        tracing::info!(
+        tracing::debug!(
             cache_hits = group.len() - cache_misses.len(),
             cache_misses = cache_misses.len(),
             "validation cache"
@@ -792,8 +817,8 @@ pub async fn run_with<C: HttpClient>(
         }
 
         // Compile the schema for cache misses.
+        let t = std::time::Instant::now();
         let validator = {
-            let _compile_span = tracing::info_span!("compile_schema").entered();
             match jsonschema::async_options()
                 .with_retriever(retriever.clone())
                 .should_validate_formats(validate_formats)
@@ -802,6 +827,7 @@ pub async fn run_with<C: HttpClient>(
             {
                 Ok(v) => v,
                 Err(e) => {
+                    compile_time += t.elapsed();
                     // When format validation is disabled and the compilation error
                     // is a uri-reference issue (e.g. Rust-style $ref paths in
                     // vector.json), skip validation silently.
@@ -829,11 +855,13 @@ pub async fn run_with<C: HttpClient>(
                 }
             }
         };
+        compile_time += t.elapsed();
 
+        let t = std::time::Instant::now();
         validate_group(
             &validator,
             schema_uri,
-            &schema_value,
+            &schema_hash,
             validate_formats,
             cache_status,
             &cache_misses,
@@ -841,6 +869,19 @@ pub async fn run_with<C: HttpClient>(
             &mut errors,
             &mut checked,
             &mut on_check,
+        );
+        validate_time += t.elapsed();
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        tracing::info!(
+            fetch_ms = fetch_time.as_millis() as u64,
+            hash_ms = hash_time.as_millis() as u64,
+            vcache_ms = vcache_time.as_millis() as u64,
+            compile_ms = compile_time.as_millis() as u64,
+            validate_ms = validate_time.as_millis() as u64,
+            "phase2 breakdown"
         );
     }
 

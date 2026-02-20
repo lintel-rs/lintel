@@ -15,9 +15,9 @@ readme = "README.md"
 workspace = true
 
 [dependencies]
-glob-match = "0.2"
-serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
-serde_json = { version = "1", default-features = false, features = ["alloc"] }
+globset = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
 anyhow = "1"

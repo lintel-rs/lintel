@@ -1,11 +1,6 @@
-#![no_std]
+use std::collections::BTreeMap;
 
-extern crate alloc;
-
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
-
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 
 /// The URL of the `SchemaStore` catalog.
@@ -35,19 +30,57 @@ pub fn parse_catalog(value: serde_json::Value) -> Result<Catalog, serde_json::Er
     serde_json::from_value(value)
 }
 
+/// A compiled `GlobSet` paired with the schema URL for each pattern index.
+struct CompiledGlobSet {
+    set: GlobSet,
+    urls: Vec<String>,
+}
+
+impl CompiledGlobSet {
+    /// Build from a list of `(pattern, url)` pairs.
+    /// Invalid patterns are silently skipped.
+    fn build(patterns: &[(String, String)]) -> Self {
+        let mut builder = GlobSetBuilder::new();
+        let mut urls = Vec::new();
+        for (pattern, url) in patterns {
+            if let Ok(glob) = Glob::new(pattern) {
+                builder.add(glob);
+                urls.push(url.clone());
+            }
+        }
+        Self {
+            set: builder.build().unwrap_or_else(|_| GlobSet::empty()),
+            urls,
+        }
+    }
+
+    /// Return the URL of the first matching pattern, or `None`.
+    fn find_match(&self, path: &str, file_name: &str) -> Option<&str> {
+        let matches = self.set.matches(path);
+        if let Some(&idx) = matches.first() {
+            return Some(&self.urls[idx]);
+        }
+        let matches = self.set.matches(file_name);
+        if let Some(&idx) = matches.first() {
+            return Some(&self.urls[idx]);
+        }
+        None
+    }
+}
+
 /// Compiled catalog for fast filename matching.
 ///
 /// Uses a three-tier lookup to avoid brute-force glob matching:
 /// 1. **Exact filename** — O(log n) `BTreeMap` lookup for bare filenames
-/// 2. **Extension-indexed patterns** — only test patterns sharing the file's extension
-/// 3. **Fallback patterns** — brute-force for patterns that can't be indexed
+/// 2. **Extension-indexed `GlobSet`s** — compiled automaton per extension
+/// 3. **Fallback `GlobSet`** — compiled automaton for patterns that can't be indexed
 pub struct CompiledCatalog {
     /// Tier 1: exact filename → schema URL.
     exact_filename: BTreeMap<String, String>,
-    /// Tier 2: file extension → list of (glob pattern, schema URL).
-    extension_patterns: BTreeMap<String, Vec<(String, String)>>,
+    /// Tier 2: file extension → compiled glob set with URLs.
+    extension_sets: BTreeMap<String, CompiledGlobSet>,
     /// Tier 3: patterns that can't be classified into the above tiers.
-    fallback_patterns: Vec<(String, String)>,
+    fallback_set: CompiledGlobSet,
 }
 
 /// Returns `true` if the pattern is a bare filename (no glob meta-characters or path separators).
@@ -80,11 +113,11 @@ impl CompiledCatalog {
     ///
     /// Entries with no `fileMatch` patterns are skipped.
     /// Bare filename patterns are stored in an exact-match `BTreeMap`.
-    /// Patterns with a deterministic extension are indexed by that extension.
-    /// Everything else goes into the fallback tier.
+    /// Patterns with a deterministic extension are compiled into per-extension `GlobSet`s.
+    /// Everything else goes into a fallback `GlobSet`.
     pub fn compile(catalog: &Catalog) -> Self {
         let mut exact_filename: BTreeMap<String, String> = BTreeMap::new();
-        let mut extension_patterns: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+        let mut ext_patterns: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
         let mut fallback_patterns: Vec<(String, String)> = Vec::new();
 
         for schema in &catalog.schemas {
@@ -94,27 +127,29 @@ impl CompiledCatalog {
                 }
 
                 if is_bare_filename(pattern) {
-                    // Tier 1: exact filename match
                     exact_filename
                         .entry(pattern.clone())
                         .or_insert_with(|| schema.url.clone());
                 } else if let Some(ext) = extract_extension(pattern) {
-                    // Tier 2: extension-indexed glob pattern
-                    extension_patterns
+                    ext_patterns
                         .entry(ext.to_ascii_lowercase())
                         .or_default()
                         .push((pattern.clone(), schema.url.clone()));
                 } else {
-                    // Tier 3: fallback
                     fallback_patterns.push((pattern.clone(), schema.url.clone()));
                 }
             }
         }
 
+        let extension_sets = ext_patterns
+            .into_iter()
+            .map(|(ext, patterns)| (ext, CompiledGlobSet::build(&patterns)))
+            .collect();
+
         Self {
             exact_filename,
-            extension_patterns,
-            fallback_patterns,
+            extension_sets,
+            fallback_set: CompiledGlobSet::build(&fallback_patterns),
         }
     }
 
@@ -128,54 +163,42 @@ impl CompiledCatalog {
             return Some(url);
         }
 
-        // Tier 2: extension-indexed patterns
+        // Tier 2: extension-indexed GlobSet
         if let Some(dot_pos) = file_name.rfind('.') {
             let ext = &file_name[dot_pos..];
-            if let Some(patterns) = self.extension_patterns.get(&ext.to_ascii_lowercase()) {
-                for (pattern, url) in patterns {
-                    if glob_match::glob_match(pattern, path)
-                        || glob_match::glob_match(pattern, file_name)
-                    {
-                        return Some(url);
-                    }
-                }
-            }
-        }
-
-        // Tier 3: fallback patterns
-        for (pattern, url) in &self.fallback_patterns {
-            if glob_match::glob_match(pattern, path) || glob_match::glob_match(pattern, file_name) {
+            if let Some(compiled) = self.extension_sets.get(&ext.to_ascii_lowercase())
+                && let Some(url) = compiled.find_match(path, file_name)
+            {
                 return Some(url);
             }
         }
 
-        None
+        // Tier 3: fallback GlobSet
+        self.fallback_set.find_match(path, file_name)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-
     use super::*;
 
     fn test_catalog() -> Catalog {
         Catalog {
-            schemas: alloc::vec![
+            schemas: vec![
                 SchemaEntry {
                     name: "tsconfig".into(),
                     url: "https://json.schemastore.org/tsconfig.json".into(),
-                    file_match: alloc::vec!["tsconfig.json".into(), "tsconfig.*.json".into(),],
+                    file_match: vec!["tsconfig.json".into(), "tsconfig.*.json".into()],
                 },
                 SchemaEntry {
                     name: "package.json".into(),
                     url: "https://json.schemastore.org/package.json".into(),
-                    file_match: alloc::vec!["package.json".into()],
+                    file_match: vec!["package.json".into()],
                 },
                 SchemaEntry {
                     name: "no-match".into(),
                     url: "https://example.com/no-match.json".into(),
-                    file_match: alloc::vec![],
+                    file_match: vec![],
                 },
             ],
         }
@@ -240,10 +263,10 @@ mod tests {
 
     fn github_workflow_catalog() -> Catalog {
         Catalog {
-            schemas: alloc::vec![SchemaEntry {
+            schemas: vec![SchemaEntry {
                 name: "GitHub Workflow".into(),
                 url: "https://www.schemastore.org/github-workflow.json".into(),
-                file_match: alloc::vec![
+                file_match: vec![
                     "**/.github/workflows/*.yml".into(),
                     "**/.github/workflows/*.yaml".into(),
                 ],
