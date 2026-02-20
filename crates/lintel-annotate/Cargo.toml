@@ -1,8 +1,14 @@
-# $schema: https://raw.githubusercontent.com/lintel-rs/catalog/master/schemas/cargo-toml.json
 [package]
 name = "lintel-annotate"
 version = "0.0.2"
 edition.workspace = true
+authors.workspace = true
+description = "Annotation-based linting for JSON and YAML files using JSON Schema"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "validation", "annotation", "linter"]
+categories = ["development-tools"]
 
 [dependencies]
 lintel-check = { version = "0.0.3", path = "../lintel-check" }
