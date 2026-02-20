@@ -1,5 +1,16 @@
 # lintel-schemastore-catalog
 
+[![Crates.io][crates-badge]][crates-url]
+[![docs.rs][docs-badge]][docs-url]
+[![License][license-badge]][license-url]
+
+[crates-badge]: https://img.shields.io/crates/v/lintel-schemastore-catalog.svg
+[crates-url]: https://crates.io/crates/lintel-schemastore-catalog
+[docs-badge]: https://docs.rs/lintel-schemastore-catalog/badge.svg
+[docs-url]: https://docs.rs/lintel-schemastore-catalog
+[license-badge]: https://img.shields.io/crates/l/lintel-schemastore-catalog.svg
+[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+
 CLI tool that mirrors the entire [SchemaStore](https://www.schemastore.org/) catalog (catalog index + all schema files) into a git repo, keeping it up to date via CI.
 
 This gives [lintel](https://github.com/lintel-rs/lintel) a self-hosted, version-controlled schema source at [`lintel-rs/schemastore-catalog`](https://github.com/lintel-rs/schemastore-catalog).
