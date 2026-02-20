@@ -1,0 +1,2 @@
+# Test fixtures from prettier's own test suite -- must not be reformatted
+crates/prettier-rs/tests/fixtures/
