@@ -11,7 +11,7 @@ keywords = ["json-schema", "validation", "annotation", "linter"]
 categories = ["development-tools"]
 
 [dependencies]
-lintel-check = { version = "0.0.3", path = "../lintel-check" }
+lintel-check = { version = "0.0.4", path = "../lintel-check" }
 bpaf = { version = "0.9", features = ["derive"] }
 humantime = "2"
 anyhow = "1"

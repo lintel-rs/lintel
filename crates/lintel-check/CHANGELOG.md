@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.3...lintel-check-v0.0.4) - 2026-02-20
+
+### Other
+
+- Remove $schema comments from all Cargo.toml files
+- Merge remote-tracking branch 'origin/master' into lintel-github-action
+- Add lintel-reporters crate, lintel-github-action binary, and --reporter flag
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.2...lintel-check-v0.0.3) - 2026-02-20
 
 ### Other

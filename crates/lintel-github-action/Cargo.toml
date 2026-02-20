@@ -11,7 +11,7 @@ keywords = ["json-schema", "validation", "github-action", "linter"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-lintel-check = { version = "0.0.3", path = "../lintel-check" }
+lintel-check = { version = "0.0.4", path = "../lintel-check" }
 lintel-reporters = { version = "0.0.2", path = "../lintel-reporters" }
 bpaf = { version = "0.9", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

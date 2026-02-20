@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1263,7 +1263,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "glob-match",
@@ -1301,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validation-cache"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "globset",
