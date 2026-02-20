@@ -1,0 +1,310 @@
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+
+use lintel_check::config;
+use lintel_check::parsers;
+use lintel_check::retriever::{HttpClient, SchemaCache, default_cache_dir};
+use lintel_check::validate;
+use schemastore::SchemaMatch;
+
+use crate::IdentifyArgs;
+
+/// The source that resolved the schema URI for a file.
+#[derive(Debug)]
+enum SchemaSource {
+    Inline,
+    Config,
+    Catalog,
+}
+
+impl std::fmt::Display for SchemaSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SchemaSource::Inline => write!(f, "inline"),
+            SchemaSource::Config => write!(f, "config"),
+            SchemaSource::Catalog => write!(f, "catalog"),
+        }
+    }
+}
+
+/// Match details captured during schema resolution.
+struct ResolvedSchema<'a> {
+    uri: String,
+    source: SchemaSource,
+    /// Present only for catalog matches.
+    catalog_match: Option<CatalogMatchInfo<'a>>,
+    /// Present only for config matches.
+    config_pattern: Option<&'a str>,
+}
+
+/// Details from a catalog match, borrowed from the `CompiledCatalog`.
+struct CatalogMatchInfo<'a> {
+    matched_pattern: &'a str,
+    file_match: &'a [String],
+    name: &'a str,
+    description: Option<&'a str>,
+}
+
+impl<'a> From<SchemaMatch<'a>> for CatalogMatchInfo<'a> {
+    fn from(m: SchemaMatch<'a>) -> Self {
+        Self {
+            matched_pattern: m.matched_pattern,
+            file_match: m.file_match,
+            name: m.name,
+            description: m.description,
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
+    let file_path = Path::new(&args.file);
+    if !file_path.exists() {
+        anyhow::bail!("file not found: {}", args.file);
+    }
+
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("failed to read {}", args.file))?;
+
+    let path_str = file_path.display().to_string();
+    let file_name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&path_str);
+
+    // Set up schema cache
+    let ttl = Some(args.schema_cache_ttl.as_deref().map_or(
+        lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL,
+        |s| {
+            humantime::parse_duration(s)
+                .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
+        },
+    ));
+    let cache_dir = args
+        .cache_dir
+        .as_ref()
+        .map_or_else(default_cache_dir, PathBuf::from);
+    let retriever = SchemaCache::new(Some(cache_dir), client, false, ttl);
+
+    // Load config
+    let config_search_dir = file_path.parent().map(Path::to_path_buf);
+    let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
+
+    // Fetch catalogs
+    let compiled_catalogs =
+        validate::fetch_compiled_catalogs(&retriever, &cfg, args.no_catalog).await;
+
+    // Detect format and parse
+    let detected_format = parsers::detect_format(file_path);
+    let (parser, instance) = parse_file(detected_format, &content, &path_str);
+
+    // Schema resolution priority (same as validate):
+    // 1. Inline $schema / YAML modeline
+    // 2. Custom schema mappings from lintel.toml [schemas]
+    // 3. Catalog matching (detailed)
+    let resolved = if let Some(uri) = parser.extract_schema_uri(&content, &instance) {
+        ResolvedSchema {
+            uri,
+            source: SchemaSource::Inline,
+            catalog_match: None,
+            config_pattern: None,
+        }
+    } else if let Some((pattern, url)) = cfg
+        .schemas
+        .iter()
+        .find(|(pattern, _)| {
+            let p = path_str.strip_prefix("./").unwrap_or(&path_str);
+            glob_match::glob_match(pattern, p) || glob_match::glob_match(pattern, file_name)
+        })
+        .map(|(pattern, url)| (pattern.as_str(), url.as_str()))
+    {
+        ResolvedSchema {
+            uri: url.to_string(),
+            source: SchemaSource::Config,
+            catalog_match: None,
+            config_pattern: Some(pattern),
+        }
+    } else if let Some(schema_match) = compiled_catalogs
+        .iter()
+        .find_map(|cat| cat.find_schema_detailed(&path_str, file_name))
+    {
+        ResolvedSchema {
+            uri: schema_match.url.to_string(),
+            source: SchemaSource::Catalog,
+            catalog_match: Some(schema_match.into()),
+            config_pattern: None,
+        }
+    } else {
+        eprintln!("{path_str}");
+        eprintln!("  no schema found");
+        return Ok(false);
+    };
+
+    // Apply rewrites
+    let schema_uri = config::apply_rewrites(&resolved.uri, &cfg.rewrite);
+    let schema_uri = config::resolve_double_slash(&schema_uri, &config_dir);
+
+    // Resolve relative local paths against the file's parent directory
+    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+    let schema_uri = if is_remote {
+        schema_uri
+    } else {
+        file_path
+            .parent()
+            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
+            .unwrap_or(schema_uri)
+    };
+
+    // Determine display name
+    let display_name = resolved
+        .catalog_match
+        .as_ref()
+        .map(|m| m.name)
+        .or_else(|| {
+            compiled_catalogs
+                .iter()
+                .find_map(|cat| cat.schema_name(&schema_uri))
+        })
+        .unwrap_or(&schema_uri);
+
+    // Basic output
+    println!("{path_str}");
+    if display_name == schema_uri {
+        println!("  schema: {schema_uri}");
+    } else {
+        println!("  schema: {display_name} ({schema_uri})");
+    }
+    println!("  source: {}", resolved.source);
+
+    // Show match details
+    match &resolved.source {
+        SchemaSource::Inline => {}
+        SchemaSource::Config => {
+            if let Some(pattern) = resolved.config_pattern {
+                println!("  matched: {pattern}");
+            }
+        }
+        SchemaSource::Catalog => {
+            if let Some(ref m) = resolved.catalog_match {
+                println!("  matched: {}", m.matched_pattern);
+                if m.file_match.len() > 1 {
+                    let globs = m
+                        .file_match
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!("  globs: {globs}");
+                }
+                if let Some(desc) = m.description {
+                    println!("  description: {desc}");
+                }
+            }
+        }
+    }
+
+    // Explain mode
+    if args.explain {
+        // Fetch the schema
+        let schema_value = if is_remote {
+            match retriever.fetch(&schema_uri).await {
+                Ok((val, _)) => val,
+                Err(e) => {
+                    eprintln!("  error fetching schema: {e}");
+                    return Ok(false);
+                }
+            }
+        } else {
+            let schema_content = std::fs::read_to_string(&schema_uri)
+                .with_context(|| format!("failed to read schema: {schema_uri}"))?;
+            serde_json::from_str(&schema_content)
+                .with_context(|| format!("failed to parse schema: {schema_uri}"))?
+        };
+
+        let is_tty = std::io::stdout().is_terminal();
+
+        if is_tty {
+            let output = jsonschema_explain::explain(&schema_value, display_name, true);
+            pipe_to_pager(&format!("\n{output}"));
+        } else {
+            let output = jsonschema_explain::explain(&schema_value, display_name, false);
+            println!();
+            print!("{output}");
+        }
+    }
+
+    Ok(false)
+}
+
+/// Pipe content through a pager (respects `$PAGER`, defaults to `less -R`).
+///
+/// Spawns the pager as a child process and writes `content` to its stdin.
+/// Falls back to printing directly if the pager cannot be spawned.
+fn pipe_to_pager(content: &str) {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let pager_env = std::env::var("PAGER").unwrap_or_default();
+    let (program, args) = if pager_env.is_empty() {
+        ("less", vec!["-R"])
+    } else {
+        let mut parts: Vec<&str> = pager_env.split_whitespace().collect();
+        let prog = parts.remove(0);
+        // Ensure less gets -R for ANSI color passthrough
+        if prog == "less" && !parts.iter().any(|a| a.contains('R')) {
+            parts.push("-R");
+        }
+        (prog, parts)
+    };
+
+    match Command::new(program)
+        .args(&args)
+        .stdin(Stdio::piped())
+        .spawn()
+    {
+        Ok(mut child) => {
+            if let Some(mut stdin) = child.stdin.take() {
+                // Ignore broken-pipe errors (user quit the pager early)
+                let _ = write!(stdin, "{content}");
+            }
+            let _ = child.wait();
+        }
+        Err(_) => {
+            // Pager unavailable — print directly
+            print!("{content}");
+        }
+    }
+}
+
+/// Parse the file content, trying the detected format first, then all parsers as fallback.
+///
+/// Exits the process when the file cannot be parsed.
+fn parse_file(
+    detected_format: Option<parsers::FileFormat>,
+    content: &str,
+    path_str: &str,
+) -> (Box<dyn parsers::Parser>, serde_json::Value) {
+    if let Some(fmt) = detected_format {
+        let parser = parsers::parser_for(fmt);
+        if let Ok(val) = parser.parse(content, path_str) {
+            return (parser, val);
+        }
+        // Try all parsers as fallback
+        if let Some((fmt, val)) = validate::try_parse_all(content, path_str) {
+            return (parsers::parser_for(fmt), val);
+        }
+        eprintln!("{path_str}");
+        eprintln!("  no schema found (file could not be parsed)");
+        std::process::exit(0);
+    }
+
+    if let Some((fmt, val)) = validate::try_parse_all(content, path_str) {
+        return (parsers::parser_for(fmt), val);
+    }
+
+    eprintln!("{path_str}");
+    eprintln!("  no schema found (unrecognized format)");
+    std::process::exit(0);
+}

@@ -1,0 +1,18 @@
+[package]
+name = "jsonschema-explain"
+version = "0.1.0"
+edition.workspace = true
+authors = ["Ian Macalinao <me@ianm.com>"]
+description = "Render JSON Schema as human-readable terminal documentation"
+license = "Apache-2.0"
+repository = "https://github.com/lintel-rs/lintel"
+homepage = "https://github.com/lintel-rs/lintel"
+keywords = ["json-schema", "documentation", "terminal", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

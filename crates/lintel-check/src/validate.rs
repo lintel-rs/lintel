@@ -138,7 +138,7 @@ struct ParsedFile {
 /// Returns `(config, config_dir, config_path)`.  When no config is found or
 /// cwd is unavailable the config is default and `config_path` is `None`.
 #[tracing::instrument(skip_all)]
-fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
+pub fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
     let start_dir = match search_dir {
         Some(d) => d.to_path_buf(),
         None => match std::env::current_dir() {
@@ -249,7 +249,7 @@ fn validate_config(
 ///
 /// JSONC is tried first (superset of JSON, handles comments), then YAML and
 /// TOML which cover the most common config formats, followed by the rest.
-fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
+pub fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
     use parsers::FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
     const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
 
@@ -582,48 +582,19 @@ fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
 // Public API
 // ---------------------------------------------------------------------------
 
-/// # Errors
+/// Fetch and compile all schema catalogs (default, `SchemaStore`, and custom registries).
 ///
-/// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run<C: HttpClient>(args: &ValidateArgs, client: C) -> Result<ValidateResult> {
-    run_with(args, client, |_| {}).await
-}
-
-/// Like [`run`], but calls `on_check` each time a file is checked, allowing
-/// callers to stream progress (e.g. verbose output) as files are processed.
-///
-/// # Errors
-///
-/// Returns an error if file collection or schema validation encounters an I/O error.
-#[tracing::instrument(skip_all, name = "validate")]
-#[allow(clippy::too_many_lines)]
-pub async fn run_with<C: HttpClient>(
-    args: &ValidateArgs,
-    client: C,
-    mut on_check: impl FnMut(&CheckedFile),
-) -> Result<ValidateResult> {
-    let cache_dir = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(default_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(
-        Some(cache_dir),
-        client.clone(),
-        args.force_schema_fetch,
-        args.schema_cache_ttl,
-    );
-
-    let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
-    let files = collect_files(&args.globs, &args.exclude)?;
-    tracing::info!(file_count = files.len(), "collected files");
-
+/// Returns a list of compiled catalogs, printing warnings for any that fail to fetch.
+pub async fn fetch_compiled_catalogs<C: HttpClient>(
+    retriever: &SchemaCache<C>,
+    config: &config::Config,
+    no_catalog: bool,
+) -> Vec<CompiledCatalog> {
     let mut compiled_catalogs = Vec::new();
 
-    if !args.no_catalog {
+    if !no_catalog {
         let catalog_span = tracing::info_span!("fetch_catalogs").entered();
 
-        // Fetch all catalogs in parallel using JoinSet.
-        // Each task returns (label, result) so error messages stay specific.
         #[allow(clippy::items_after_statements)]
         type CatalogResult = (
             String,
@@ -673,6 +644,46 @@ pub async fn run_with<C: HttpClient>(
 
         drop(catalog_span);
     }
+
+    compiled_catalogs
+}
+
+/// # Errors
+///
+/// Returns an error if file collection or schema validation encounters an I/O error.
+pub async fn run<C: HttpClient>(args: &ValidateArgs, client: C) -> Result<ValidateResult> {
+    run_with(args, client, |_| {}).await
+}
+
+/// Like [`run`], but calls `on_check` each time a file is checked, allowing
+/// callers to stream progress (e.g. verbose output) as files are processed.
+///
+/// # Errors
+///
+/// Returns an error if file collection or schema validation encounters an I/O error.
+#[tracing::instrument(skip_all, name = "validate")]
+#[allow(clippy::too_many_lines)]
+pub async fn run_with<C: HttpClient>(
+    args: &ValidateArgs,
+    client: C,
+    mut on_check: impl FnMut(&CheckedFile),
+) -> Result<ValidateResult> {
+    let cache_dir = args
+        .cache_dir
+        .as_ref()
+        .map_or_else(default_cache_dir, PathBuf::from);
+    let retriever = SchemaCache::new(
+        Some(cache_dir),
+        client.clone(),
+        args.force_schema_fetch,
+        args.schema_cache_ttl,
+    );
+
+    let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
+    let files = collect_files(&args.globs, &args.exclude)?;
+    tracing::info!(file_count = files.len(), "collected files");
+
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
 
     let mut errors: Vec<LintError> = Vec::new();
     let mut checked: Vec<CheckedFile> = Vec::new();

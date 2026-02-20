@@ -147,6 +147,27 @@ impl core::str::FromStr for OutputFormat {
 }
 
 #[derive(Debug, Clone, Bpaf)]
+pub struct IdentifyArgs {
+    /// Show detailed schema documentation
+    #[bpaf(long("explain"), switch)]
+    pub explain: bool,
+
+    #[bpaf(long("no-catalog"), switch)]
+    pub no_catalog: bool,
+
+    #[bpaf(long("cache-dir"), argument("DIR"))]
+    pub cache_dir: Option<String>,
+
+    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
+    #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
+    pub schema_cache_ttl: Option<String>,
+
+    /// File to identify
+    #[bpaf(positional("FILE"))]
+    pub file: String,
+}
+
+#[derive(Debug, Clone, Bpaf)]
 pub struct ConvertArgs {
     /// Output format
     #[bpaf(long("to"), argument("FORMAT"))]
@@ -195,6 +216,10 @@ enum Commands {
         #[bpaf(external(cli_options), hide_usage)] CliOptions,
         #[bpaf(external(validate_args))] ValidateArgs,
     ),
+
+    #[bpaf(command("identify"))]
+    /// Show which schema a file resolves to
+    Identify(#[bpaf(external(identify_args))] IdentifyArgs),
 
     #[bpaf(command("init"))]
     /// Create a lintel.toml configuration file
@@ -265,6 +290,9 @@ async fn main() -> ExitCode {
                 cli_options.verbose,
             )
             .await
+        }
+        Commands::Identify(args) => {
+            commands::identify::run(args, lintel_check::retriever::ReqwestClient::default()).await
         }
         Commands::Init => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
@@ -433,6 +461,81 @@ mod tests {
                 assert!(cli_options.verbose);
             }
             _ => panic!("expected Check"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_basic() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["identify", "file.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Identify(args) => {
+                assert_eq!(args.file, "file.json");
+                assert!(!args.explain);
+                assert!(!args.no_catalog);
+                assert!(args.cache_dir.is_none());
+                assert!(args.schema_cache_ttl.is_none());
+            }
+            _ => panic!("expected Identify"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_explain() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["identify", "--explain", "file.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Identify(args) => {
+                assert_eq!(args.file, "file.json");
+                assert!(args.explain);
+            }
+            _ => panic!("expected Identify"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_no_catalog() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["identify", "--no-catalog", "file.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Identify(args) => {
+                assert_eq!(args.file, "file.json");
+                assert!(args.no_catalog);
+            }
+            _ => panic!("expected Identify"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_all_options() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&[
+                "identify",
+                "--explain",
+                "--no-catalog",
+                "--cache-dir",
+                "/tmp/cache",
+                "--schema-cache-ttl",
+                "30m",
+                "tsconfig.json",
+            ])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Identify(args) => {
+                assert_eq!(args.file, "tsconfig.json");
+                assert!(args.explain);
+                assert!(args.no_catalog);
+                assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
+                assert_eq!(args.schema_cache_ttl.as_deref(), Some("30m"));
+            }
+            _ => panic!("expected Identify"),
         }
         Ok(())
     }

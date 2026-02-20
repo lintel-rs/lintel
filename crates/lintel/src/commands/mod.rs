@@ -2,6 +2,7 @@ pub mod check;
 pub mod ci;
 pub mod completions;
 pub mod convert;
+pub mod identify;
 pub mod init;
 
 use lintel_check::retriever::CacheStatus;
