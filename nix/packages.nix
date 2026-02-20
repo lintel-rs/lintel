@@ -37,7 +37,7 @@ let
         --zsh <($out/bin/lintel completions zsh) \
         --fish <($out/bin/lintel completions fish)
     '';
-    nativeBuildInputs = [ pkgs.installShellCompletion ];
+    nativeBuildInputs = [ pkgs.installShellFiles ];
   };
 
   lintel-schemastore-catalog = mkPackage ../crates/lintel-schemastore-catalog { };
