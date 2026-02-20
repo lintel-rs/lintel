@@ -33,9 +33,9 @@ let
   lintel = mkPackage ../crates/lintel {
     postInstall = ''
       installShellCompletion --cmd lintel \
-        --bash <($out/bin/lintel completions bash) \
-        --zsh <($out/bin/lintel completions zsh) \
-        --fish <($out/bin/lintel completions fish)
+        --bash <($out/bin/lintel --bpaf-complete-style-bash) \
+        --zsh <($out/bin/lintel --bpaf-complete-style-zsh) \
+        --fish <($out/bin/lintel --bpaf-complete-style-fish)
     '';
     nativeBuildInputs = [ pkgs.installShellFiles ];
   };

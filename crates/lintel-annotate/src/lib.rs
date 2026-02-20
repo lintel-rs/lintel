@@ -10,7 +10,7 @@ use lintel_check::config;
 use lintel_check::discover;
 use lintel_check::parsers;
 use lintel_check::registry;
-use lintel_check::retriever::{HttpClient, SchemaCache, default_cache_dir};
+use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -294,7 +294,7 @@ pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<Annota
     let cache_dir_path = args
         .cache_dir
         .as_ref()
-        .map_or_else(default_cache_dir, PathBuf::from);
+        .map_or_else(ensure_cache_dir, PathBuf::from);
     let retriever = SchemaCache::new(
         Some(cache_dir_path),
         client,
