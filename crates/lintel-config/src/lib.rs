@@ -46,6 +46,11 @@ pub struct Config {
     #[serde(default)]
     pub schemas: HashMap<String, String>,
 
+    /// If true, skip the built-in Lintel catalog (only use `SchemaStore`
+    /// and any extra registries).
+    #[serde(default, rename = "no-default-catalog")]
+    pub no_default_catalog: bool,
+
     /// Additional schema catalog URLs to fetch alongside `SchemaStore`.
     /// Each URL should point to a JSON file with the same format as
     /// the `SchemaStore` catalog (`{"schemas": [...]}`).

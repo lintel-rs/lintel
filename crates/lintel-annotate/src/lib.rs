@@ -1,8 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
-use bpaf::Bpaf;
+use bpaf::{Bpaf, Parser};
 use glob::glob;
 
 use lintel_check::catalog::{self, CompiledCatalog};
@@ -28,12 +29,8 @@ pub struct AnnotateArgs {
     #[bpaf(long("no-catalog"), switch)]
     pub no_catalog: bool,
 
-    #[bpaf(long("format"), argument("FORMAT"))]
-    pub format: Option<String>,
-
-    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
-    #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
-    pub schema_cache_ttl: Option<String>,
+    #[bpaf(external(schema_cache_ttl))]
+    pub schema_cache_ttl: Option<Duration>,
 
     /// Update existing annotations with latest catalog resolutions
     #[bpaf(long("update"), switch)]
@@ -41,6 +38,16 @@ pub struct AnnotateArgs {
 
     #[bpaf(positional("PATH"))]
     pub globs: Vec<String>,
+}
+
+fn schema_cache_ttl() -> impl bpaf::Parser<Option<Duration>> {
+    bpaf::long("schema-cache-ttl")
+        .help("Schema cache TTL (e.g. \"12h\", \"30m\", \"1d\"); default 12h")
+        .argument::<String>("DURATION")
+        .parse(|s: String| {
+            humantime::parse_duration(&s).map_err(|e| format!("invalid duration '{s}': {e}"))
+        })
+        .optional()
 }
 
 /// Construct the bpaf parser for `AnnotateArgs`.
@@ -190,7 +197,6 @@ enum FileOutcome {
 
 fn process_file(
     file_path: &Path,
-    format_override: Option<parsers::FileFormat>,
     config: &config::Config,
     catalogs: &[CompiledCatalog],
     update: bool,
@@ -206,7 +212,7 @@ fn process_file(
         Err(e) => return FileOutcome::Error(path_str, format!("failed to read: {e}")),
     };
 
-    let Some(fmt) = format_override.or_else(|| parsers::detect_format(file_path)) else {
+    let Some(fmt) = parsers::detect_format(file_path) else {
         return FileOutcome::Skipped;
     };
 
@@ -286,10 +292,7 @@ pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<Annota
         .find(|g| Path::new(g).is_dir())
         .map(PathBuf::from);
 
-    let schema_cache_ttl = args.schema_cache_ttl.as_deref().map(|s| {
-        humantime::parse_duration(s)
-            .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
-    });
+    let schema_cache_ttl = args.schema_cache_ttl;
 
     let cache_dir_path = args
         .cache_dir
@@ -304,15 +307,6 @@ pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<Annota
 
     let (mut config, _config_dir) = load_config(config_dir.as_deref());
     config.exclude.extend(args.exclude.clone());
-
-    let format_override = args.format.as_deref().and_then(|f| match f {
-        "json" => Some(parsers::FileFormat::Json),
-        "json5" => Some(parsers::FileFormat::Json5),
-        "jsonc" => Some(parsers::FileFormat::Jsonc),
-        "toml" => Some(parsers::FileFormat::Toml),
-        "yaml" => Some(parsers::FileFormat::Yaml),
-        _ => None,
-    });
 
     let files = collect_files(&args.globs, &config.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
@@ -331,7 +325,7 @@ pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<Annota
     };
 
     for file_path in &files {
-        match process_file(file_path, format_override, &config, &catalogs, args.update) {
+        match process_file(file_path, &config, &catalogs, args.update) {
             FileOutcome::Annotated(f) => result.annotated.push(f),
             FileOutcome::Updated(f) => result.updated.push(f),
             FileOutcome::Skipped => result.skipped += 1,

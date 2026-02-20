@@ -1203,6 +1203,7 @@ dependencies = [
  "jsonschema-explain",
  "lintel-annotate",
  "lintel-check",
+ "lintel-reporters",
  "miette",
  "schemastore",
  "serde_json",
@@ -1282,6 +1283,31 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "lintel-github-action"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "lintel-check",
+ "lintel-reporters",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "lintel-reporters"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "humantime",
+ "lintel-check",
+ "miette",
 ]
 
 [[package]]

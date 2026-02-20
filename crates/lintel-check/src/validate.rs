@@ -36,9 +36,6 @@ pub struct ValidateArgs {
     /// Disable `SchemaStore` catalog matching
     pub no_catalog: bool,
 
-    /// Force file format for all inputs
-    pub format: Option<parsers::FileFormat>,
-
     /// Directory to search for `lintel.toml` (defaults to cwd)
     pub config_dir: Option<PathBuf>,
 
@@ -73,7 +70,7 @@ impl LintError {
     }
 
     /// Byte offset in the source file (for sorting).
-    fn offset(&self) -> usize {
+    pub fn offset(&self) -> usize {
         match self {
             LintError::Parse(d) => d.span.offset(),
             LintError::Validation(d) => d.span.offset(),
@@ -276,7 +273,6 @@ enum FileResult {
 /// Process a single file: read, parse, resolve schema URI.
 fn process_one_file(
     path: &Path,
-    format_override: Option<FileFormat>,
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
@@ -297,7 +293,7 @@ fn process_one_file(
         .and_then(|n| n.to_str())
         .unwrap_or(&path_str);
 
-    let detected_format = format_override.or_else(|| parsers::detect_format(path));
+    let detected_format = parsers::detect_format(path);
 
     // For unrecognized extensions, only proceed if a catalog or config mapping matches.
     if detected_format.is_none() {
@@ -398,7 +394,6 @@ fn process_one_file(
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
 fn parse_and_group_files(
     files: &[PathBuf],
-    args: &ValidateArgs,
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
@@ -408,7 +403,7 @@ fn parse_and_group_files(
 
     let results: Vec<FileResult> = files
         .par_iter()
-        .map(|path| process_one_file(path, args.format, config, config_dir, compiled_catalogs))
+        .map(|path| process_one_file(path, config, config_dir, compiled_catalogs))
         .collect();
 
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
@@ -605,14 +600,16 @@ pub async fn fetch_compiled_catalogs<C: HttpClient>(
         let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
 
         // Lintel catalog
-        let r = retriever.clone();
-        let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
-        catalog_tasks.spawn(async move {
-            let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
-                .await
-                .map(|cat| CompiledCatalog::compile(&cat));
-            (label, result)
-        });
+        if !config.no_default_catalog {
+            let r = retriever.clone();
+            let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
+            catalog_tasks.spawn(async move {
+                let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
+                    .await
+                    .map(|cat| CompiledCatalog::compile(&cat));
+                (label, result)
+            });
+        }
 
         // SchemaStore catalog
         let r = retriever.clone();
@@ -702,7 +699,6 @@ pub async fn run_with<C: HttpClient>(
     // Phase 1: Parse files and resolve schema URIs
     let schema_groups = parse_and_group_files(
         &files,
-        args,
         &config,
         &config_dir,
         &compiled_catalogs,
@@ -973,7 +969,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         }
@@ -999,7 +994,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1060,7 +1054,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1084,7 +1077,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1108,7 +1100,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1127,7 +1118,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1146,7 +1136,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1171,7 +1160,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1192,7 +1180,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1230,7 +1217,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1262,7 +1248,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1285,7 +1270,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1323,7 +1307,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1359,7 +1342,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1420,7 +1402,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1454,7 +1435,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1490,7 +1470,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1529,7 +1508,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1570,7 +1548,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1604,7 +1581,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1646,7 +1622,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1691,7 +1666,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1718,7 +1692,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1760,7 +1733,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1797,7 +1769,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1836,7 +1807,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1873,7 +1843,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: false,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
