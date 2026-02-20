@@ -1,0 +1,28 @@
+name: Update SchemaStore Catalog
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  update-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
+      - run: cargo build --release -p lintel-schemastore-catalog -p lintel
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Update catalog
+        run: ./target/release/lintel-schemastore-catalog update
+        env:
+          GITHUB_TOKEN: ${{ secrets.SCHEMASTORE_CATALOG_GITHUB_PAT }}
+          PATH: ./target/release:${{ env.PATH }}
