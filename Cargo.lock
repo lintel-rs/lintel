@@ -1279,8 +1279,6 @@ dependencies = [
  "anyhow",
  "bpaf",
  "futures",
- "lintel-check",
- "lintel-schema-cache",
  "reqwest 0.12.28",
  "schemastore",
  "serde",

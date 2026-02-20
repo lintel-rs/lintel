@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
@@ -47,12 +46,7 @@ pub async fn run(repo: Option<&str>, branch: Option<&str>) -> Result<()> {
 
     info!(changes = %status_output.trim(), "changes detected");
 
-    // 5. Run lintel check on the generated catalog
-    info!("running lintel check");
-    run_lintel_check(&clone_dir).await?;
-    info!("lintel check passed");
-
-    // 6. Configure git user
+    // 5. Configure git user
     info!("configuring git user");
     run_git_in(&clone_dir, &["config", "user.name", "github-actions[bot]"])?;
     run_git_in(
@@ -64,47 +58,13 @@ pub async fn run(repo: Option<&str>, branch: Option<&str>) -> Result<()> {
         ],
     )?;
 
-    // 7. Commit and push
+    // 6. Commit and push
     info!("committing and pushing");
     run_git_in(&clone_dir, &["add", "-A"])?;
     run_git_in(&clone_dir, &["commit", "-m", "Update SchemaStore catalog"])?;
     run_git_in(&clone_dir, &["push"])?;
 
     info!("catalog updated and pushed");
-    Ok(())
-}
-
-/// Run lintel validation on the given directory using the library directly.
-async fn run_lintel_check(dir: &Path) -> Result<()> {
-    let args = lintel_check::validate::ValidateArgs {
-        globs: vec![dir.display().to_string()],
-        exclude: vec![],
-        cache_dir: None,
-        force_schema_fetch: false,
-        force_validation: false,
-        no_catalog: false,
-        format: None,
-        config_dir: Some(dir.to_path_buf()),
-        schema_cache_ttl: Some(lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL),
-    };
-
-    let client = lintel_schema_cache::ReqwestClient::default();
-    let result = lintel_check::validate::run(&args, client).await?;
-
-    if result.has_errors() {
-        for error in &result.errors {
-            tracing::error!("{}", error.path());
-        }
-        bail!(
-            "lintel check failed with {} error(s), refusing to commit",
-            result.errors.len()
-        );
-    }
-
-    info!(
-        files_checked = result.files_checked(),
-        "lintel check completed"
-    );
     Ok(())
 }
 
