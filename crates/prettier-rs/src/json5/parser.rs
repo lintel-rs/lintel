@@ -414,7 +414,7 @@ mod tests {
                 assert_eq!(entries.len(), 1);
                 match &entries[0].key {
                     Key::String { value, .. } => assert_eq!(value, "key"),
-                    _ => panic!("expected string key"),
+                    Key::Identifier(_) => panic!("expected string key"),
                 }
             }
             _ => panic!("expected object"),
@@ -427,7 +427,7 @@ mod tests {
         match node {
             Node::Object(entries) => match &entries[0].key {
                 Key::Identifier(name) => assert_eq!(name, "key"),
-                _ => panic!("expected identifier key"),
+                Key::String { .. } => panic!("expected identifier key"),
             },
             _ => panic!("expected object"),
         }
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn parse_trailing_commas() {
-        let (node, _) = parse(r#"{ a: 1, b: 2, }"#).expect("parse");
+        let (node, _) = parse(r"{ a: 1, b: 2, }").expect("parse");
         match node {
             Node::Object(entries) => assert_eq!(entries.len(), 2),
             _ => panic!("expected object"),
