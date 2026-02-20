@@ -5,39 +5,14 @@ use anyhow::Result;
 
 use lintel_check::retriever::HttpClient;
 
-use crate::ValidateArgs;
-
 /// Run the `annotate` command: add schema annotations to files.
 pub async fn run<C: HttpClient>(
-    args: &mut ValidateArgs,
+    args: &lintel_annotate::AnnotateArgs,
     client: C,
     verbose: bool,
-    update: bool,
 ) -> Result<bool> {
-    super::merge_config(args);
-
-    let annotate_args = lintel_annotate::AnnotateArgs {
-        exclude: args.exclude.clone(),
-        cache_dir: args.cache_dir.clone(),
-        no_catalog: args.no_catalog,
-        format: args.format.map(|f| {
-            match f {
-                crate::FileFormat::Json => "json",
-                crate::FileFormat::Json5 => "json5",
-                crate::FileFormat::Jsonc => "jsonc",
-                crate::FileFormat::Toml => "toml",
-                crate::FileFormat::Yaml => "yaml",
-                crate::FileFormat::Markdown => "markdown",
-            }
-            .to_string()
-        }),
-        schema_cache_ttl: args.schema_cache_ttl.clone(),
-        update,
-        globs: args.globs.clone(),
-    };
-
     let start = Instant::now();
-    let result = lintel_annotate::run(&annotate_args, client).await?;
+    let result = lintel_annotate::run(args, client).await?;
     let had_errors = !result.errors.is_empty();
 
     if verbose {

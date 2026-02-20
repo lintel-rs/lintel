@@ -41,7 +41,9 @@ let
   };
 
   lintel-schemastore-catalog = mkPackage ../crates/lintel-schemastore-catalog { };
+
+  lintel-github-action = mkPackage ../crates/lintel-github-action { };
 in
 {
-  inherit lintel lintel-schemastore-catalog;
+  inherit lintel lintel-schemastore-catalog lintel-github-action;
 }
