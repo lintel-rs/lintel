@@ -354,7 +354,7 @@ mod tests {
     fn json_compact() {
         let result = JsonParser
             .annotate(r#"{"name":"hello"}"#, "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             r#"{"$schema":"https://example.com/schema.json","name":"hello"}"#
@@ -368,7 +368,7 @@ mod tests {
                 "{\n  \"name\": \"hello\"\n}\n",
                 "https://example.com/schema.json",
             )
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "{\n  \"$schema\": \"https://example.com/schema.json\",\n  \"name\": \"hello\"\n}\n"
@@ -382,7 +382,7 @@ mod tests {
                 "{\n    \"name\": \"hello\"\n}\n",
                 "https://example.com/schema.json",
             )
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "{\n    \"$schema\": \"https://example.com/schema.json\",\n    \"name\": \"hello\"\n}\n"
@@ -396,7 +396,7 @@ mod tests {
                 "{\n\t\"name\": \"hello\"\n}\n",
                 "https://example.com/schema.json",
             )
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "{\n\t\"$schema\": \"https://example.com/schema.json\",\n\t\"name\": \"hello\"\n}\n"
@@ -407,7 +407,7 @@ mod tests {
     fn json_empty_object() {
         let result = JsonParser
             .annotate("{}", "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(result, r#"{"$schema":"https://example.com/schema.json",}"#);
     }
 
@@ -415,7 +415,7 @@ mod tests {
     fn json_empty_object_pretty() {
         let result = JsonParser
             .annotate("{\n}\n", "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert!(result.contains("\"$schema\": \"https://example.com/schema.json\""));
     }
 
@@ -425,7 +425,7 @@ mod tests {
     fn json5_compact() {
         let result = Json5Parser
             .annotate(r#"{"name":"hello"}"#, "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             r#"{"$schema":"https://example.com/schema.json","name":"hello"}"#
@@ -438,7 +438,7 @@ mod tests {
     fn jsonc_compact() {
         let result = JsoncParser
             .annotate(r#"{"name":"hello"}"#, "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             r#"{"$schema":"https://example.com/schema.json","name":"hello"}"#
@@ -451,7 +451,7 @@ mod tests {
     fn yaml_prepends_modeline() {
         let result = YamlParser
             .annotate("name: hello\n", "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "# yaml-language-server: $schema=https://example.com/schema.json\nname: hello\n"
@@ -465,7 +465,7 @@ mod tests {
                 "# existing comment\nname: hello\n",
                 "https://example.com/schema.json",
             )
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "# yaml-language-server: $schema=https://example.com/schema.json\n# existing comment\nname: hello\n"
@@ -478,7 +478,7 @@ mod tests {
     fn toml_prepends_schema_comment() {
         let result = TomlParser
             .annotate("name = \"hello\"\n", "https://example.com/schema.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "# :schema https://example.com/schema.json\nname = \"hello\"\n"
@@ -492,7 +492,7 @@ mod tests {
                 "# existing comment\nname = \"hello\"\n",
                 "https://example.com/schema.json",
             )
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             result,
             "# :schema https://example.com/schema.json\n# existing comment\nname = \"hello\"\n"
@@ -592,7 +592,7 @@ mod tests {
         let stripped = JsonParser.strip_annotation(original);
         let updated = JsonParser
             .annotate(&stripped, "https://new.com/s.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             updated,
             "{\n  \"$schema\": \"https://new.com/s.json\",\n  \"name\": \"hello\"\n}\n"
@@ -605,7 +605,7 @@ mod tests {
         let stripped = YamlParser.strip_annotation(original);
         let updated = YamlParser
             .annotate(&stripped, "https://new.com/s.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             updated,
             "# yaml-language-server: $schema=https://new.com/s.json\nname: hello\n"
@@ -618,7 +618,7 @@ mod tests {
         let stripped = TomlParser.strip_annotation(original);
         let updated = TomlParser
             .annotate(&stripped, "https://new.com/s.json")
-            .unwrap();
+            .expect("annotate failed");
         assert_eq!(
             updated,
             "# :schema https://new.com/s.json\nname = \"hello\"\n"
