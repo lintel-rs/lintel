@@ -16,13 +16,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "workspace"
-      - run: cargo build --release -p lintel-schemastore-catalog -p lintel
       - name: Configure git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Update catalog
-        run: ./target/release/lintel-schemastore-catalog update
+        run: cargo run --release -p lintel-schemastore-catalog -- update
         env:
           GITHUB_TOKEN: ${{ secrets.SCHEMASTORE_CATALOG_GITHUB_PAT }}
-          PATH: ./target/release:${{ env.PATH }}
