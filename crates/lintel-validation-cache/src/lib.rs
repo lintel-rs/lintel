@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -51,7 +50,7 @@ impl ValidationCache {
     ///
     /// `schema_hash` should be obtained from [`schema_hash`] — pass the same
     /// value for all files in a schema group to avoid redundant serialization.
-    pub fn lookup(
+    pub async fn lookup(
         &self,
         file_content: &str,
         schema_hash: &str,
@@ -64,7 +63,7 @@ impl ValidationCache {
         let key = Self::cache_key(file_content, schema_hash, validate_formats);
         let cache_path = self.cache_dir.join(format!("{key}.json"));
 
-        let Ok(data) = fs::read_to_string(&cache_path) else {
+        let Ok(data) = tokio::fs::read_to_string(&cache_path).await else {
             return (None, ValidationCacheStatus::Miss);
         };
 
@@ -88,7 +87,7 @@ impl ValidationCache {
     ///
     /// `schema_hash` should be obtained from [`schema_hash`] — pass the same
     /// value for all files in a schema group to avoid redundant serialization.
-    pub fn store(
+    pub async fn store(
         &self,
         file_content: &str,
         schema_hash: &str,
@@ -112,8 +111,8 @@ impl ValidationCache {
             return;
         };
 
-        if fs::create_dir_all(&self.cache_dir).is_ok() {
-            let _ = fs::write(&cache_path, json);
+        if tokio::fs::create_dir_all(&self.cache_dir).await.is_ok() {
+            let _ = tokio::fs::write(&cache_path, json).await;
         }
     }
 
@@ -137,13 +136,21 @@ pub fn schema_hash(schema: &Value) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Return the default cache directory for validation results:
-/// `<system_cache>/lintel/validations`.
-pub fn default_cache_dir() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from(".cache"))
-        .join("lintel")
-        .join("validations")
+/// Return a usable cache directory for validation results, creating it if necessary.
+///
+/// Tries `<system_cache>/lintel/validations` first, falling back to
+/// `<temp_dir>/lintel/validations` when the preferred path is unwritable.
+pub fn ensure_cache_dir() -> PathBuf {
+    let candidates = [
+        dirs::cache_dir().map(|d| d.join("lintel").join("validations")),
+        Some(std::env::temp_dir().join("lintel").join("validations")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if std::fs::create_dir_all(&candidate).is_ok() {
+            return candidate;
+        }
+    }
+    std::env::temp_dir().join("lintel").join("validations")
 }
 
 #[cfg(test)]
@@ -187,16 +194,16 @@ mod tests {
         assert_ne!(a, b);
     }
 
-    #[test]
-    fn store_and_lookup() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn store_and_lookup() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let cache = ValidationCache::new(tmp.path().to_path_buf(), false);
         let hash = schema_hash(&sample_schema());
 
         let errors = vec![("/name".to_string(), "missing required property".to_string())];
-        cache.store("content", &hash, true, &errors);
+        cache.store("content", &hash, true, &errors).await;
 
-        let (result, status) = cache.lookup("content", &hash, true);
+        let (result, status) = cache.lookup("content", &hash, true).await;
         assert_eq!(status, ValidationCacheStatus::Hit);
         let result = result.expect("expected cache hit");
         assert_eq!(result.len(), 1);
@@ -205,49 +212,51 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn lookup_miss() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn lookup_miss() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let cache = ValidationCache::new(tmp.path().to_path_buf(), false);
         let hash = schema_hash(&sample_schema());
 
-        let (result, status) = cache.lookup("content", &hash, true);
+        let (result, status) = cache.lookup("content", &hash, true).await;
         assert_eq!(status, ValidationCacheStatus::Miss);
         assert!(result.is_none());
         Ok(())
     }
 
-    #[test]
-    fn skip_read_forces_miss() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn skip_read_forces_miss() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
         let cache_write = ValidationCache::new(tmp.path().to_path_buf(), false);
         let cache_skip = ValidationCache::new(tmp.path().to_path_buf(), true);
         let hash = schema_hash(&sample_schema());
 
         // Store a result
-        cache_write.store("content", &hash, true, &[]);
+        cache_write.store("content", &hash, true, &[]).await;
 
         // With skip_read, lookup always returns miss
-        let (result, status) = cache_skip.lookup("content", &hash, true);
+        let (result, status) = cache_skip.lookup("content", &hash, true).await;
         assert_eq!(status, ValidationCacheStatus::Miss);
         assert!(result.is_none());
 
         // But store still writes (verify by reading with non-skip cache)
-        cache_skip.store(
-            "other",
-            &hash,
-            true,
-            &[("path".to_string(), "msg".to_string())],
-        );
-        let (result, status) = cache_write.lookup("other", &hash, true);
+        cache_skip
+            .store(
+                "other",
+                &hash,
+                true,
+                &[("path".to_string(), "msg".to_string())],
+            )
+            .await;
+        let (result, status) = cache_write.lookup("other", &hash, true).await;
         assert_eq!(status, ValidationCacheStatus::Hit);
         assert!(result.is_some());
         Ok(())
     }
 
     #[test]
-    fn default_cache_dir_ends_with_validations() {
-        let dir = default_cache_dir();
+    fn ensure_cache_dir_ends_with_validations() {
+        let dir = ensure_cache_dir();
         assert!(dir.ends_with("lintel/validations"));
     }
 }

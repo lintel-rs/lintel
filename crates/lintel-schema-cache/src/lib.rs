@@ -119,9 +119,11 @@ impl<C: HttpClient> SchemaCache<C> {
         {
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
-            if cache_path.exists() && !self.is_expired(&cache_path) {
-                let content = fs::read_to_string(&cache_path)?;
-                let value: Value = serde_json::from_str(&content)?;
+            if cache_path.exists()
+                && !self.is_expired(&cache_path)
+                && let Ok(content) = tokio::fs::read_to_string(&cache_path).await
+                && let Ok(value) = serde_json::from_str::<Value>(&content)
+            {
                 self.memory_cache
                     .lock()
                     .expect("memory cache poisoned")
@@ -143,11 +145,15 @@ impl<C: HttpClient> SchemaCache<C> {
             .insert(uri.to_string(), value.clone());
 
         let status = if let Some(ref cache_dir) = self.cache_dir {
-            // Write to disk cache
-            fs::create_dir_all(cache_dir)?;
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
-            fs::write(&cache_path, &body)?;
+            if let Err(e) = tokio::fs::write(&cache_path, &body).await {
+                tracing::warn!(
+                    path = %cache_path.display(),
+                    error = %e,
+                    "failed to write schema to disk cache"
+                );
+            }
             CacheStatus::Miss
         } else {
             CacheStatus::Disabled
@@ -179,12 +185,21 @@ impl<C: HttpClient> SchemaCache<C> {
     }
 }
 
-/// Return the default cache directory for schemas: `<system_cache>/lintel/schemas`.
-pub fn default_cache_dir() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from(".cache"))
-        .join("lintel")
-        .join("schemas")
+/// Return a usable cache directory for schemas, creating it if necessary.
+///
+/// Tries `<system_cache>/lintel/schemas` first, falling back to
+/// `<temp_dir>/lintel/schemas` when the preferred path is unwritable.
+pub fn ensure_cache_dir() -> PathBuf {
+    let candidates = [
+        dirs::cache_dir().map(|d| d.join("lintel").join("schemas")),
+        Some(std::env::temp_dir().join("lintel").join("schemas")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if fs::create_dir_all(&candidate).is_ok() {
+            return candidate;
+        }
+    }
+    std::env::temp_dir().join("lintel").join("schemas")
 }
 
 // -- jsonschema trait impls --------------------------------------------------
@@ -402,8 +417,8 @@ mod tests {
     }
 
     #[test]
-    fn default_cache_dir_ends_with_schemas() {
-        let dir = default_cache_dir();
+    fn ensure_cache_dir_ends_with_schemas() {
+        let dir = ensure_cache_dir();
         assert!(dir.ends_with("lintel/schemas"));
     }
 }
