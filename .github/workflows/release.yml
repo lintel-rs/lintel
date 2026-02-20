@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ["lintel-v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
