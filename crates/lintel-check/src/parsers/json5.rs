@@ -20,4 +20,12 @@ impl Parser for Json5Parser {
             }
         })
     }
+
+    fn annotate(&self, content: &str, schema_url: &str) -> Option<String> {
+        Some(super::annotate_json_content(content, schema_url))
+    }
+
+    fn strip_annotation(&self, content: &str) -> String {
+        super::strip_json_schema_property(content)
+    }
 }

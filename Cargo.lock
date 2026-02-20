@@ -1192,12 +1192,30 @@ dependencies = [
  "bpaf",
  "humantime",
  "insta",
+ "lintel-annotate",
  "lintel-check",
  "miette",
  "serde_json",
  "serde_yaml",
  "tokio",
  "toml",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tree",
+]
+
+[[package]]
+name = "lintel-annotate"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "glob",
+ "glob-match",
+ "humantime",
+ "lintel-check",
+ "rayon",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "tracing-tree",

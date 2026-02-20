@@ -17,6 +17,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo fmt --check
 

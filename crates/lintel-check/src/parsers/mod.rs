@@ -49,6 +49,22 @@ pub trait Parser {
             .and_then(Value::as_str)
             .map(String::from)
     }
+
+    /// Insert a schema annotation into the file content.
+    ///
+    /// Returns `Some(annotated_content)` if the format supports inline schema
+    /// annotations, or `None` if it does not (e.g. Markdown).
+    fn annotate(&self, _content: &str, _schema_url: &str) -> Option<String> {
+        None
+    }
+
+    /// Remove an existing schema annotation from the file content.
+    ///
+    /// Returns the content with the annotation stripped. If no annotation is
+    /// found, returns the content unchanged.
+    fn strip_annotation(&self, content: &str) -> String {
+        content.to_string()
+    }
 }
 
 /// Detect file format from extension. Returns `None` for unrecognized extensions.
@@ -73,6 +89,140 @@ pub fn parser_for(format: FileFormat) -> Box<dyn Parser> {
         FileFormat::Toml => Box::new(TomlParser),
         FileFormat::Yaml => Box::new(YamlParser),
         FileFormat::Markdown => Box::new(MarkdownParser),
+    }
+}
+
+/// Insert `"$schema": "URL"` as the first property after `{` in a JSON object.
+///
+/// Uses string manipulation (not parse+reserialize) to preserve formatting.
+pub(crate) fn annotate_json_content(content: &str, schema_url: &str) -> String {
+    let Some(brace_pos) = content.find('{') else {
+        return content.to_string();
+    };
+
+    let after_brace = &content[brace_pos + 1..];
+
+    // Detect if the content is compact (no newline before next non-whitespace)
+    let next_non_ws = after_brace.find(|c: char| !c.is_ascii_whitespace());
+    let has_newline_before_content = after_brace
+        .get(..next_non_ws.unwrap_or(0))
+        .is_some_and(|s| s.contains('\n'));
+
+    if has_newline_before_content {
+        let indent = detect_json_indent(after_brace);
+        format!(
+            "{}{{\n{indent}\"$schema\": \"{schema_url}\",{}",
+            &content[..brace_pos],
+            after_brace
+        )
+    } else {
+        format!(
+            "{}{{\"$schema\":\"{schema_url}\",{}",
+            &content[..brace_pos],
+            after_brace.trim_start()
+        )
+    }
+}
+
+/// Detect the indentation used in a JSON string (the whitespace at the start
+/// of the first content line after the opening brace).
+fn detect_json_indent(after_brace: &str) -> String {
+    for line in after_brace.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let indent_end = line.len() - line.trim_start().len();
+        return line[..indent_end].to_string();
+    }
+    "  ".to_string()
+}
+
+/// Remove the top-level `"$schema"` property from a JSON string.
+///
+/// Uses string manipulation (not parse+reserialize) to preserve formatting.
+pub(crate) fn strip_json_schema_property(content: &str) -> String {
+    let key = "\"$schema\"";
+    let Some(key_start) = content.find(key) else {
+        return content.to_string();
+    };
+
+    let key_end = key_start + key.len();
+    let mut pos = key_end;
+
+    // Skip whitespace (space/tab) between key and colon
+    while pos < content.len() && matches!(content.as_bytes()[pos], b' ' | b'\t') {
+        pos += 1;
+    }
+    // Expect colon
+    if content.as_bytes().get(pos) != Some(&b':') {
+        return content.to_string();
+    }
+    pos += 1;
+
+    // Skip whitespace (space/tab) between colon and value
+    while pos < content.len() && matches!(content.as_bytes()[pos], b' ' | b'\t') {
+        pos += 1;
+    }
+    // Expect opening quote
+    if content.as_bytes().get(pos) != Some(&b'"') {
+        return content.to_string();
+    }
+    pos += 1;
+
+    // Read string value until closing quote (handling backslash escapes)
+    while pos < content.len() {
+        match content.as_bytes()[pos] {
+            b'\\' => pos += 2,
+            b'"' => {
+                pos += 1;
+                break;
+            }
+            _ => pos += 1,
+        }
+    }
+    let value_end = pos;
+
+    // Check for trailing comma (with optional space/tab before it)
+    let ws_after = content.as_bytes()[value_end..]
+        .iter()
+        .take_while(|&&b| b == b' ' || b == b'\t')
+        .count();
+    let has_trailing_comma = content.as_bytes().get(value_end + ws_after) == Some(&b',');
+
+    if has_trailing_comma {
+        let remove_end = value_end + ws_after + 1; // past the comma
+        let before = &content[..key_start];
+        if let Some(nl_pos) = before.rfind('\n') {
+            // Pretty-printed: remove from newline to past the comma
+            format!("{}{}", &content[..nl_pos], &content[remove_end..])
+        } else {
+            // Compact: remove key-value+comma and any space/tab after comma
+            let ws_skip = content.as_bytes()[remove_end..]
+                .iter()
+                .take_while(|&&b| b == b' ' || b == b'\t')
+                .count();
+            format!(
+                "{}{}",
+                &content[..key_start],
+                &content[remove_end + ws_skip..]
+            )
+        }
+    } else {
+        // No trailing comma — $schema is the only or last property
+        let before = &content[..key_start];
+        let rtrimmed = before.trim_end();
+        if rtrimmed.ends_with(',') {
+            // Last property: also remove the preceding comma
+            let comma_pos = before.rfind(',').expect("comma before $schema");
+            format!("{}{}", &content[..comma_pos], &content[value_end..])
+        } else if let Some(nl_pos) = before.rfind('\n') {
+            // Only property, pretty-printed
+            format!("{}{}", &content[..nl_pos], &content[value_end..])
+        } else {
+            // Only property, compact
+            format!("{}{}", &content[..key_start], &content[value_end..])
+        }
     }
 }
 
@@ -223,7 +373,7 @@ mod tests {
 
     #[test]
     fn extract_schema_toml_comment() {
-        let content = "# $schema: https://example.com/s.json\nkey = \"value\"\n";
+        let content = "# :schema https://example.com/s.json\nkey = \"value\"\n";
         let val = serde_json::json!({"key": "value"});
         let uri = TomlParser.extract_schema_uri(content, &val);
         assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
@@ -231,7 +381,7 @@ mod tests {
 
     #[test]
     fn extract_schema_toml_with_leading_blank_lines() {
-        let content = "\n# $schema: https://example.com/s.json\nkey = \"value\"\n";
+        let content = "\n# :schema https://example.com/s.json\nkey = \"value\"\n";
         let val = serde_json::json!({"key": "value"});
         let uri = TomlParser.extract_schema_uri(content, &val);
         assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
@@ -239,7 +389,7 @@ mod tests {
 
     #[test]
     fn extract_schema_toml_not_in_body() {
-        let content = "key = \"value\"\n# $schema: https://example.com/s.json\n";
+        let content = "key = \"value\"\n# :schema https://example.com/s.json\n";
         let val = serde_json::json!({"key": "value"});
         let uri = TomlParser.extract_schema_uri(content, &val);
         assert!(uri.is_none());
@@ -251,6 +401,14 @@ mod tests {
         let val = serde_json::json!({"key": "value"});
         let uri = TomlParser.extract_schema_uri(content, &val);
         assert!(uri.is_none());
+    }
+
+    #[test]
+    fn extract_schema_toml_legacy_dollar_schema() {
+        let content = "# $schema: https://example.com/s.json\nkey = \"value\"\n";
+        let val = serde_json::json!({"key": "value"});
+        let uri = TomlParser.extract_schema_uri(content, &val);
+        assert_eq!(uri.as_deref(), Some("https://example.com/s.json"));
     }
 
     // --- line_col_to_offset ---

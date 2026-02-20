@@ -1,6 +1,6 @@
+pub mod annotate;
 pub mod check;
 pub mod ci;
-pub mod completions;
 pub mod convert;
 pub mod init;
 

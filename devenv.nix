@@ -18,7 +18,11 @@
   git-hooks.hooks = {
     clippy = {
       enable = true;
-      settings.denyWarnings = true;
+      settings = {
+        allFeatures = true;
+        denyWarnings = true;
+        extraArgs = "--all-targets";
+      };
     };
     rustfmt.enable = true;
     nixfmt.enable = true;
