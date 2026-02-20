@@ -28,7 +28,8 @@ let schema = json!({
 });
 
 // color=false for plain text, color=true for ANSI terminal output
-let output = jsonschema_explain::explain(&schema, "example", false);
+// syntax_highlight=true to enable syntax highlighting in fenced code blocks
+let output = jsonschema_explain::explain(&schema, "example", false, false);
 println!("{output}");
 ```
 

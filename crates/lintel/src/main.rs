@@ -32,6 +32,7 @@ impl core::str::FromStr for OutputFormat {
 }
 
 #[derive(Debug, Clone, Bpaf)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct IdentifyArgs {
     /// Show detailed schema documentation
     #[bpaf(long("explain"), switch)]
@@ -46,6 +47,14 @@ pub struct IdentifyArgs {
     /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
     #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
     pub schema_cache_ttl: Option<String>,
+
+    /// Bypass schema cache reads (still writes fetched schemas to cache)
+    #[bpaf(long("force-schema-fetch"), switch)]
+    pub force_schema_fetch: bool,
+
+    /// Disable syntax highlighting in code blocks
+    #[bpaf(long("no-syntax-highlighting"), switch)]
+    pub no_syntax_highlighting: bool,
 
     /// File to identify
     #[bpaf(positional("FILE"))]
@@ -408,6 +417,7 @@ mod tests {
                 assert_eq!(args.file, "file.json");
                 assert!(!args.explain);
                 assert!(!args.no_catalog);
+                assert!(!args.force_schema_fetch);
                 assert!(args.cache_dir.is_none());
                 assert!(args.schema_cache_ttl.is_none());
             }
@@ -453,6 +463,7 @@ mod tests {
                 "identify",
                 "--explain",
                 "--no-catalog",
+                "--force-schema-fetch",
                 "--cache-dir",
                 "/tmp/cache",
                 "--schema-cache-ttl",
@@ -465,6 +476,7 @@ mod tests {
                 assert_eq!(args.file, "tsconfig.json");
                 assert!(args.explain);
                 assert!(args.no_catalog);
+                assert!(args.force_schema_fetch);
                 assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
                 assert_eq!(args.schema_cache_ttl.as_deref(), Some("30m"));
             }

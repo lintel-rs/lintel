@@ -86,7 +86,7 @@ pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(cache_dir), client, false, ttl);
+    let retriever = SchemaCache::new(Some(cache_dir), client, args.force_schema_fetch, ttl);
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
@@ -226,10 +226,11 @@ pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
         let is_tty = std::io::stdout().is_terminal();
 
         if is_tty {
-            let output = jsonschema_explain::explain(&schema_value, display_name, true);
+            let syntax_hl = !args.no_syntax_highlighting;
+            let output = jsonschema_explain::explain(&schema_value, display_name, true, syntax_hl);
             pipe_to_pager(&format!("\n{output}"));
         } else {
-            let output = jsonschema_explain::explain(&schema_value, display_name, false);
+            let output = jsonschema_explain::explain(&schema_value, display_name, false, false);
             println!();
             print!("{output}");
         }

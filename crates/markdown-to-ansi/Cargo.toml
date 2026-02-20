@@ -1,0 +1,18 @@
+[package]
+name = "markdown-to-ansi"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+homepage.workspace = true
+description = "Render Markdown as ANSI-formatted terminal text"
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+syntect = { version = "5", default-features = false, features = [
+    "default-syntaxes", "default-themes", "regex-fancy", "yaml-load"
+] }
+
+[lints]
+workspace = true
