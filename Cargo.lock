@@ -1795,12 +1795,22 @@ dependencies = [
  "insta",
  "json5 0.4.1",
  "jsonc-parser 0.24.0",
+ "prettier-yaml",
  "pretty_assertions",
- "saphyr-parser",
  "serde",
  "serde_json",
  "serde_yaml",
  "toml",
+]
+
+[[package]]
+name = "prettier-yaml"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "insta",
+ "pretty_assertions",
+ "saphyr-parser",
 ]
 
 [[package]]

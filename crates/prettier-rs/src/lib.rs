@@ -4,7 +4,6 @@ pub mod json5;
 pub mod jsonc;
 pub mod options;
 pub mod printer;
-pub mod yaml;
 
 use std::path::Path;
 
@@ -38,7 +37,21 @@ pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> R
         }
         Format::Jsonc => jsonc::format_jsonc(content, options),
         Format::Json5 => json5::format_json5(content, options),
-        Format::Yaml => yaml::format_yaml(content, options),
+        Format::Yaml => {
+            let yaml_opts = prettier_yaml::YamlFormatOptions {
+                print_width: options.print_width,
+                tab_width: options.tab_width,
+                use_tabs: options.use_tabs,
+                single_quote: options.single_quote,
+                bracket_spacing: options.bracket_spacing,
+                prose_wrap: match options.prose_wrap {
+                    options::ProseWrap::Always => prettier_yaml::ProseWrap::Always,
+                    options::ProseWrap::Never => prettier_yaml::ProseWrap::Never,
+                    options::ProseWrap::Preserve => prettier_yaml::ProseWrap::Preserve,
+                },
+            };
+            prettier_yaml::format_yaml(content, &yaml_opts)
+        }
     }
 }
 
