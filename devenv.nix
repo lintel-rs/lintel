@@ -8,6 +8,10 @@
   languages.rust.enable = true;
 
   scripts.lintel.exec = ''
+    cargo run --release -p lintel -- "$@"
+  '';
+
+  scripts.lintel-debug.exec = ''
     cargo run -p lintel -- "$@"
   '';
 
