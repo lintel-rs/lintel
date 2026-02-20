@@ -1,6 +1,6 @@
 [package]
 name = "lintel-annotate"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
 authors.workspace = true
 description = "Annotation-based linting for JSON and YAML files using JSON Schema"
