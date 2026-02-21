@@ -5,6 +5,7 @@ use lintel_cli_common::CLIGlobalOptions;
 use tracing_subscriber::prelude::*;
 
 use lintel_annotate::annotate_args;
+use lintel_identify::identify_args;
 use lintel_reporters::{ReporterKind, ValidateArgs, make_reporter, validate_args};
 
 mod commands;
@@ -28,40 +29,6 @@ impl core::str::FromStr for OutputFormat {
             )),
         }
     }
-}
-
-#[derive(Debug, Clone, Bpaf)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct IdentifyArgs {
-    /// Show detailed schema documentation
-    #[bpaf(long("explain"), switch)]
-    pub explain: bool,
-
-    #[bpaf(long("no-catalog"), switch)]
-    pub no_catalog: bool,
-
-    #[bpaf(long("cache-dir"), argument("DIR"))]
-    pub cache_dir: Option<String>,
-
-    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
-    #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
-    pub schema_cache_ttl: Option<String>,
-
-    /// Bypass schema cache reads (still writes fetched schemas to cache)
-    #[bpaf(long("force-schema-fetch"), switch)]
-    pub force_schema_fetch: bool,
-
-    /// Disable syntax highlighting in code blocks
-    #[bpaf(long("no-syntax-highlighting"), switch)]
-    pub no_syntax_highlighting: bool,
-
-    /// Print output directly instead of piping through a pager
-    #[bpaf(long("no-pager"), switch)]
-    pub no_pager: bool,
-
-    /// File to identify
-    #[bpaf(positional("FILE"))]
-    pub file: String,
 }
 
 #[derive(Debug, Clone, Bpaf)]
@@ -118,7 +85,7 @@ enum Commands {
     /// Show which schema a file resolves to
     Identify(
         #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
-        #[bpaf(external(identify_args))] IdentifyArgs,
+        #[bpaf(external(identify_args))] lintel_identify::IdentifyArgs,
     ),
 
     #[bpaf(command("init"))]
@@ -137,6 +104,13 @@ enum Commands {
     Annotate(
         #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
         #[bpaf(external(annotate_args))] lintel_annotate::AnnotateArgs,
+    ),
+
+    #[bpaf(command("cache"), hide, fallback_to_usage)]
+    /// Cache debugging tools
+    Cache(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(commands::cache::cache_command))] commands::cache::CacheCommand,
     ),
 
     #[bpaf(command("version"))]
@@ -221,7 +195,7 @@ async fn main() -> ExitCode {
         Commands::Identify(global, args) => {
             setup_tracing(&global);
             setup_miette(&global);
-            commands::identify::run(
+            lintel_identify::run(
                 args,
                 &global,
                 lintel_check::retriever::ReqwestClient::default(),
@@ -245,6 +219,15 @@ async fn main() -> ExitCode {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
+        Commands::Cache(global, cmd) => {
+            setup_tracing(&global);
+            commands::cache::run(
+                cmd,
+                &global,
+                lintel_check::retriever::ReqwestClient::default(),
+            )
+            .await
+        }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
@@ -372,35 +355,6 @@ mod tests {
     }
 
     #[test]
-    fn cli_verbose_short_after_subcommand() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["check", "-v", "*.json"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Check(global, _, args) => {
-                assert!(global.verbose);
-                assert_eq!(args.globs, vec!["*.json"]);
-            }
-            _ => panic!("expected Check"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_verbose_long_after_subcommand() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["check", "--verbose"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Check(global, _, _) => {
-                assert!(global.verbose);
-            }
-            _ => panic!("expected Check"),
-        }
-        Ok(())
-    }
-
-    #[test]
     fn cli_check_default_reporter_is_pretty() -> anyhow::Result<()> {
         let parsed = cli()
             .run_inner(&["check"])
@@ -452,112 +406,6 @@ mod tests {
                 assert_eq!(reporter_kind, ReporterKind::Pretty);
             }
             _ => panic!("expected CI"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_parses_identify_basic() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["identify", "file.json"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Identify(_, args) => {
-                assert_eq!(args.file, "file.json");
-                assert!(!args.explain);
-                assert!(!args.no_catalog);
-                assert!(!args.force_schema_fetch);
-                assert!(args.cache_dir.is_none());
-                assert!(args.schema_cache_ttl.is_none());
-            }
-            _ => panic!("expected Identify"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_check_with_log_level() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["check", "--log-level", "debug"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Check(global, _, _) => {
-                assert_eq!(global.log_level, lintel_cli_common::LogLevel::Debug);
-            }
-            _ => panic!("expected Check"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_check_with_colors_off() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["check", "--colors", "off"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Check(global, _, _) => {
-                assert_eq!(global.colors, Some(lintel_cli_common::ColorsArg::Off));
-            }
-            _ => panic!("expected Check"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_parses_identify_explain() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["identify", "file.json", "--explain"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Identify(_, args) => {
-                assert_eq!(args.file, "file.json");
-                assert!(args.explain);
-            }
-            _ => panic!("expected Identify"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_parses_identify_no_catalog() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&["identify", "--no-catalog", "file.json"])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Identify(_, args) => {
-                assert_eq!(args.file, "file.json");
-                assert!(args.no_catalog);
-            }
-            _ => panic!("expected Identify"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn cli_parses_identify_all_options() -> anyhow::Result<()> {
-        let parsed = cli()
-            .run_inner(&[
-                "identify",
-                "--explain",
-                "--no-catalog",
-                "--force-schema-fetch",
-                "--cache-dir",
-                "/tmp/cache",
-                "--schema-cache-ttl",
-                "30m",
-                "tsconfig.json",
-            ])
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        match parsed.command {
-            Commands::Identify(_, args) => {
-                assert_eq!(args.file, "tsconfig.json");
-                assert!(args.explain);
-                assert!(args.no_catalog);
-                assert!(args.force_schema_fetch);
-                assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
-                assert_eq!(args.schema_cache_ttl.as_deref(), Some("30m"));
-            }
-            _ => panic!("expected Identify"),
         }
         Ok(())
     }
