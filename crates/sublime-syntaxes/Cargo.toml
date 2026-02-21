@@ -1,0 +1,22 @@
+[package]
+name = "sublime-syntaxes"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+homepage.workspace = true
+description = "Precompiled Sublime Text syntax definitions for languages not in syntect's defaults"
+keywords = ["syntax-highlighting", "syntect", "sublime-syntax"]
+categories = ["text-processing"]
+
+[dependencies]
+syntect = { version = "5", default-features = false, features = ["default-syntaxes"] }
+
+[build-dependencies]
+syntect = { version = "5", default-features = false, features = [
+    "default-syntaxes", "regex-fancy", "yaml-load",
+] }
+
+[lints]
+workspace = true
