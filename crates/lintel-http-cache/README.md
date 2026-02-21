@@ -24,7 +24,7 @@ Disk-backed HTTP cache with JSON parsing for schema files. Fetches JSON over HTT
 
 ## Usage
 
-```rust
+```rust,ignore
 use lintel_http_cache::{HttpCache, ensure_cache_dir};
 use std::time::Duration;
 
@@ -41,7 +41,7 @@ let (schema, status) = cache.fetch("https://json.schemastore.org/tsconfig.json")
 
 Use the memory-only constructor to avoid network and disk I/O in tests:
 
-```rust
+```rust,ignore
 use lintel_http_cache::HttpCache;
 
 let cache = HttpCache::memory();

@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use core::time::Duration;
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -1,15 +1,9 @@
 # lintel-reporters
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-reporters.svg
-[crates-url]: https://crates.io/crates/lintel-reporters
-[docs-badge]: https://docs.rs/lintel-reporters/badge.svg
-[docs-url]: https://docs.rs/lintel-reporters
-[license-badge]: https://img.shields.io/crates/l/lintel-reporters.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-reporters.svg)](https://crates.io/crates/lintel-reporters)
+[![docs.rs](https://docs.rs/lintel-reporters/badge.svg)](https://docs.rs/lintel-reporters)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-reporters.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Reporter implementations for [Lintel](https://github.com/lintel-rs/lintel). Provides pluggable output formatting for validation results.
 
@@ -22,9 +16,12 @@ Reporter implementations for [Lintel](https://github.com/lintel-rs/lintel). Prov
 ## Usage
 
 ```rust
-use lintel_reporters::{ReporterKind, make_reporter, run, ValidateArgs};
+use lintel_reporters::{ReporterKind, make_reporter};
 
-let mut args = ValidateArgs { /* ... */ };
-let mut reporter = make_reporter(ReporterKind::Pretty, false);
-let had_errors = run(&mut args, client, reporter.as_mut()).await?;
+let reporter = make_reporter(ReporterKind::Pretty, false);
+// Pass `reporter.as_mut()` to the validation engine
 ```
+
+## License
+
+Apache-2.0

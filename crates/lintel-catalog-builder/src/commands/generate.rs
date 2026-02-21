@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 use crate::catalog::build_output_catalog;
 use crate::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 use crate::download::{DownloadItem, download_batch, download_one};
-use crate::refs::{find_external_refs, resolve_and_rewrite};
+use crate::refs::resolve_and_rewrite;
 use crate::targets::{AnyTarget, OutputContext, Target};
 
 /// Run the `generate` subcommand.
@@ -170,33 +170,16 @@ async fn generate_for_target(
                         format!("failed to read local schema {}", source_path.display())
                     })?;
 
-                if output_dir == config_dir {
-                    // Same directory — only resolve $ref deps if present
-                    let value: serde_json::Value = serde_json::from_str(&text)?;
-                    let ext_refs = find_external_refs(&value);
-                    if !ext_refs.is_empty() {
-                        resolve_and_rewrite(
-                            cache,
-                            &text,
-                            &dest_path,
-                            &shared_dir,
-                            &shared_base_url,
-                            &mut already_downloaded,
-                        )
-                        .await?;
-                    }
-                } else {
-                    // Copy to output dir and resolve $ref deps
-                    resolve_and_rewrite(
-                        cache,
-                        &text,
-                        &dest_path,
-                        &shared_dir,
-                        &shared_base_url,
-                        &mut already_downloaded,
-                    )
-                    .await?;
-                }
+                // Resolve $ref deps and fix invalid URI references
+                resolve_and_rewrite(
+                    cache,
+                    &text,
+                    &dest_path,
+                    &shared_dir,
+                    &shared_base_url,
+                    &mut already_downloaded,
+                )
+                .await?;
             }
 
             group_schema_names.push(schema_def.name.clone());
@@ -471,21 +454,19 @@ async fn resolve_source_refs(
             continue;
         }
         let text = tokio::fs::read_to_string(&item.dest).await?;
-        let value: serde_json::Value = serde_json::from_str(&text)?;
-        let ext_refs = find_external_refs(&value);
-        if !ext_refs.is_empty() {
-            debug!(schema = %info.name, refs = ext_refs.len(), "resolving $ref deps for source schema");
-            resolve_and_rewrite(
-                cache,
-                &text,
-                &item.dest,
-                &shared_dir,
-                &shared_base_url,
-                &mut already_downloaded,
-            )
-            .await
-            .with_context(|| format!("failed to resolve $ref deps for {}", info.name))?;
-        }
+        // Always run resolve_and_rewrite: it handles both external $ref
+        // resolution and fixing invalid URI references (spaces, brackets, etc.)
+        debug!(schema = %info.name, "processing schema refs");
+        resolve_and_rewrite(
+            cache,
+            &text,
+            &item.dest,
+            &shared_dir,
+            &shared_base_url,
+            &mut already_downloaded,
+        )
+        .await
+        .with_context(|| format!("failed to process refs for {}", info.name))?;
     }
 
     Ok(())

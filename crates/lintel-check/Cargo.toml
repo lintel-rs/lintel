@@ -10,6 +10,9 @@ homepage.workspace = true
 keywords = ["json-schema", "validation", "yaml", "toml", "linter"]
 categories = ["development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 lintel-config = { version = "0.0.3", path = "../lintel-config" }
 lintel-http-cache = { version = "0.0.4", path = "../lintel-http-cache" }
@@ -33,9 +36,6 @@ tracing = "0.1"
 [build-dependencies]
 lintel-config = { version = "0.0.3", path = "../lintel-config" }
 serde_json = "1"
-
-[lints]
-workspace = true
 
 [dev-dependencies]
 insta = { version = "1", features = ["filters"] }

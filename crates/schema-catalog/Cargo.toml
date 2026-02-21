@@ -7,6 +7,8 @@ description = "Types for the JSON Schema catalog format (schema-catalog.json)"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+keywords = ["json-schema", "catalog", "schemastore"]
+categories = ["data-structures"]
 
 [lints]
 workspace = true

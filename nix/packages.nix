@@ -44,6 +44,8 @@ let
 
   lintel-github-action = mkPackage ../crates/lintel-github-action { };
 
+  cargo-furnish = mkPackage ../crates/cargo-furnish { };
+
   lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder { };
 in
 {
@@ -51,6 +53,7 @@ in
     lintel
     lintel-schemastore-catalog
     lintel-github-action
+    cargo-furnish
     lintel-catalog-builder
     ;
 }

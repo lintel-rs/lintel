@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use bpaf::Bpaf;
 
 /// Global options applied to all commands
