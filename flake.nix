@@ -38,6 +38,7 @@
         inherit (packages')
           lintel
           lintel-schemastore-catalog
+          lintel-catalog-builder
           lintel-github-action
           cargo-furnish
           ;
@@ -51,6 +52,7 @@
           inherit
             lintel
             lintel-schemastore-catalog
+            lintel-catalog-builder
             lintel-github-action
             cargo-furnish
             ;
