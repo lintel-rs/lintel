@@ -179,7 +179,6 @@ async fn main() -> ExitCode {
         }
         Commands::Annotate(global, args) => {
             setup_tracing(&global);
-            setup_miette(&global);
             commands::annotate::run(
                 &args,
                 lintel_check::retriever::ReqwestClient::default(),

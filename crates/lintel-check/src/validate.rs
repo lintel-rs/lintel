@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, HashMap};
+use alloc::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -40,7 +41,7 @@ pub struct ValidateArgs {
     pub config_dir: Option<PathBuf>,
 
     /// TTL for cached schemas. `None` means no expiry.
-    pub schema_cache_ttl: Option<std::time::Duration>,
+    pub schema_cache_ttl: Option<core::time::Duration>,
 }
 
 /// A single lint error produced during validation.
@@ -470,7 +471,7 @@ fn fetch_schema_from_prefetched(
 }
 
 /// Report the same error for every file in a schema group.
-fn report_group_error<P: std::borrow::Borrow<ParsedFile>>(
+fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
     message: &str,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
@@ -497,7 +498,7 @@ fn report_group_error<P: std::borrow::Borrow<ParsedFile>>(
 }
 
 /// Mark every file in a group as checked (no errors).
-fn mark_group_checked<P: std::borrow::Borrow<ParsedFile>>(
+fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     validation_cache_status: Option<ValidationCacheStatus>,
@@ -540,7 +541,7 @@ fn push_error_pairs(
 /// results in the validation cache.
 #[tracing::instrument(skip_all, fields(schema_uri, file_count = group.len()))]
 #[allow(clippy::too_many_arguments)]
-async fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
+async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
     schema_uri: &str,
     schema_hash: &str,
@@ -628,7 +629,7 @@ pub async fn run_with<C: HttpClient>(
         #[allow(clippy::items_after_statements)]
         type CatalogResult = (
             String,
-            Result<CompiledCatalog, Box<dyn std::error::Error + Send + Sync>>,
+            Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
         );
         let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
 
@@ -740,11 +741,11 @@ pub async fn run_with<C: HttpClient>(
 
     // Phase 2: Compile each schema once and validate all matching files
     let mut local_schema_cache: HashMap<String, Value> = HashMap::new();
-    let mut fetch_time = std::time::Duration::ZERO;
-    let mut hash_time = std::time::Duration::ZERO;
-    let mut vcache_time = std::time::Duration::ZERO;
-    let mut compile_time = std::time::Duration::ZERO;
-    let mut validate_time = std::time::Duration::ZERO;
+    let mut fetch_time = core::time::Duration::ZERO;
+    let mut hash_time = core::time::Duration::ZERO;
+    let mut vcache_time = core::time::Duration::ZERO;
+    let mut compile_time = core::time::Duration::ZERO;
+    let mut validate_time = core::time::Duration::ZERO;
 
     for (schema_uri, group) in &schema_groups {
         let _group_span = tracing::debug_span!(
@@ -903,8 +904,8 @@ pub async fn run_with<C: HttpClient>(
 mod tests {
     use super::*;
     use crate::retriever::HttpClient;
+    use core::error::Error;
     use std::collections::HashMap;
-    use std::error::Error;
     use std::path::Path;
 
     #[derive(Clone)]

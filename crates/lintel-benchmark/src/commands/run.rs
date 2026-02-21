@@ -19,9 +19,9 @@ pub enum Filter {
     Repo,
 }
 
-impl std::str::FromStr for Filter {
+impl core::str::FromStr for Filter {
     type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
         match s {
             "single" => Ok(Self::Single),
             "multi" => Ok(Self::Multi),

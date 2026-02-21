@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;

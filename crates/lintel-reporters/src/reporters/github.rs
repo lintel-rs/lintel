@@ -1,4 +1,4 @@
-use std::time::Duration;
+use core::time::Duration;
 
 use lintel_check::diagnostics::offset_to_line_col;
 use lintel_check::validate::{CheckedFile, LintError, ValidateResult};

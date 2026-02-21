@@ -40,7 +40,7 @@ impl Diagnostic for ValidationDiagnostic {
         } else {
             self.instance_path.clone()
         };
-        Some(Box::new(std::iter::once(LabeledSpan::new(
+        Some(Box::new(core::iter::once(LabeledSpan::new(
             Some(label),
             self.span.offset(),
             self.span.len(),
