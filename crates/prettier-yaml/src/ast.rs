@@ -68,6 +68,9 @@ pub(crate) struct MappingNode {
     pub tag: Option<String>,
     /// For flow mappings, store the raw source if we want to preserve it
     pub flow_source: Option<String>,
+    /// Whether this mapping had explicit `{ ... }` braces in the source.
+    /// Detected by checking `span.start != span.end` for `MappingStart` events.
+    pub has_explicit_braces: bool,
     pub middle_comments: Vec<Comment>, // comments between tag/anchor and first entry
     pub trailing_comments: Vec<Comment>, // comments after last entry before MappingEnd
 }

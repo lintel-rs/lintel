@@ -336,6 +336,14 @@ fn format_flow_sequence_flat(
             && m.flow
             && m.entries.len() == 1
         {
+            // If the mapping has explicit braces, anchor, or tag, keep as `{ ... }`.
+            // e.g. `{ &e e: f }` and `&g { g: h }` must preserve braces.
+            if m.has_explicit_braces || m.anchor.is_some() || m.tag.is_some() {
+                format_node(&item.value, &mut part, indent, options, false, true);
+                parts.push(part);
+                continue;
+            }
+
             let entry = &m.entries[0];
             let key_is_null = is_null_value(&entry.key);
             // If value is a collection and key is a simple scalar, wrap in {} for clarity
@@ -463,6 +471,23 @@ fn format_flow_sequence_broken(
             && m.flow
             && m.entries.len() == 1
         {
+            // If the mapping has explicit braces, anchor, or tag, keep as `{ ... }`.
+            if m.has_explicit_braces || m.anchor.is_some() || m.tag.is_some() {
+                output.push_str(&inner_indent_s);
+                format_node(&item.value, output, inner_indent, options, false, true);
+                output.push(',');
+                if let Node::Mapping(m2) = &item.value
+                    && m2.flow
+                    && m2.entries.len() == 1
+                    && let Some(comment) = &m2.entries[0].trailing_comment
+                {
+                    output.push(' ');
+                    output.push_str(comment);
+                }
+                output.push('\n');
+                continue;
+            }
+
             let entry = &m.entries[0];
             let key_is_complex = is_collection(&entry.key);
             let key_is_null = is_null_value(&entry.key);

@@ -51,6 +51,10 @@ fn main() {
             "spec-9-3-bare-documents",
             "Bare\ndocument\n...\n# No document\n...\n|\n%!PS-Adobe-2.0 # Not the first line\n",
         ),
+        (
+            "various-anchors",
+            "&flowseq [a: b, &c c: d, { &e e: f }, &g { g: h }]\n",
+        ),
     ];
     for (name, input) in inputs {
         println!("=== {name} ===");
