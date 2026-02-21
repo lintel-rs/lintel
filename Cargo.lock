@@ -1302,7 +1302,7 @@ dependencies = [
  "bpaf",
  "futures",
  "glob-match",
- "lintel-http-cache",
+ "lintel-schema-cache",
  "percent-encoding",
  "reqwest 0.12.28",
  "schema-catalog",
@@ -1330,7 +1330,7 @@ dependencies = [
  "jsonc-parser",
  "jsonschema",
  "lintel-config",
- "lintel-http-cache",
+ "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
  "schemastore",
@@ -1378,23 +1378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lintel-http-cache"
-version = "0.0.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "dirs",
- "filetime",
- "jsonschema",
- "reqwest 0.12.28",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "lintel-identify"
 version = "0.0.1"
 dependencies = [
@@ -1419,6 +1402,23 @@ dependencies = [
  "humantime",
  "lintel-check",
  "miette",
+]
+
+[[package]]
+name = "lintel-schema-cache"
+version = "0.0.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "dirs",
+ "filetime",
+ "jsonschema",
+ "reqwest 0.12.28",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

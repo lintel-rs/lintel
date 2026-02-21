@@ -7,7 +7,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{CacheStatus, HttpCache, ensure_cache_dir};
+use lintel_check::retriever::{CacheStatus, SchemaCache, ensure_cache_dir};
 use lintel_check::validate;
 use lintel_check::validation_cache;
 
@@ -63,7 +63,7 @@ pub async fn run(cmd: CacheCommand, _global: &CLIGlobalOptions) -> Result<bool> 
 }
 
 fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
-    let hash = HttpCache::hash_uri(&args.url);
+    let hash = SchemaCache::hash_uri(&args.url);
     let cache_dir = match args.cache_dir {
         Some(dir) => PathBuf::from(dir),
         None => ensure_cache_dir(),
@@ -132,7 +132,7 @@ async fn trace(args: TraceArgs) -> Result<()> {
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = HttpCache::new(Some(schema_cache_dir.clone()), false, ttl);
+    let retriever = SchemaCache::new(Some(schema_cache_dir.clone()), false, ttl);
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
@@ -174,7 +174,7 @@ async fn trace(args: TraceArgs) -> Result<()> {
 }
 
 async fn trace_catalog(
-    retriever: &HttpCache,
+    retriever: &SchemaCache,
     cfg: &config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
@@ -186,7 +186,7 @@ async fn trace_catalog(
         println!("  status: disabled (--no-catalog)");
     } else {
         let catalog_url = lintel_check::catalog::CATALOG_URL;
-        let catalog_hash = HttpCache::hash_uri(catalog_url);
+        let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
         println!("  hash: {catalog_hash}");
@@ -259,7 +259,7 @@ fn trace_schema_resolution(
 }
 
 async fn trace_schema_cache(
-    retriever: &HttpCache,
+    retriever: &SchemaCache,
     schema_uri: &str,
     is_remote: bool,
     schema_cache_dir: &Path,
@@ -267,7 +267,7 @@ async fn trace_schema_cache(
     println!();
     println!("schema cache:");
     if is_remote {
-        let schema_hash = HttpCache::hash_uri(schema_uri);
+        let schema_hash = SchemaCache::hash_uri(schema_uri);
         let schema_cache_path = schema_cache_dir.join(format!("{schema_hash}.json"));
         println!("  hash: {schema_hash}");
         println!("  path: {}", schema_cache_path.display());
@@ -301,7 +301,7 @@ async fn trace_schema_cache(
 }
 
 async fn trace_validation_cache(
-    retriever: &HttpCache,
+    retriever: &SchemaCache,
     schema_uri: &str,
     is_remote: bool,
     cfg: &config::Config,

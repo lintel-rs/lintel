@@ -9,7 +9,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{HttpCache, ensure_cache_dir};
+use lintel_check::retriever::{SchemaCache, ensure_cache_dir};
 use lintel_check::validate;
 use schemastore::SchemaMatch;
 
@@ -144,7 +144,7 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = HttpCache::new(Some(cache_dir), args.force_schema_fetch, ttl);
+    let retriever = SchemaCache::new(Some(cache_dir), args.force_schema_fetch, ttl);
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);

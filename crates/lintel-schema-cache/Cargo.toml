@@ -1,13 +1,13 @@
 [package]
-name = "lintel-http-cache"
+name = "lintel-schema-cache"
 version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
-description = "Disk-backed HTTP cache with JSON parsing for schema files"
+description = "Disk-backed schema cache with HTTP fetching and JSON parsing"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords = ["json-schema", "cache", "http"]
+keywords = ["json-schema", "cache", "schema"]
 categories = ["caching", "development-tools"]
 
 [lints]

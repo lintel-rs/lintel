@@ -1,17 +1,11 @@
-# lintel-http-cache
+# lintel-schema-cache
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
+[![Crates.io](https://img.shields.io/crates/v/lintel-schema-cache.svg)](https://crates.io/crates/lintel-schema-cache)
+[![docs.rs](https://docs.rs/lintel-schema-cache/badge.svg)](https://docs.rs/lintel-schema-cache)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-schema-cache.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-[crates-badge]: https://img.shields.io/crates/v/lintel-http-cache.svg
-[crates-url]: https://crates.io/crates/lintel-http-cache
-[docs-badge]: https://docs.rs/lintel-http-cache/badge.svg
-[docs-url]: https://docs.rs/lintel-http-cache
-[license-badge]: https://img.shields.io/crates/l/lintel-http-cache.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
-
-Disk-backed HTTP cache with JSON parsing for schema files. Fetches JSON over HTTP and stores results locally for fast subsequent lookups.
+Disk-backed schema cache with HTTP fetching and JSON parsing. Part of the [Lintel](https://github.com/lintel-rs/lintel) project. Fetches JSON schemas over HTTP and stores results locally for fast subsequent lookups.
 
 ## Features
 
@@ -20,15 +14,15 @@ Disk-backed HTTP cache with JSON parsing for schema files. Fetches JSON over HTT
 - **TTL support** — configurable time-to-live for cache entries based on file modification time
 - **In-memory layer** — frequently accessed schemas are also kept in memory for zero-IO lookups
 - **jsonschema integration** — implements `jsonschema::AsyncRetrieve` for seamless use as a schema resolver
-- **Test-friendly** — `HttpCache::memory()` constructor creates a memory-only cache with no HTTP or disk I/O
+- **Test-friendly** — `SchemaCache::memory()` constructor creates a memory-only cache with no HTTP or disk I/O
 
 ## Usage
 
 ```rust,ignore
-use lintel_http_cache::{HttpCache, ensure_cache_dir};
+use lintel_schema_cache::{SchemaCache, ensure_cache_dir};
 use std::time::Duration;
 
-let cache = HttpCache::new(
+let cache = SchemaCache::new(
     Some(ensure_cache_dir()),
     false,                                   // skip_read
     Some(Duration::from_secs(12 * 60 * 60)), // TTL
@@ -42,9 +36,13 @@ let (schema, status) = cache.fetch("https://json.schemastore.org/tsconfig.json")
 Use the memory-only constructor to avoid network and disk I/O in tests:
 
 ```rust,ignore
-use lintel_http_cache::HttpCache;
+use lintel_schema_cache::SchemaCache;
 
-let cache = HttpCache::memory();
+let cache = SchemaCache::memory();
 cache.insert("https://example.com/schema.json", serde_json::json!({"type": "object"}));
 let (val, _status) = cache.fetch("https://example.com/schema.json").await?;
 ```
+
+## License
+
+Apache-2.0

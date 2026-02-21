@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 schema-catalog = { version = "0.0.1", path = "../schema-catalog" }
-lintel-http-cache = { version = "0.0.4", path = "../lintel-http-cache" }
+lintel-schema-cache = { version = "0.0.4", path = "../lintel-schema-cache" }
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

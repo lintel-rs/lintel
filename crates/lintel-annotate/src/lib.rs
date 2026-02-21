@@ -13,7 +13,7 @@ use lintel_check::config;
 use lintel_check::discover;
 use lintel_check::parsers;
 use lintel_check::registry;
-use lintel_check::retriever::{HttpCache, ensure_cache_dir};
+use lintel_check::retriever::{SchemaCache, ensure_cache_dir};
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -133,7 +133,7 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // Catalog fetching
 // ---------------------------------------------------------------------------
 
-async fn fetch_catalogs(retriever: &HttpCache, registries: &[String]) -> Vec<CompiledCatalog> {
+async fn fetch_catalogs(retriever: &SchemaCache, registries: &[String]) -> Vec<CompiledCatalog> {
     type CatalogResult = (
         String,
         Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
@@ -297,7 +297,7 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = HttpCache::new(
+    let retriever = SchemaCache::new(
         Some(cache_dir_path),
         false, // don't force schema fetch
         schema_cache_ttl,

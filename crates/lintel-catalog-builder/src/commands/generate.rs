@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use lintel_http_cache::{HttpCache, ensure_cache_dir};
+use lintel_schema_cache::{SchemaCache, ensure_cache_dir};
 use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
@@ -53,7 +53,7 @@ pub async fn run(
 
     // Create schema cache
     let cache_dir = ensure_cache_dir();
-    let cache = HttpCache::new(Some(cache_dir), no_cache, None);
+    let cache = SchemaCache::new(Some(cache_dir), no_cache, None);
 
     // Process each target
     for (target_name, target_config) in &config.target {
@@ -91,7 +91,7 @@ pub async fn run(
 /// Generate output for a single target.
 #[allow(clippy::too_many_lines)]
 async fn generate_for_target(
-    cache: &HttpCache,
+    cache: &SchemaCache,
     config: &CatalogConfig,
     target: &AnyTarget,
     output_dir: &Path,
@@ -281,7 +281,7 @@ async fn load_catalog_config(config_path: &Path) -> Result<CatalogConfig> {
 /// Returns `(entries, groups)` where groups are `(group_key, schema_names)`.
 #[allow(clippy::too_many_lines)]
 async fn process_source(
-    cache: &HttpCache,
+    cache: &SchemaCache,
     base_url: &str,
     source_name: &str,
     source_config: &SourceConfig,
@@ -437,7 +437,7 @@ async fn process_source(
 
 /// Resolve `$ref` dependencies for all downloaded source schemas.
 async fn resolve_source_refs(
-    cache: &HttpCache,
+    cache: &SchemaCache,
     download_items: &[DownloadItem],
     entry_info: &[SourceSchemaInfo],
     downloaded: &HashSet<String>,

@@ -43,14 +43,14 @@ enum HttpMode {
     Memory,
 }
 
-/// A disk-backed HTTP cache with JSON parsing.
+/// A disk-backed schema cache with HTTP fetching and JSON parsing.
 ///
 /// Schemas are fetched via HTTP and stored as `<cache_dir>/<hash>.json`
 /// where `<hash>` is a SHA-256 hex digest of the URI. When a schema is
 /// requested, the cache is checked first; on a miss the schema is fetched
 /// and written to disk for future use.
 #[derive(Clone)]
-pub struct HttpCache {
+pub struct SchemaCache {
     cache_dir: Option<PathBuf>,
     http: Arc<HttpMode>,
     skip_read: bool,
@@ -59,7 +59,7 @@ pub struct HttpCache {
     memory_cache: Arc<Mutex<HashMap<String, Value>>>,
 }
 
-impl HttpCache {
+impl SchemaCache {
     /// Production constructor — uses reqwest for HTTP, disk + memory cache.
     pub fn new(cache_dir: Option<PathBuf>, skip_read: bool, ttl: Option<Duration>) -> Self {
         Self {
@@ -301,7 +301,7 @@ pub fn ensure_cache_dir() -> PathBuf {
 // -- jsonschema trait impls --------------------------------------------------
 
 #[async_trait::async_trait]
-impl jsonschema::AsyncRetrieve for HttpCache {
+impl jsonschema::AsyncRetrieve for SchemaCache {
     async fn retrieve(
         &self,
         uri: &jsonschema::Uri<String>,
@@ -317,21 +317,21 @@ mod tests {
 
     #[test]
     fn hash_uri_deterministic() {
-        let a = HttpCache::hash_uri("https://example.com/schema.json");
-        let b = HttpCache::hash_uri("https://example.com/schema.json");
+        let a = SchemaCache::hash_uri("https://example.com/schema.json");
+        let b = SchemaCache::hash_uri("https://example.com/schema.json");
         assert_eq!(a, b);
     }
 
     #[test]
     fn hash_uri_different_inputs() {
-        let a = HttpCache::hash_uri("https://example.com/a.json");
-        let b = HttpCache::hash_uri("https://example.com/b.json");
+        let a = SchemaCache::hash_uri("https://example.com/a.json");
+        let b = SchemaCache::hash_uri("https://example.com/b.json");
         assert_ne!(a, b);
     }
 
     #[test]
     fn hash_uri_is_64_hex_chars() {
-        let h = HttpCache::hash_uri("https://example.com/schema.json");
+        let h = SchemaCache::hash_uri("https://example.com/schema.json");
         assert_eq!(h.len(), 64);
         assert!(h.chars().all(|c| c.is_ascii_hexdigit()));
     }
@@ -344,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn memory_cache_insert_and_fetch() -> anyhow::Result<()> {
-        let cache = HttpCache::memory();
+        let cache = SchemaCache::memory();
         cache.insert(
             "https://example.com/s.json",
             serde_json::json!({"type": "object"}),
@@ -360,7 +360,7 @@ mod tests {
 
     #[tokio::test]
     async fn memory_cache_missing_uri_errors() {
-        let cache = HttpCache::memory();
+        let cache = SchemaCache::memory();
         assert!(
             cache
                 .fetch("https://example.com/missing.json")
@@ -371,7 +371,7 @@ mod tests {
 
     #[tokio::test]
     async fn async_retrieve_trait_delegates() -> anyhow::Result<()> {
-        let cache = HttpCache::memory();
+        let cache = SchemaCache::memory();
         cache.insert(
             "https://example.com/s.json",
             serde_json::json!({"type": "object"}),

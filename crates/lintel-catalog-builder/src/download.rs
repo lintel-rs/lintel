@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use futures::stream::{self, StreamExt};
-use lintel_http_cache::HttpCache;
+use lintel_schema_cache::SchemaCache;
 use tracing::{debug, warn};
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this
@@ -21,7 +21,7 @@ pub struct DownloadItem {
 ///
 /// Schemas whose serialized output exceeds [`MAX_SCHEMA_SIZE`] are skipped so
 /// that very large files don't bloat the output.
-pub async fn download_one(cache: &HttpCache, url: &str, path: &Path) -> Result<String> {
+pub async fn download_one(cache: &SchemaCache, url: &str, path: &Path) -> Result<String> {
     debug!(url = %url, "fetching schema");
     let (value, _status) = cache.fetch(url).await.map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -45,7 +45,7 @@ pub async fn download_one(cache: &HttpCache, url: &str, path: &Path) -> Result<S
 /// Download a batch of items concurrently. Returns the set of URLs that were
 /// successfully downloaded. Failed downloads are logged as warnings and skipped.
 pub async fn download_batch(
-    cache: &HttpCache,
+    cache: &SchemaCache,
     items: &[DownloadItem],
     concurrency: usize,
 ) -> Result<HashSet<String>> {

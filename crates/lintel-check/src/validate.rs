@@ -15,7 +15,7 @@ use crate::diagnostics::{
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
-use crate::retriever::{CacheStatus, HttpCache, ensure_cache_dir};
+use crate::retriever::{CacheStatus, SchemaCache, ensure_cache_dir};
 use crate::validation_cache::{self, ValidationCacheStatus};
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
@@ -646,7 +646,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
 ///
 /// Returns a list of compiled catalogs, printing warnings for any that fail to fetch.
 pub async fn fetch_compiled_catalogs(
-    retriever: &HttpCache,
+    retriever: &SchemaCache,
     config: &config::Config,
     no_catalog: bool,
 ) -> Vec<CompiledCatalog> {
@@ -727,7 +727,7 @@ pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
 #[allow(clippy::too_many_lines)]
 pub async fn run_with(
     args: &ValidateArgs,
-    cache: Option<HttpCache>,
+    cache: Option<SchemaCache>,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<ValidateResult> {
     let retriever = if let Some(c) = cache {
@@ -741,7 +741,7 @@ pub async fn run_with(
             }
             None => ensure_cache_dir(),
         };
-        HttpCache::new(
+        SchemaCache::new(
             Some(cache_dir),
             args.force_schema_fetch,
             args.schema_cache_ttl,
@@ -982,11 +982,11 @@ pub async fn run_with(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::retriever::HttpCache;
+    use crate::retriever::SchemaCache;
     use std::path::Path;
 
-    fn mock(entries: &[(&str, &str)]) -> HttpCache {
-        let cache = HttpCache::memory();
+    fn mock(entries: &[(&str, &str)]) -> SchemaCache {
+        let cache = SchemaCache::memory();
         for (uri, body) in entries {
             cache.insert(
                 uri,
@@ -1033,7 +1033,7 @@ mod tests {
     const SCHEMA: &str =
         r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
 
-    fn schema_mock() -> HttpCache {
+    fn schema_mock() -> SchemaCache {
         mock(&[("https://example.com/schema.json", SCHEMA)])
     }
 
