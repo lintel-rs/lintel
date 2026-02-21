@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.3...lintel-reporters-v0.0.4) - 2026-02-21
+
+### Other
+
+- add SchemaCacheBuilder and centralize TTL defaulting
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.2...lintel-reporters-v0.0.3) - 2026-02-21
 
 ### Added
