@@ -25,13 +25,26 @@ pub struct CatalogMeta {
     pub title: Option<String>,
 }
 
+/// GitHub Pages hosting options (`.nojekyll`, `CNAME`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitHubPagesConfig {
+    #[serde(default)]
+    pub cname: Option<String>,
+}
+
 /// Target output configuration.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", deny_unknown_fields)]
 pub enum TargetConfig {
     /// Write output to a local directory.
     #[serde(rename = "dir")]
-    Dir { dir: String, base_url: String },
+    Dir {
+        dir: String,
+        base_url: String,
+        #[serde(default)]
+        github: Option<GitHubPagesConfig>,
+    },
     /// Generate output optimized for GitHub Pages deployment.
     #[serde(rename = "github-pages")]
     GitHubPages {
@@ -157,7 +170,7 @@ match = ["**.github**"]
         // Targets
         assert_eq!(config.target.len(), 2);
         match &config.target["local"] {
-            TargetConfig::Dir { dir, base_url } => {
+            TargetConfig::Dir { dir, base_url, .. } => {
                 assert_eq!(dir, "../catalog-generated");
                 assert_eq!(
                     base_url,

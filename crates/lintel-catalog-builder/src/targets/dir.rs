@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use tracing::debug;
+
+use crate::config::GitHubPagesConfig;
 
 use super::{OutputContext, Target, write_common_files};
 
@@ -8,6 +11,7 @@ use super::{OutputContext, Target, write_common_files};
 pub struct DirTarget {
     pub dir: String,
     pub base_url: String,
+    pub github: Option<GitHubPagesConfig>,
 }
 
 impl Target for DirTarget {
@@ -25,6 +29,23 @@ impl Target for DirTarget {
     }
 
     async fn finalize(&self, ctx: &OutputContext<'_>) -> Result<()> {
-        write_common_files(ctx).await
+        write_common_files(ctx).await?;
+
+        if let Some(gh) = &self.github {
+            tokio::fs::write(ctx.output_dir.join(".nojekyll"), "")
+                .await
+                .context("failed to write .nojekyll")?;
+
+            if let Some(domain) = &gh.cname {
+                tokio::fs::write(ctx.output_dir.join("CNAME"), format!("{domain}\n"))
+                    .await
+                    .context("failed to write CNAME")?;
+                debug!(domain, "wrote CNAME");
+            }
+
+            debug!("wrote .nojekyll");
+        }
+
+        Ok(())
     }
 }
