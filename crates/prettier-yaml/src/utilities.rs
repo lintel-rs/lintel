@@ -37,9 +37,25 @@ pub(crate) fn has_node_props(node: &Node) -> bool {
     }
 }
 
+/// Check if we need a space before the `:` mapping value indicator.
+/// This is needed when the key ends with characters that would be
+/// ambiguous without a space (tagged null keys, aliases).
+pub(crate) fn needs_space_before_colon(node: &Node) -> bool {
+    match node {
+        Node::Scalar(s) if s.is_implicit_null && s.tag.is_some() => true,
+        Node::Alias(_) => true,
+        _ => false,
+    }
+}
+
 /// Check if a node is a collection (mapping or sequence).
 pub(crate) fn is_collection(node: &Node) -> bool {
     matches!(node, Node::Mapping(_) | Node::Sequence(_))
+}
+
+/// Check if a node is a block (non-flow) collection — only these need explicit key format.
+pub(crate) fn is_block_collection(node: &Node) -> bool {
+    matches!(node, Node::Mapping(m) if !m.flow) || matches!(node, Node::Sequence(s) if !s.flow)
 }
 
 /// Check if a character is valid in a YAML anchor/alias name.

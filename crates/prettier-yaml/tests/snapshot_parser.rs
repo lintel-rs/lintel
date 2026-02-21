@@ -61,8 +61,16 @@ fn parse_entry(name: &str, body: &str) -> Option<TestCase> {
         return None;
     }
 
-    let input = unescape_template_literal(&lines[input_idx + 1..output_idx].join("\n"));
-    let expected = unescape_template_literal(&lines[output_idx + 1..end_idx].join("\n"));
+    let mut input = unescape_template_literal(&lines[input_idx + 1..output_idx].join("\n"));
+    let mut expected = unescape_template_literal(&lines[output_idx + 1..end_idx].join("\n"));
+    // Ensure trailing newline — prettier always outputs one, and the snapshot
+    // format strips the final newline. Don't add to empty content.
+    if !input.is_empty() && !input.ends_with('\n') {
+        input.push('\n');
+    }
+    if !expected.is_empty() && !expected.ends_with('\n') {
+        expected.push('\n');
+    }
 
     Some(TestCase {
         name: name.to_string(),
@@ -130,6 +138,9 @@ fn parse_options(lines: &[&str]) -> (String, YamlFormatOptions, bool) {
             }
             "bracketSpacing" => {
                 options.bracket_spacing = value == "true";
+            }
+            "useTabs" => {
+                options.use_tabs = value == "true";
             }
             "proseWrap" => {
                 options.prose_wrap = match value.trim_matches('"') {

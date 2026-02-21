@@ -21,6 +21,16 @@ pub(crate) struct YamlDoc {
     pub preamble: Vec<String>,
     pub root: Option<Node>,
     pub end_comments: Vec<Comment>, // comments after root, before next doc or end
+    /// Inline comment on the `---` document start marker (e.g. `--- # comment`)
+    pub start_comment: Option<String>,
+    /// Inline comment on the `...` document end marker (e.g. `... # Suffix`)
+    pub end_marker_comment: Option<String>,
+    /// Trailing comment on the root node's last line (e.g. `!!int 1 - 3 # comment`)
+    pub root_trailing_comment: Option<String>,
+    /// Raw body source for prettier-ignore documents
+    pub raw_body_source: Option<String>,
+    /// Comments between `---` and the root body (e.g. for scalar roots)
+    pub body_leading_comments: Vec<Comment>,
 }
 
 pub(crate) enum Node {
@@ -68,9 +78,18 @@ pub(crate) struct MappingEntry {
     pub leading_comments: Vec<Comment>,
     pub key_trailing_comment: Option<String>, // trailing comment on key line (e.g. "hr: # comment")
     pub between_comments: Vec<Comment>,       // standalone comments between key and value
+    pub blank_line_before_value: bool,        // blank line between last between_comment and value
+    /// Trailing comment on the `:` line of an explicit key (e.g. `? key\n: # comment\n  value`).
+    /// Unlike `between_comments`, this does NOT force explicit key format.
+    pub colon_comment: Option<Comment>,
     pub trailing_comment: Option<String>,
     pub blank_line_before: bool,
     pub is_explicit_key: bool,
+    /// Inline comment on the `?` indicator line when key is on a separate line.
+    /// e.g. `? # comment\n  key` → `question_mark_comment` = Some("# comment")
+    pub question_mark_comment: Option<String>,
+    /// Raw source text for prettier-ignore entries (de-indented)
+    pub raw_source: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -89,6 +108,8 @@ pub(crate) struct SequenceItem {
     pub leading_comments: Vec<Comment>,
     pub trailing_comment: Option<String>,
     pub blank_line_before: bool,
+    /// Whether this item has a `# prettier-ignore` leading comment
+    pub prettier_ignore: bool,
 }
 
 pub(crate) struct AliasNode {

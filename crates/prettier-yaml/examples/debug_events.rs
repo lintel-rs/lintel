@@ -19,6 +19,26 @@ fn main() {
             "foo1:\n  - foo: item1\n    bar: item1\n\n  # - foo: item2\n  #   bar: item2\n\n  # - foo: item3\n  #   bar: item3\n\n  - foo: item4\n    bar: item4\n",
         ),
         ("sequence.yml", "-  - a\n\n   # - b\n\n   # - c\n\n   - e\n"),
+        (
+            "empty-block-chomp",
+            "strip: >-\n\nclip: >\n\nkeep: |+\n\n\n",
+        ),
+        (
+            "spec-8-18",
+            "plain key: in-line value\n: # Both empty\n\"quoted key\":\n- entry\n",
+        ),
+        (
+            "spec-8-20",
+            "- \"flow in block\"\n- >\n  Block scalar\n- !!map # Block collection\n  foo: bar\n",
+        ),
+        (
+            "spec-6-19",
+            "%TAG !! tag:example.com,2000:app/\n---\n!!int 1 - 3 # Interval, not integer\n",
+        ),
+        (
+            "tags-on-empty",
+            "- !!str\n- !!null : a\n  b: !!str\n- !!str : !!null\n",
+        ),
     ];
     for (name, input) in inputs {
         println!("=== {} ===", name);
@@ -35,7 +55,9 @@ fn main() {
                 Event::MappingEnd => "MappingEnd".to_string(),
                 Event::SequenceStart(a, t) => format!("SequenceStart(anchor={}, tag={:?})", a, t),
                 Event::SequenceEnd => "SequenceEnd".to_string(),
-                Event::Scalar(v, s, _, _) => format!("Scalar({:?}, {:?})", v, s),
+                Event::Scalar(v, s, a, t) => {
+                    format!("Scalar({:?}, {:?}, anchor={}, tag={:?})", v, s, a, t)
+                }
                 Event::Alias(id) => format!("Alias({})", id),
                 _ => format!("{:?}", event),
             };
@@ -51,3 +73,5 @@ fn main() {
         println!();
     }
 }
+
+// Additional debug: format and compare

@@ -7,7 +7,7 @@ use crate::utilities::{is_collection, is_null_value};
 pub(crate) fn format_flow_mapping(
     mapping: &MappingNode,
     output: &mut String,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) {
     let has_props = mapping.tag.is_some() || mapping.anchor.is_some();
@@ -60,26 +60,25 @@ pub(crate) fn format_flow_mapping(
     });
 
     if has_middle_comments || has_entry_comments || !mapping.trailing_comments.is_empty() {
-        format_flow_mapping_broken(mapping, output, depth, options);
+        format_flow_mapping_broken(mapping, output, indent, options);
         return;
     }
 
     // Try flat format first
-    let flat = format_flow_mapping_flat(mapping, depth, options);
+    let flat = format_flow_mapping_flat(mapping, indent, options);
 
     // If flat result contains newlines (nested broken collections), go to broken
-    let current_col = depth * options.tab_width;
-    if !flat.contains('\n') && current_col + flat.len() <= options.print_width {
+    if !flat.contains('\n') && indent + flat.len() <= options.print_width {
         output.push_str(&flat);
     } else {
         // Break to multi-line
-        format_flow_mapping_broken(mapping, output, depth, options);
+        format_flow_mapping_broken(mapping, output, indent, options);
     }
 }
 
 fn format_flow_mapping_flat(
     mapping: &MappingNode,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) -> String {
     let mut parts = Vec::new();
@@ -98,7 +97,7 @@ fn format_flow_mapping_flat(
             parts.push(part);
             continue;
         }
-        format_node(&entry.key, &mut part, depth, options, false, true);
+        format_node(&entry.key, &mut part, indent, options, false, true);
         if is_null_value(&entry.value) {
             // Null value: just the key, no ": ~"
         } else {
@@ -108,7 +107,7 @@ fn format_flow_mapping_flat(
             } else {
                 part.push_str(": ");
             }
-            format_node(&entry.value, &mut part, depth, options, false, true);
+            format_node(&entry.value, &mut part, indent, options, false, true);
         }
         parts.push(part);
     }
@@ -123,11 +122,13 @@ fn format_flow_mapping_flat(
 fn format_flow_mapping_broken(
     mapping: &MappingNode,
     output: &mut String,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) {
-    let inner_indent = indent_str(depth + 1, options);
-    let outer_indent = indent_str(depth, options);
+    let tw = options.tab_width;
+    let inner_indent = indent + tw;
+    let inner_indent_s = indent_str(inner_indent);
+    let outer_indent_s = indent_str(indent);
 
     output.push_str("{\n");
     for (i, entry) in mapping.entries.iter().enumerate() {
@@ -136,7 +137,7 @@ fn format_flow_mapping_broken(
             if comment.blank_line_before && i > 0 && !output.ends_with("\n\n") {
                 output.push('\n');
             }
-            output.push_str(&inner_indent);
+            output.push_str(&inner_indent_s);
             output.push_str(&comment.text);
             output.push('\n');
         }
@@ -150,49 +151,50 @@ fn format_flow_mapping_broken(
         let key_is_null = is_null_value(&entry.key);
         let value_is_null = is_null_value(&entry.value);
         let value_is_multiline =
-            !value_is_null && renders_multiline(&entry.value, depth + 2, options);
+            !value_is_null && renders_multiline(&entry.value, inner_indent + tw, options);
 
         let has_between =
             !entry.between_comments.is_empty() || entry.key_trailing_comment.is_some();
 
         if key_is_null && value_is_null {
             // null key + null value = `: `
-            output.push_str(&inner_indent);
+            output.push_str(&inner_indent_s);
             output.push_str(": ");
         } else if (key_is_complex || has_between) && !value_is_null {
             // Complex key or comments between key-value: use ? key \n [comments] \n : value
-            output.push_str(&inner_indent);
+            output.push_str(&inner_indent_s);
             output.push_str("? ");
-            format_node(&entry.key, output, depth + 2, options, false, true);
+            format_node(&entry.key, output, inner_indent + 2, options, false, true);
             if let Some(comment) = &entry.key_trailing_comment {
                 output.push(' ');
                 output.push_str(comment);
             }
             for comment in &entry.between_comments {
                 output.push('\n');
-                output.push_str(&inner_indent);
+                output.push_str(&inner_indent_s);
                 output.push_str(&comment.text);
             }
             output.push('\n');
-            output.push_str(&inner_indent);
+            output.push_str(&inner_indent_s);
             output.push_str(": ");
-            format_node(&entry.value, output, depth + 2, options, false, true);
+            format_node(&entry.value, output, inner_indent + 2, options, false, true);
         } else if key_is_complex {
             // Complex key with null value: just the key
-            output.push_str(&inner_indent);
-            format_node(&entry.key, output, depth + 1, options, false, true);
+            output.push_str(&inner_indent_s);
+            format_node(&entry.key, output, inner_indent, options, false, true);
         } else if value_is_multiline {
             // Simple key with multiline value: key:\n  value
-            output.push_str(&inner_indent);
-            format_node(&entry.key, output, depth + 1, options, false, true);
+            output.push_str(&inner_indent_s);
+            format_node(&entry.key, output, inner_indent, options, false, true);
             output.push_str(":\n");
-            let value_indent = indent_str(depth + 2, options);
-            output.push_str(&value_indent);
-            format_node(&entry.value, output, depth + 2, options, false, true);
+            let value_indent = inner_indent + tw;
+            let value_indent_s = indent_str(value_indent);
+            output.push_str(&value_indent_s);
+            format_node(&entry.value, output, value_indent, options, false, true);
         } else {
             // Simple key with simple value (or null)
-            output.push_str(&inner_indent);
-            format_node(&entry.key, output, depth + 1, options, false, true);
+            output.push_str(&inner_indent_s);
+            format_node(&entry.key, output, inner_indent, options, false, true);
             if !value_is_null {
                 // Alias keys need space before colon
                 if matches!(&entry.key, Node::Alias(_)) {
@@ -200,7 +202,7 @@ fn format_flow_mapping_broken(
                 } else {
                     output.push_str(": ");
                 }
-                format_node(&entry.value, output, depth + 1, options, false, true);
+                format_node(&entry.value, output, inner_indent, options, false, true);
             }
         }
         // Always trailing comma (prettier style)
@@ -211,14 +213,23 @@ fn format_flow_mapping_broken(
         }
         output.push('\n');
     }
-    output.push_str(&outer_indent);
+    // Print trailing comments (comments after last entry, before `}`)
+    for comment in &mapping.trailing_comments {
+        if comment.blank_line_before && !output.ends_with("\n\n") {
+            output.push('\n');
+        }
+        output.push_str(&inner_indent_s);
+        output.push_str(&comment.text);
+        output.push('\n');
+    }
+    output.push_str(&outer_indent_s);
     output.push('}');
 }
 
 pub(crate) fn format_flow_sequence(
     seq: &SequenceNode,
     output: &mut String,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) {
     let has_props = seq.tag.is_some() || seq.anchor.is_some();
@@ -287,25 +298,24 @@ pub(crate) fn format_flow_sequence(
         || has_mapping_comments
         || !seq.trailing_comments.is_empty()
     {
-        format_flow_sequence_broken(seq, output, depth, options);
+        format_flow_sequence_broken(seq, output, indent, options);
         return;
     }
 
     // Try flat format
-    let flat = format_flow_sequence_flat(seq, depth, options);
+    let flat = format_flow_sequence_flat(seq, indent, options);
 
     // If flat result contains newlines (nested broken collections), go to broken
-    let current_col = depth * options.tab_width;
-    if !flat.contains('\n') && current_col + flat.len() <= options.print_width {
+    if !flat.contains('\n') && indent + flat.len() <= options.print_width {
         output.push_str(&flat);
     } else {
-        format_flow_sequence_broken(seq, output, depth, options);
+        format_flow_sequence_broken(seq, output, indent, options);
     }
 }
 
 fn format_flow_sequence_flat(
     seq: &SequenceNode,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) -> String {
     let mut parts = Vec::new();
@@ -323,7 +333,7 @@ fn format_flow_sequence_flat(
             let key_is_simple = matches!(&entry.key, Node::Scalar(_)) && !key_is_null;
             if value_is_collection && key_is_simple && !entry.is_explicit_key {
                 // Format as { key: value } (explicit mapping)
-                format_node(&item.value, &mut part, depth, options, false, true);
+                format_node(&item.value, &mut part, indent, options, false, true);
                 parts.push(part);
                 continue;
             }
@@ -336,7 +346,7 @@ fn format_flow_sequence_flat(
             if entry.is_explicit_key {
                 part.push_str("? ");
             }
-            format_node(&entry.key, &mut part, depth, options, false, true);
+            format_node(&entry.key, &mut part, indent, options, false, true);
             if !is_null_value(&entry.value) {
                 // Alias keys need space before colon
                 if matches!(&entry.key, Node::Alias(_)) {
@@ -344,25 +354,28 @@ fn format_flow_sequence_flat(
                 } else {
                     part.push_str(": ");
                 }
-                format_node(&entry.value, &mut part, depth, options, false, true);
+                format_node(&entry.value, &mut part, indent, options, false, true);
             }
             parts.push(part);
             continue;
         }
-        format_node(&item.value, &mut part, depth, options, false, true);
+        format_node(&item.value, &mut part, indent, options, false, true);
         parts.push(part);
     }
     format!("[{}]", parts.join(", "))
 }
 
+#[allow(clippy::too_many_lines)]
 fn format_flow_sequence_broken(
     seq: &SequenceNode,
     output: &mut String,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) {
-    let inner_indent = indent_str(depth + 1, options);
-    let outer_indent = indent_str(depth, options);
+    let tw = options.tab_width;
+    let inner_indent = indent + tw;
+    let inner_indent_s = indent_str(inner_indent);
+    let outer_indent_s = indent_str(indent);
 
     output.push_str("[\n");
     for (i, item) in seq.items.iter().enumerate() {
@@ -371,7 +384,7 @@ fn format_flow_sequence_broken(
             if comment.blank_line_before && i > 0 && !output.ends_with("\n\n") {
                 output.push('\n');
             }
-            output.push_str(&inner_indent);
+            output.push_str(&inner_indent_s);
             output.push_str(&comment.text);
             output.push('\n');
         }
@@ -379,6 +392,51 @@ fn format_flow_sequence_broken(
         // Blank line between last leading comment and the item
         if item.blank_line_before && i > 0 && !output.ends_with("\n\n") {
             output.push('\n');
+        }
+
+        // prettier-ignore: output raw source for the value
+        if item.prettier_ignore {
+            output.push_str(&inner_indent_s);
+            let used_raw = match &item.value {
+                Node::Mapping(m) if m.flow_source.is_some() => {
+                    if let Some(fs) = m.flow_source.as_ref() {
+                        output.push_str(fs);
+                    }
+                    true
+                }
+                Node::Sequence(s) if s.flow_source.is_some() => {
+                    if let Some(fs) = s.flow_source.as_ref() {
+                        output.push_str(fs);
+                    }
+                    true
+                }
+                _ => false,
+            };
+            if !used_raw {
+                format_node(&item.value, output, inner_indent, options, false, true);
+            }
+            output.push(',');
+            // Check item's trailing comment, or look inside flow mapping/sequence entries
+            if let Some(comment) = &item.trailing_comment {
+                output.push(' ');
+                output.push_str(comment);
+            } else if let Node::Mapping(m) = &item.value
+                && m.flow
+                && m.entries.len() == 1
+                && let Some(comment) = &m.entries[0].trailing_comment
+            {
+                output.push(' ');
+                output.push_str(comment);
+            } else if let Node::Sequence(s) = &item.value
+                && s.flow
+                && let Some(last_item) = s.items.last()
+                && let Some(comment) = &last_item.trailing_comment
+            {
+                output.push(' ');
+                output.push_str(comment);
+            }
+            output.push('\n');
+            continue;
         }
 
         // Check if item is a single-entry flow mapping (key-value pair in sequence)
@@ -397,8 +455,8 @@ fn format_flow_sequence_broken(
 
             // If value is a collection and key is simple, format as { key: value } for clarity
             if value_is_collection && key_is_simple && !entry.is_explicit_key {
-                output.push_str(&inner_indent);
-                format_node(&item.value, output, depth + 1, options, false, true);
+                output.push_str(&inner_indent_s);
+                format_node(&item.value, output, inner_indent, options, false, true);
                 output.push(',');
                 output.push('\n');
                 continue;
@@ -406,44 +464,50 @@ fn format_flow_sequence_broken(
 
             if key_is_null && value_is_null {
                 // null:null -> ": "
-                output.push_str(&inner_indent);
+                output.push_str(&inner_indent_s);
                 output.push_str(": ");
             } else if (key_is_complex || has_between) && !value_is_null {
                 // ? key \n [comments] \n : value
-                output.push_str(&inner_indent);
+                output.push_str(&inner_indent_s);
                 output.push_str("? ");
-                format_node(&entry.key, output, depth + 2, options, false, true);
+                format_node(&entry.key, output, inner_indent + 2, options, false, true);
                 if let Some(comment) = &entry.key_trailing_comment {
                     output.push(' ');
                     output.push_str(comment);
                 }
                 for comment in &entry.between_comments {
                     output.push('\n');
-                    output.push_str(&inner_indent);
+                    output.push_str(&inner_indent_s);
                     output.push_str(&comment.text);
                 }
                 output.push('\n');
-                output.push_str(&inner_indent);
+                output.push_str(&inner_indent_s);
                 output.push_str(": ");
-                format_node(&entry.value, output, depth + 2, options, false, true);
+                format_node(&entry.value, output, inner_indent + 2, options, false, true);
             } else if key_is_complex || (entry.is_explicit_key && value_is_null) {
                 // ? key (null value) — explicit key syntax for long keys
-                output.push_str(&inner_indent);
+                output.push_str(&inner_indent_s);
                 output.push_str("? ");
-                format_node(&entry.key, output, depth + 2, options, false, true);
+                format_node(&entry.key, output, inner_indent + 2, options, false, true);
+            } else if value_is_null {
+                // Single key with null value: output as { key } to preserve braces
+                output.push_str(&inner_indent_s);
+                format_node(&item.value, output, inner_indent, options, false, true);
             } else {
                 // simple key: value
-                output.push_str(&inner_indent);
-                format_node(&entry.key, output, depth + 1, options, false, true);
-                if !value_is_null {
-                    // Alias keys need space before colon
-                    if matches!(&entry.key, Node::Alias(_)) {
-                        output.push_str(" : ");
-                    } else {
-                        output.push_str(": ");
-                    }
-                    format_node(&entry.value, output, depth + 2, options, false, true);
+                output.push_str(&inner_indent_s);
+                let key_start_pos = output.len();
+                format_node(&entry.key, output, inner_indent, options, false, true);
+                // Alias keys need space before colon
+                if matches!(&entry.key, Node::Alias(_)) {
+                    output.push_str(" : ");
+                } else {
+                    output.push_str(": ");
                 }
+                // Value indent = position after "key: " (relative to line start)
+                let key_width = output.len() - key_start_pos;
+                let value_indent = inner_indent + key_width;
+                format_node(&entry.value, output, value_indent, options, false, true);
             }
             output.push(',');
             if let Some(comment) = &entry.trailing_comment {
@@ -454,8 +518,8 @@ fn format_flow_sequence_broken(
             continue;
         }
 
-        output.push_str(&inner_indent);
-        format_node(&item.value, output, depth + 1, options, false, true);
+        output.push_str(&inner_indent_s);
+        format_node(&item.value, output, inner_indent, options, false, true);
         output.push(',');
         if let Some(comment) = &item.trailing_comment {
             output.push(' ');
@@ -463,6 +527,15 @@ fn format_flow_sequence_broken(
         }
         output.push('\n');
     }
-    output.push_str(&outer_indent);
+    // Print trailing comments (comments after last item, before `]`)
+    for comment in &seq.trailing_comments {
+        if comment.blank_line_before && !output.ends_with("\n\n") {
+            output.push('\n');
+        }
+        output.push_str(&inner_indent_s);
+        output.push_str(&comment.text);
+        output.push('\n');
+    }
+    output.push_str(&outer_indent_s);
     output.push(']');
 }

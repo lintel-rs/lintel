@@ -36,15 +36,16 @@ pub(crate) fn normalize_block_header(header: &str) -> String {
 /// Format a block scalar (literal `|` or folded `>`).
 ///
 /// Re-indents the body from the raw source to use the correct indentation
-/// based on depth and `tab_width`. Uses raw source to preserve trailing blank
-/// lines (saphyr doesn't always include them in the parsed value).
+/// based on `indent` (column position). Uses raw source to preserve trailing
+/// blank lines (saphyr doesn't always include them in the parsed value).
 #[allow(clippy::too_many_lines)]
 pub(crate) fn format_block_scalar(
     s: &ScalarNode,
     output: &mut String,
-    depth: usize,
+    indent: usize,
     options: &YamlFormatOptions,
 ) {
+    let tw = options.tab_width;
     let Some(block_src) = &s.block_source else {
         // Fallback: reconstruct from value
         let indicator = if s.style == ScalarStyle::Literal {
@@ -54,7 +55,7 @@ pub(crate) fn format_block_scalar(
         };
         output.push(indicator);
         output.push('\n');
-        let body_indent = " ".repeat(depth.max(1) * options.tab_width);
+        let body_indent = " ".repeat(indent.max(tw));
         for line in s.value.lines() {
             output.push_str(&body_indent);
             output.push_str(line);
@@ -107,27 +108,43 @@ pub(crate) fn format_block_scalar(
         .skip(1) // skip | or >
         .any(|c| c.is_ascii_digit());
 
-    if has_explicit_indent {
+    // For folded (>) scalars with proseWrap:always/never, re-wrap content
+    // even when there's an explicit indent indicator
+    let needs_rewrap = s.style == ScalarStyle::Folded
+        && matches!(options.prose_wrap, ProseWrap::Always | ProseWrap::Never);
+
+    if has_explicit_indent && !needs_rewrap {
         // With explicit indent, preserve body lines as-is from source
         for line in &body_lines {
             output.push_str(line);
             output.push('\n');
         }
     } else {
-        // Re-indent: detect base indent from source and normalize to target
-        let base_indent = body_lines
-            .iter()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| l.len() - l.trim_start().len())
-            .min()
-            .unwrap_or(0);
+        let base_indent = if has_explicit_indent {
+            // Explicit indent indicator gives us the exact indent value
+            header
+                .chars()
+                .skip(1)
+                .find(char::is_ascii_digit)
+                .map_or(0, |c| (c as usize) - ('0' as usize))
+        } else {
+            // Re-indent: detect base indent from source
+            body_lines
+                .iter()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| l.len() - l.trim_start().len())
+                .min()
+                .unwrap_or(0)
+        };
 
-        let target_indent = " ".repeat(depth.max(1) * options.tab_width);
+        let target_indent = if has_explicit_indent {
+            // With explicit indent, keep original indent width
+            " ".repeat(base_indent)
+        } else {
+            " ".repeat(indent.max(tw))
+        };
 
-        // For folded (>) scalars with proseWrap:always/never, re-wrap content
-        if s.style == ScalarStyle::Folded
-            && matches!(options.prose_wrap, ProseWrap::Always | ProseWrap::Never)
-        {
+        if needs_rewrap {
             format_block_folded_rewrap(&body_lines, output, base_indent, &target_indent, options);
             return;
         }
@@ -163,6 +180,43 @@ pub(crate) fn format_block_scalar(
     }
 }
 
+/// Split a string on single spaces only, preserving runs of multiple spaces.
+///
+/// Prettier's `splitWithSingleSpace` splits on `(?<!^| ) (?! |$)` — a space that
+/// is NOT preceded by start-of-string/space and NOT followed by space/end-of-string.
+/// So `"123   456   789"` is one chunk (multi-space runs preserved),
+/// while `"123 456 789"` splits into `["123", "456", "789"]`.
+fn split_with_single_space(s: &str) -> Vec<&str> {
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    if len == 0 {
+        return vec![s];
+    }
+
+    let mut parts = Vec::new();
+    let mut start = 0;
+
+    let mut i = 0;
+    while i < len {
+        if bytes[i] == b' ' {
+            // Check if this is a single space:
+            // - NOT preceded by space (or at start of string)
+            // - NOT followed by space (or at end of string)
+            let prev_is_space = i == 0 || bytes[i - 1] == b' ';
+            let next_is_space = i + 1 >= len || bytes[i + 1] == b' ';
+
+            if !prev_is_space && !next_is_space {
+                // Single space — split here
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+        }
+        i += 1;
+    }
+    parts.push(&s[start..]);
+    parts
+}
+
 /// Re-wrap folded block scalar content for Always/Never prose wrap modes.
 fn format_block_folded_rewrap(
     body_lines: &[&str],
@@ -174,17 +228,15 @@ fn format_block_folded_rewrap(
     let mut i = 0;
     while i < body_lines.len() {
         let line = body_lines[i];
-        let trimmed = line.trim();
+        // Use trim_start() not trim() — trailing whitespace must not affect indent calculation.
+        // "  foo " has indent 2, not 3. trim() would give "foo" (len 3) making indent 6-3=3.
+        let trimmed = line.trim_start();
 
         if trimmed.is_empty() {
-            // Blank line: preserve (paragraph break or keep-chomping trailing)
-            if !line.is_empty() {
-                let line_indent = line.len();
-                let extra = line_indent.saturating_sub(base_indent);
-                if extra > 0 {
-                    output.push_str(target_indent);
-                    output.push_str(&" ".repeat(extra));
-                }
+            // Blank line: preserve original whitespace characters (may include tabs)
+            if !line.is_empty() && line.len() > base_indent {
+                output.push_str(target_indent);
+                output.push_str(&line[base_indent..]);
             }
             output.push('\n');
             i += 1;
@@ -193,18 +245,20 @@ fn format_block_folded_rewrap(
             let extra = line_indent.saturating_sub(base_indent);
 
             if extra > 0 {
-                // More-indented line: preserve with re-indent
+                // More-indented line: preserve with re-indent, keeping original
+                // whitespace characters (tabs, spaces) beyond base indent
                 output.push_str(target_indent);
-                output.push_str(&" ".repeat(extra));
+                output.push_str(&line[base_indent..line_indent]);
                 output.push_str(trimmed);
                 output.push('\n');
                 i += 1;
             } else {
                 // Regular content: collect consecutive regular lines, fold into paragraph
-                let mut words = Vec::new();
+                // Use splitWithSingleSpace to preserve runs of multiple spaces
+                let mut words: Vec<&str> = Vec::new();
                 while i < body_lines.len() {
                     let l = body_lines[i];
-                    let t = l.trim();
+                    let t = l.trim_start();
                     if t.is_empty() {
                         break;
                     }
@@ -213,7 +267,7 @@ fn format_block_folded_rewrap(
                     if ex > 0 {
                         break;
                     }
-                    words.extend(t.split_whitespace());
+                    words.extend(split_with_single_space(t));
                     i += 1;
                 }
 
