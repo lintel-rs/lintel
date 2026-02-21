@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "text-processing"]
 workspace = true
 
 [dependencies]
+ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
 pulldown-cmark = { version = "0.13", default-features = false }
 sublime-syntaxes = { version = "0.1.0", path = "../sublime-syntaxes" }
 syntect = { version = "5", default-features = false, features = [

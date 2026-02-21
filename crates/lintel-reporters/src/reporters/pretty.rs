@@ -1,6 +1,7 @@
 use core::time::Duration;
 use std::io::IsTerminal;
 
+use ansi_term_codes::{BOLD, DIM, RESET};
 use miette::Report;
 
 use lintel_check::validate::{CheckedFile, ValidateResult};
@@ -22,7 +23,7 @@ impl Reporter for PrettyReporter {
 
         let ms = elapsed.as_millis();
         if std::io::stderr().is_terminal() {
-            eprintln!("\x1b[1mChecked {n} files\x1b[0m \x1b[2min {ms}ms.\x1b[0m");
+            eprintln!("{BOLD}Checked {n} files{RESET} {DIM}in {ms}ms.{RESET}");
         } else {
             eprintln!("Checked {n} files in {ms}ms.");
         }

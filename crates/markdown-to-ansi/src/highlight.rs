@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
-const RESET: &str = "\x1b[0m";
+use ansi_term_codes::RESET;
 
 static DEFAULTS: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 
