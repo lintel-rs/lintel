@@ -1,6 +1,13 @@
 # lintel-catalog-builder
 
+[![Crates.io](https://img.shields.io/crates/v/lintel-catalog-builder.svg)](https://crates.io/crates/lintel-catalog-builder)
+[![docs.rs](https://docs.rs/lintel-catalog-builder/badge.svg)](https://docs.rs/lintel-catalog-builder)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-catalog-builder.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
+
 Build a custom JSON Schema catalog from local schemas and external sources like [SchemaStore](https://www.schemastore.org/).
+
+Part of the [Lintel](https://github.com/lintel-rs/lintel) project.
 
 ## Config format
 
@@ -151,3 +158,7 @@ Go to repo **Settings > Pages > Source** and select **GitHub Actions**.
 ### 4. Configure DNS (if using a custom domain)
 
 Create a CNAME DNS record pointing your domain to `<your-org>.github.io`. The `CNAME` file in the generated output tells GitHub Pages to use the custom domain automatically.
+
+## License
+
+Apache-2.0
