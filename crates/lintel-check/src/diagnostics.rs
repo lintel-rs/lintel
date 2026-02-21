@@ -31,18 +31,25 @@ pub enum LintError {
     },
 
     #[error("{message}")]
-    #[diagnostic(code(lintel::validation), url("{schema_url}"))]
+    #[diagnostic(
+        code(lintel::validation),
+        url("{schema_url}"),
+        help("run `lintel identify {path} --explain` to see the full schema definition")
+    )]
     Validation {
         #[source_code]
         src: NamedSource<String>,
-        #[label("{instance_path}")]
+        #[label("{label}")]
         span: SourceSpan,
         path: String,
         instance_path: String,
+        label: String,
         message: String,
         /// Schema URI this file was validated against (shown as a clickable link
         /// in terminals for remote schemas).
         schema_url: String,
+        /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
+        schema_path: String,
     },
 
     /// Validation error for `lintel.toml` against its built-in schema.
@@ -213,6 +220,17 @@ pub fn find_instance_path_span(content: &str, instance_path: &str) -> (usize, us
     (0, 0)
 }
 
+/// Build a label string combining the instance path and the schema path.
+///
+/// Returns just the `instance_path` when `schema_path` is empty.
+pub fn format_label(instance_path: &str, schema_path: &str) -> String {
+    if schema_path.is_empty() {
+        instance_path.to_string()
+    } else {
+        format!("{instance_path} in {schema_path}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,8 +347,10 @@ mod tests {
                     span: 0.into(),
                     path: String::new(),
                     instance_path: String::new(),
+                    label: String::new(),
                     message: String::new(),
                     schema_url: String::new(),
+                    schema_path: String::new(),
                 },
                 "lintel::validation",
             ),
@@ -374,5 +394,23 @@ mod tests {
                 "wrong code for {error:?}"
             );
         }
+    }
+
+    // --- format_label tests ---
+
+    #[test]
+    fn format_label_with_schema_path() {
+        assert_eq!(
+            format_label(
+                "/jobs/build",
+                "/properties/jobs/patternProperties/^[_a-zA-Z][a-zA-Z0-9_-]*$/oneOf"
+            ),
+            "/jobs/build in /properties/jobs/patternProperties/^[_a-zA-Z][a-zA-Z0-9_-]*$/oneOf"
+        );
+    }
+
+    #[test]
+    fn format_label_empty_schema_path() {
+        assert_eq!(format_label("/name", ""), "/name");
     }
 }

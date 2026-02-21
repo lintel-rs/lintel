@@ -6,6 +6,12 @@ use lintel_schema_cache::{HttpClient, SchemaCache};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, warn};
 
+/// A downloaded `$ref` dependency pending recursive processing.
+struct DownloadedDep {
+    text: String,
+    filename: String,
+}
+
 /// Characters that must be percent-encoded in URI fragment components.
 ///
 /// Per RFC 3986, fragments may contain: `pchar / "/" / "?"` where
@@ -219,7 +225,7 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
 
     // Build URL → local path mapping and download deps
     let mut url_map: HashMap<String, String> = HashMap::new();
-    let mut to_process: Vec<(String, String, String)> = Vec::new(); // (url, local_text, filename)
+    let mut to_process: Vec<DownloadedDep> = Vec::new();
 
     for ref_url in &external_refs {
         if let Some(existing_filename) = already_downloaded.get(ref_url) {
@@ -244,7 +250,10 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
                 already_downloaded.insert(ref_url.clone(), filename.clone());
                 let local_url = format!("{}/{filename}", base_url_for_shared.trim_end_matches('/'));
                 url_map.insert(ref_url.clone(), local_url);
-                to_process.push((ref_url.clone(), dep_text, filename));
+                to_process.push(DownloadedDep {
+                    text: dep_text,
+                    filename,
+                });
             }
             Err(e) => {
                 warn!(url = %ref_url, error = %e, "failed to download $ref dependency, keeping original URL");
@@ -259,11 +268,11 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
     tokio::fs::write(schema_dest, format!("{rewritten}\n")).await?;
 
     // Recursively process transitive deps
-    for (_dep_url, dep_text, dep_filename) in to_process {
-        let dep_dest = shared_dir.join(&dep_filename);
+    for dep in to_process {
+        let dep_dest = shared_dir.join(&dep.filename);
         Box::pin(resolve_and_rewrite(
             cache,
-            &dep_text,
+            &dep.text,
             &dep_dest,
             shared_dir,
             base_url_for_shared,
