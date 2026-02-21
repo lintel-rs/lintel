@@ -13,7 +13,7 @@ use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
-use crate::retriever::{CacheStatus, SchemaCache, ensure_cache_dir};
+use crate::retriever::{CacheStatus, SchemaCache};
 use crate::validation_cache::{self, ValidationCacheStatus, ValidationError};
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
@@ -697,19 +697,16 @@ pub async fn run_with(
     let retriever = if let Some(c) = cache {
         c
     } else {
-        let cache_dir = match &args.cache_dir {
-            Some(dir) => {
-                let path = PathBuf::from(dir);
-                let _ = fs::create_dir_all(&path);
-                path
-            }
-            None => ensure_cache_dir(),
-        };
-        SchemaCache::new(
-            Some(cache_dir),
-            args.force_schema_fetch,
-            args.schema_cache_ttl,
-        )
+        let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
+        if let Some(dir) = &args.cache_dir {
+            let path = PathBuf::from(dir);
+            let _ = fs::create_dir_all(&path);
+            builder = builder.cache_dir(path);
+        }
+        if let Some(ttl) = args.schema_cache_ttl {
+            builder = builder.ttl(ttl);
+        }
+        builder.build()
     };
 
     let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());

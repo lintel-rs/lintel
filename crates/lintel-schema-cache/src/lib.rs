@@ -59,15 +59,77 @@ pub struct SchemaCache {
     memory_cache: Arc<Mutex<HashMap<String, Value>>>,
 }
 
-impl SchemaCache {
-    /// Production constructor — uses reqwest for HTTP, disk + memory cache.
-    pub fn new(cache_dir: Option<PathBuf>, skip_read: bool, ttl: Option<Duration>) -> Self {
-        Self {
-            cache_dir,
+/// Builder for constructing a [`SchemaCache`] with sensible defaults.
+///
+/// Defaults:
+/// - `cache_dir`: [`ensure_cache_dir()`]
+/// - `force_fetch`: `false`
+/// - `ttl`: [`DEFAULT_SCHEMA_CACHE_TTL`] (12 hours)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let cache = SchemaCache::builder().build();
+/// let cache = SchemaCache::builder().force_fetch(true).ttl(Duration::from_secs(3600)).build();
+/// ```
+#[must_use]
+pub struct SchemaCacheBuilder {
+    cache_dir: Option<PathBuf>,
+    skip_read: bool,
+    ttl: Option<Duration>,
+}
+
+impl SchemaCacheBuilder {
+    /// Override the default cache directory.
+    pub fn cache_dir(mut self, dir: PathBuf) -> Self {
+        self.cache_dir = Some(dir);
+        self
+    }
+
+    /// When `true`, bypass cache reads and always fetch from the network.
+    /// Fetched schemas are still written to the cache.
+    pub fn force_fetch(mut self, force: bool) -> Self {
+        self.skip_read = force;
+        self
+    }
+
+    /// Override the default TTL for cached schemas.
+    pub fn ttl(mut self, ttl: Duration) -> Self {
+        self.ttl = Some(ttl);
+        self
+    }
+
+    /// Returns the cache directory that will be used, or [`ensure_cache_dir()`]
+    /// if none was explicitly set.
+    ///
+    /// Useful when callers need the resolved path before calling [`build`](Self::build).
+    pub fn cache_dir_or_default(&self) -> PathBuf {
+        self.cache_dir.clone().unwrap_or_else(ensure_cache_dir)
+    }
+
+    /// Build the [`SchemaCache`].
+    pub fn build(self) -> SchemaCache {
+        SchemaCache {
+            cache_dir: self.cache_dir,
             http: Arc::new(HttpMode::Reqwest(reqwest::Client::new())),
-            skip_read,
-            ttl,
+            skip_read: self.skip_read,
+            ttl: self.ttl,
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+impl SchemaCache {
+    /// Returns a builder pre-configured with sensible defaults.
+    ///
+    /// - `cache_dir` = [`ensure_cache_dir()`]
+    /// - `ttl` = [`DEFAULT_SCHEMA_CACHE_TTL`]
+    /// - `force_fetch` = `false`
+    pub fn builder() -> SchemaCacheBuilder {
+        SchemaCacheBuilder {
+            cache_dir: Some(ensure_cache_dir()),
+            skip_read: false,
+            ttl: Some(DEFAULT_SCHEMA_CACHE_TTL),
         }
     }
 

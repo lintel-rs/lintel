@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use lintel_schema_cache::{SchemaCache, ensure_cache_dir};
+use lintel_schema_cache::SchemaCache;
 use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
@@ -52,8 +52,7 @@ pub async fn run(
     }
 
     // Create schema cache
-    let cache_dir = ensure_cache_dir();
-    let cache = SchemaCache::new(Some(cache_dir), no_cache, None);
+    let cache = SchemaCache::builder().force_fetch(no_cache).build();
 
     // Process each target
     for (target_name, target_config) in &config.target {

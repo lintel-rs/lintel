@@ -19,14 +19,18 @@ Disk-backed schema cache with HTTP fetching and JSON parsing. Part of the [Linte
 ## Usage
 
 ```rust,ignore
-use lintel_schema_cache::{SchemaCache, ensure_cache_dir};
+use lintel_schema_cache::SchemaCache;
 use std::time::Duration;
 
-let cache = SchemaCache::new(
-    Some(ensure_cache_dir()),
-    false,                                   // skip_read
-    Some(Duration::from_secs(12 * 60 * 60)), // TTL
-);
+// Uses sensible defaults: system cache dir, 12h TTL
+let cache = SchemaCache::builder().build();
+
+// Or customize:
+let cache = SchemaCache::builder()
+    .force_fetch(true)
+    .ttl(Duration::from_secs(3600))
+    .build();
+
 let (schema, status) = cache.fetch("https://json.schemastore.org/tsconfig.json").await?;
 // status: Hit (from disk/memory), Miss (fetched and cached), or Disabled (no cache dir)
 ```

@@ -116,10 +116,7 @@ impl From<&ValidateArgs> for validate::ValidateArgs {
             force_validation: args.force_validation || args.force,
             no_catalog: args.no_catalog,
             config_dir,
-            schema_cache_ttl: Some(
-                args.schema_cache_ttl
-                    .unwrap_or(lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL),
-            ),
+            schema_cache_ttl: args.schema_cache_ttl,
         }
     }
 }

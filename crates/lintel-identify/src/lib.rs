@@ -9,7 +9,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{SchemaCache, ensure_cache_dir};
+use lintel_check::retriever::SchemaCache;
 use lintel_check::validate;
 use schemastore::SchemaMatch;
 
@@ -133,18 +133,16 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
         .unwrap_or(&path_str);
 
     // Set up schema cache
-    let ttl = Some(args.schema_cache_ttl.as_deref().map_or(
-        lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL,
-        |s| {
-            humantime::parse_duration(s)
-                .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
-        },
-    ));
-    let cache_dir = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(cache_dir), args.force_schema_fetch, ttl);
+    let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
+    if let Some(dir) = &args.cache_dir {
+        builder = builder.cache_dir(PathBuf::from(dir));
+    }
+    if let Some(ref s) = args.schema_cache_ttl {
+        let ttl = humantime::parse_duration(s)
+            .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"));
+        builder = builder.ttl(ttl);
+    }
+    let retriever = builder.build();
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);

@@ -7,7 +7,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{CacheStatus, SchemaCache, ensure_cache_dir};
+use lintel_check::retriever::{CacheStatus, SchemaCache};
 use lintel_check::validate;
 use lintel_check::validation_cache;
 
@@ -64,10 +64,9 @@ pub async fn run(cmd: CacheCommand, _global: &CLIGlobalOptions) -> Result<bool> 
 
 fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
     let hash = SchemaCache::hash_uri(&args.url);
-    let cache_dir = match args.cache_dir {
-        Some(dir) => PathBuf::from(dir),
-        None => ensure_cache_dir(),
-    };
+    let cache_dir = args
+        .cache_dir
+        .map_or_else(lintel_check::retriever::ensure_cache_dir, PathBuf::from);
     let cache_path = cache_dir.join(format!("{hash}.json"));
 
     println!("URL:        {}", args.url);
@@ -121,18 +120,17 @@ async fn trace(args: TraceArgs) -> Result<()> {
     println!("file: {path_str}");
 
     // Set up schema cache
-    let ttl = Some(args.schema_cache_ttl.as_deref().map_or(
-        lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL,
-        |s| {
-            humantime::parse_duration(s)
-                .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
-        },
-    ));
-    let schema_cache_dir = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(schema_cache_dir.clone()), false, ttl);
+    let mut builder = SchemaCache::builder();
+    if let Some(dir) = &args.cache_dir {
+        builder = builder.cache_dir(PathBuf::from(dir));
+    }
+    if let Some(ref s) = args.schema_cache_ttl {
+        let ttl = humantime::parse_duration(s)
+            .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"));
+        builder = builder.ttl(ttl);
+    }
+    let schema_cache_dir = builder.cache_dir_or_default();
+    let retriever = builder.build();
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
