@@ -12,7 +12,7 @@ impl Parser for YamlParser {
         // Strip UTF-8 BOM characters that can appear at the start of a file or
         // mid-stream (e.g. after a comment line), which serde_yaml misinterprets
         // as a multi-document separator.
-        let clean: std::borrow::Cow<'_, str> = if content.contains('\u{FEFF}') {
+        let clean: alloc::borrow::Cow<'_, str> = if content.contains('\u{FEFF}') {
             content.replace('\u{FEFF}', "").into()
         } else {
             content.into()

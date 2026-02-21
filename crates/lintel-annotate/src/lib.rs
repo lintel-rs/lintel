@@ -1,6 +1,6 @@
+use core::time::Duration;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use bpaf::{Bpaf, Parser};
@@ -137,7 +137,7 @@ async fn fetch_catalogs<C: HttpClient>(
 ) -> Vec<CompiledCatalog> {
     type CatalogResult = (
         String,
-        Result<CompiledCatalog, Box<dyn std::error::Error + Send + Sync>>,
+        Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
     );
     let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
 

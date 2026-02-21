@@ -108,7 +108,7 @@ fn error_to_annotation(error: &LintError) -> Annotation {
 }
 
 fn build_summary(files_checked: usize, ms: u128, annotations: &[Annotation]) -> String {
-    use std::fmt::Write;
+    use core::fmt::Write;
 
     if annotations.is_empty() {
         return format!("Checked **{files_checked}** files in **{ms}ms**. No errors found.");
