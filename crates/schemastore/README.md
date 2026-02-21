@@ -14,18 +14,23 @@ Parse and match files against the [SchemaStore](https://www.schemastore.org/) ca
 ```rust
 use schemastore::{parse_catalog, CompiledCatalog, CATALOG_URL};
 
-// Fetch the catalog JSON yourself (using ureq, reqwest, etc.)
-let json: String = ureq::get(CATALOG_URL).call()?.body_mut().read_to_string()?;
-let value: serde_json::Value = serde_json::from_str(&json)?;
+// Fetch the catalog JSON yourself (using reqwest, ureq, etc.)
+// let json = reqwest::blocking::get(CATALOG_URL)?.text()?;
+// let value: serde_json::Value = serde_json::from_str(&json)?;
+// let catalog = parse_catalog(value)?;
 
-let catalog = parse_catalog(value)?;
+// Example with inline data:
+let value = serde_json::json!({
+    "schemas": [{
+        "name": "TypeScript",
+        "url": "https://json.schemastore.org/tsconfig.json",
+        "fileMatch": ["tsconfig.json"]
+    }]
+});
+let catalog = parse_catalog(value).unwrap();
 let compiled = CompiledCatalog::compile(&catalog);
 
-compiled.find_schema("tsconfig.json", "tsconfig.json");
-// => Some("https://json.schemastore.org/tsconfig.json")
-
-compiled.find_schema(".github/workflows/ci.yml", "ci.yml");
-// => Some("https://www.schemastore.org/github-workflow.json")
+assert!(compiled.find_schema("tsconfig.json", "tsconfig.json").is_some());
 ```
 
 ## API

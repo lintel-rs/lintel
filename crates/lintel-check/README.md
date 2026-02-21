@@ -17,9 +17,8 @@ Core validation engine for [Lintel](https://github.com/lintel-rs/lintel). Valida
 
 ## Usage
 
-```rust,ignore
-use lintel_check::validate::{self, ValidateArgs};
-use lintel_check::retriever::UreqClient;
+```rust
+use lintel_check::validate::ValidateArgs;
 
 let args = ValidateArgs {
     globs: vec!["**/*.json".to_string()],
@@ -28,14 +27,10 @@ let args = ValidateArgs {
     force_schema_fetch: false,
     force_validation: false,
     no_catalog: false,
-    format: None,
     config_dir: None,
+    schema_cache_ttl: None,
 };
-
-let result = validate::run(&args, UreqClient).await?;
-for error in result.errors {
-    eprintln!("{}: {}", error.path(), error.message());
-}
+// Pass args and an HttpClient implementation to validate::run()
 ```
 
 ## Configuration (`lintel.toml`)

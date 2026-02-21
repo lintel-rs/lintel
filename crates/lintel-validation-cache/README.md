@@ -16,17 +16,17 @@ Each cache entry is keyed by a SHA-256 digest of the file contents and schema UR
 ## Usage
 
 ```rust
-use lintel_validation_cache::ValidationCache;
+use lintel_validation_cache::{ValidationCache, schema_hash, ensure_cache_dir};
 
-let cache = ValidationCache::new(Some(cache_dir)).await?;
+let cache = ValidationCache::new(ensure_cache_dir(), false);
 
-// Check if a result is cached
-if let Some(result) = cache.get(&file_hash, &schema_uri).await? {
-    // Use cached result
-}
+// Compute a schema hash once per schema group
+let schema = serde_json::json!({"type": "object"});
+let hash = schema_hash(&schema);
 
-// Store a new result
-cache.set(&file_hash, &schema_uri, &result).await?;
+// Cache key = SHA-256(file_content + schema_hash + validate_formats)
+let key = ValidationCache::cache_key("file contents", &hash, true);
+drop(key);
 ```
 
 ## License

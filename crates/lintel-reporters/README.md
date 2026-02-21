@@ -16,11 +16,10 @@ Reporter implementations for [Lintel](https://github.com/lintel-rs/lintel). Prov
 ## Usage
 
 ```rust
-use lintel_reporters::{ReporterKind, make_reporter, run, ValidateArgs};
+use lintel_reporters::{ReporterKind, make_reporter};
 
-let mut args = ValidateArgs { /* ... */ };
-let mut reporter = make_reporter(ReporterKind::Pretty, false);
-let had_errors = run(&mut args, client, reporter.as_mut()).await?;
+let reporter = make_reporter(ReporterKind::Pretty, false);
+// Pass `reporter.as_mut()` to the validation engine
 ```
 
 ## License

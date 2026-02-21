@@ -18,10 +18,11 @@ Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel)
 ## Usage
 
 ```rust
-use lintel_config::{Config, find_and_load, apply_rewrites, resolve_double_slash};
+use lintel_config::{find_and_load, apply_rewrites, resolve_double_slash};
 
 // Load config by walking up from a directory
-let config = find_and_load(std::path::Path::new("."))?
+let config = find_and_load(std::path::Path::new("."))
+    .unwrap()
     .unwrap_or_default();
 
 // Check for custom schema mappings
@@ -32,6 +33,7 @@ if let Some(url) = config.find_schema_mapping("src/config.json", "config.json") 
 // Apply rewrite rules and resolve // paths
 let uri = apply_rewrites("http://localhost:8000/schema.json", &config.rewrite);
 let uri = resolve_double_slash(&uri, std::path::Path::new("/project"));
+drop(uri);
 ```
 
 ### Standalone binary
