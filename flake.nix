@@ -57,6 +57,16 @@
             cargo-furnish
             ;
           default = lintel;
+          all = pkgs.symlinkJoin {
+            name = "lintel-all";
+            paths = [
+              lintel
+              lintel-schemastore-catalog
+              lintel-catalog-builder
+              lintel-github-action
+              cargo-furnish
+            ];
+          };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           docker = import ./nix/docker.nix { inherit pkgs lintel; };
