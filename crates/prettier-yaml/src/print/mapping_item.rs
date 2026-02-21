@@ -87,13 +87,41 @@ pub(crate) fn format_block_mapping(
             if comment.blank_line_before && allow_blank && !output.ends_with("\n\n") {
                 output.push('\n');
             }
-            // For the first entry (i==0), leading comments should use structural
-            // indent (source may have arbitrary indentation). For subsequent entries,
-            // comments between entries preserve their source indentation.
+            // For the first entry, use the structural indent. For subsequent
+            // entries, the strategy depends on the previous entry's value type:
+            //
+            // - After a scalar value (including block scalars): use the group's
+            //   minimum column with floor-rounding. This normalizes off-grid
+            //   "section" comments (e.g. col 1/2 in spec-8-5) to the entry's
+            //   indent level (col 0).
+            //
+            // - After a collection value (mapping/sequence): use per-comment
+            //   ceil-rounding via comment_indent. These comments visually
+            //   "belong" to the preceding collection's scope (e.g. col 1 in
+            //   end-comment.yml snaps UP to col 2).
             let ci = if i == 0 {
                 indent_str(indent)
             } else {
-                comment_indent(comment, indent, options)
+                let prev_value_is_scalar = matches!(
+                    &mapping.entries[i - 1].value,
+                    Node::Scalar(_) | Node::Alias(_)
+                );
+                if prev_value_is_scalar {
+                    let group_min = entry
+                        .leading_comments
+                        .iter()
+                        .map(|c| c.col)
+                        .min()
+                        .unwrap_or(0);
+                    let snapped = if tw > 0 {
+                        (group_min / tw) * tw
+                    } else {
+                        group_min
+                    };
+                    " ".repeat(indent.max(snapped))
+                } else {
+                    comment_indent(comment, indent, options)
+                }
             };
             output.push_str(&ci);
             output.push_str(&comment.text);
@@ -258,15 +286,48 @@ pub(crate) fn format_block_mapping(
         }
     }
 
-    // Write trailing comments (comments after last entry in the mapping)
-    for comment in &mapping.trailing_comments {
-        if comment.blank_line_before && !output.ends_with("\n\n") {
+    // Write trailing comments (comments after last entry in the mapping).
+    // After block scalar values at top level, use group-min floor snap to
+    // normalize off-grid "section" comments (spec-8-5: col 1→0).
+    let last_value_is_block_scalar = mapping.entries.last().is_some_and(|e| {
+        matches!(
+            &e.value,
+            Node::Scalar(s) if matches!(s.style, ScalarStyle::Literal | ScalarStyle::Folded)
+        )
+    });
+    let use_floor_for_trail = last_value_is_block_scalar && is_top;
+    if use_floor_for_trail {
+        let trail_group_min = mapping
+            .trailing_comments
+            .iter()
+            .map(|c| c.col)
+            .min()
+            .unwrap_or(0);
+        let trail_snapped = if tw > 0 {
+            (trail_group_min / tw) * tw
+        } else {
+            trail_group_min
+        };
+        let trail_indent_val = indent.max(trail_snapped).min(indent + tw);
+        let trail_indent_s = " ".repeat(trail_indent_val);
+        for comment in &mapping.trailing_comments {
+            if comment.blank_line_before && !output.ends_with("\n\n") {
+                output.push('\n');
+            }
+            output.push_str(&trail_indent_s);
+            output.push_str(&comment.text);
             output.push('\n');
         }
-        let ci = comment_indent_capped(comment, indent, indent + tw, options);
-        output.push_str(&ci);
-        output.push_str(&comment.text);
-        output.push('\n');
+    } else {
+        for comment in &mapping.trailing_comments {
+            if comment.blank_line_before && !output.ends_with("\n\n") {
+                output.push('\n');
+            }
+            let ci = comment_indent_capped(comment, indent, indent + tw, options);
+            output.push_str(&ci);
+            output.push_str(&comment.text);
+            output.push('\n');
+        }
     }
 }
 

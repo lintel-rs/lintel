@@ -251,13 +251,12 @@ mod tests {
 
     #[test]
     fn format_spec_85_chomping_trailing() {
-        // spec-example-8-5: block scalars with trailing comments
-        // Input has comments at col 1 (off-grid). div_ceil rounds up to col 2.
-        // Prettier would put them at col 0, but that requires deeper comment
-        // attachment changes (endComment vs leadingComment of next entry).
+        // spec-example-8-5: block scalars with trailing comments.
+        // After block scalar values, off-grid comments (col 1) normalize to
+        // the structural indent (col 0) via group-min floor snapping.
         let input = "# Strip\n# Comments:\nstrip: |-\n  # text\n \n # Clip\n # comments:\n \nclip: |\n  # text\n\n # Keep\n # comments:\n\nkeep: |+\n  # text\n\n # Trail\n # comments.\n";
         let result = format_yaml(input, &YamlFormatOptions::default()).expect("format");
-        let expected = "# Strip\n# Comments:\nstrip: |-\n  # text\n\n  # Clip\n  # comments:\n\nclip: |\n  # text\n\n  # Keep\n  # comments:\n\nkeep: |+\n  # text\n\n  # Trail\n  # comments.\n";
+        let expected = "# Strip\n# Comments:\nstrip: |-\n  # text\n\n# Clip\n# comments:\n\nclip: |\n  # text\n\n# Keep\n# comments:\n\nkeep: |+\n  # text\n\n# Trail\n# comments.\n";
         assert_eq!(result, expected);
     }
 
