@@ -2,11 +2,11 @@
 name = "lintel-benchmark"
 version = "0.0.2"
 edition.workspace = true
+authors.workspace = true
 description = "Benchmarking harness for Lintel — runs validation against real-world repos and records timing results"
+license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-license.workspace = true
-authors.workspace = true
 keywords = ["json-schema", "benchmark", "validation"]
 categories = ["command-line-utilities", "development-tools"]
 
