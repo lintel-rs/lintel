@@ -9,9 +9,7 @@ use serde_json::Value;
 
 use crate::catalog::{self, CompiledCatalog};
 use crate::config;
-use crate::diagnostics::{
-    FileDiagnostic, ParseDiagnostic, ValidationDiagnostic, find_instance_path_offset,
-};
+use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span};
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
@@ -49,50 +47,9 @@ pub struct ValidateArgs {
     pub schema_cache_ttl: Option<core::time::Duration>,
 }
 
-/// A single lint error produced during validation.
-pub enum LintError {
-    Parse(ParseDiagnostic),
-    Validation(ValidationDiagnostic),
-    File(FileDiagnostic),
-}
-
-impl LintError {
-    /// File path associated with this error.
-    pub fn path(&self) -> &str {
-        match self {
-            LintError::Parse(d) => d.src.name(),
-            LintError::Validation(d) => &d.path,
-            LintError::File(d) => &d.path,
-        }
-    }
-
-    /// Human-readable error message.
-    pub fn message(&self) -> &str {
-        match self {
-            LintError::Parse(d) => &d.message,
-            LintError::Validation(d) => &d.message,
-            LintError::File(d) => &d.message,
-        }
-    }
-
-    /// Byte offset in the source file (for sorting).
-    pub fn offset(&self) -> usize {
-        match self {
-            LintError::Parse(d) => d.span.offset(),
-            LintError::Validation(d) => d.span.offset(),
-            LintError::File(_) => 0,
-        }
-    }
-
-    /// Convert into a boxed miette Diagnostic for rich rendering.
-    pub fn into_diagnostic(self) -> Box<dyn miette::Diagnostic + Send + Sync> {
-        match self {
-            LintError::Parse(d) => Box::new(d),
-            LintError::Validation(d) => Box::new(d),
-            LintError::File(d) => Box::new(d),
-        }
-    }
-}
+/// Re-exported from [`crate::diagnostics::LintError`] for backwards
+/// compatibility with existing `use lintel_check::validate::LintError` paths.
+pub use crate::diagnostics::LintError;
 
 /// A file that was checked and the schema it resolved to.
 pub struct CheckedFile {
@@ -223,14 +180,18 @@ async fn validate_config(
         let path_str = config_path.display().to_string();
         for error in validator.iter_errors(&config_value) {
             let ip = error.instance_path().to_string();
-            let offset = find_instance_path_offset(&content, &ip);
-            errors.push(LintError::Validation(ValidationDiagnostic {
+            let span = find_instance_path_span(&content, &ip);
+            errors.push(LintError::Config {
                 src: miette::NamedSource::new(&path_str, content.clone()),
-                span: offset.into(),
+                span: span.into(),
                 path: path_str.clone(),
-                instance_path: ip,
+                instance_path: if ip.is_empty() {
+                    DEFAULT_LABEL.to_string()
+                } else {
+                    ip
+                },
                 message: truncate_error_value(error.to_string()),
-            }));
+            });
         }
         let cf = CheckedFile {
             path: path_str,
@@ -317,10 +278,10 @@ fn process_one_file(
                 {
                     match JsoncParser.parse(&content, &path_str) {
                         Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
-                        Err(jsonc_err) => return FileResult::Error(LintError::Parse(jsonc_err)),
+                        Err(jsonc_err) => return FileResult::Error(jsonc_err.into()),
                     }
                 } else {
-                    return FileResult::Error(LintError::Parse(parse_err));
+                    return FileResult::Error(parse_err.into());
                 }
             }
         }
@@ -424,10 +385,10 @@ async fn parse_and_group_files(
         let content = match content_result {
             Ok(c) => c,
             Err(e) => {
-                errors.push(LintError::File(FileDiagnostic {
+                errors.push(LintError::Io {
                     path: path.display().to_string(),
                     message: format!("failed to read: {e}"),
-                }));
+                });
                 continue;
             }
         };
@@ -488,7 +449,18 @@ async fn fetch_schema_from_prefetched(
     match result {
         Ok(value) => Some(value),
         Err(message) => {
-            report_group_error(&message, schema_uri, None, group, errors, checked, on_check);
+            report_group_error(
+                |path| LintError::SchemaFetch {
+                    path: path.to_string(),
+                    message: message.clone(),
+                },
+                schema_uri,
+                None,
+                group,
+                errors,
+                checked,
+                on_check,
+            );
             None
         }
     }
@@ -496,7 +468,7 @@ async fn fetch_schema_from_prefetched(
 
 /// Report the same error for every file in a schema group.
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
-    message: &str,
+    make_error: impl Fn(&str) -> LintError,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     group: &[P],
@@ -514,10 +486,7 @@ fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
         };
         on_check(&cf);
         checked.push(cf);
-        errors.push(LintError::File(FileDiagnostic {
-            path: pf.path.clone(),
-            message: message.to_string(),
-        }));
+        errors.push(make_error(&pf.path));
     }
 }
 
@@ -579,18 +548,24 @@ fn truncate_error_value(msg: String) -> String {
 /// Convert `(instance_path, message)` pairs into `LintError::Validation` diagnostics.
 fn push_error_pairs(
     pf: &ParsedFile,
+    schema_url: &str,
     error_pairs: &[(String, String)],
     errors: &mut Vec<LintError>,
 ) {
     for (ip, msg) in error_pairs {
-        let offset = find_instance_path_offset(&pf.content, ip);
-        errors.push(LintError::Validation(ValidationDiagnostic {
+        let span = find_instance_path_span(&pf.content, ip);
+        errors.push(LintError::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
-            span: offset.into(),
+            span: span.into(),
             path: pf.path.clone(),
-            instance_path: ip.clone(),
+            instance_path: if ip.is_empty() {
+                DEFAULT_LABEL.to_string()
+            } else {
+                ip.clone()
+            },
             message: msg.clone(),
-        }));
+            schema_url: schema_url.to_string(),
+        });
     }
 }
 
@@ -625,7 +600,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
         vcache
             .store(&pf.content, schema_hash, validate_formats, &file_errors)
             .await;
-        push_error_pairs(pf, &file_errors, errors);
+        push_error_pairs(pf, schema_uri, &file_errors, errors);
 
         let cf = CheckedFile {
             path: pf.path.clone(),
@@ -870,7 +845,7 @@ pub async fn run_with<C: HttpClient>(
                 .await;
 
             if let Some(cached_errors) = cached {
-                push_error_pairs(pf, &cached_errors, &mut errors);
+                push_error_pairs(pf, schema_uri, &cached_errors, &mut errors);
                 let cf = CheckedFile {
                     path: pf.path.clone(),
                     schema: schema_uri.clone(),
@@ -922,8 +897,12 @@ pub async fn run_with<C: HttpClient>(
                         );
                         continue;
                     }
+                    let msg = format!("failed to compile schema: {e}");
                     report_group_error(
-                        &format!("failed to compile schema: {e}"),
+                        |path| LintError::SchemaCompile {
+                            path: path.to_string(),
+                            message: msg.clone(),
+                        },
                         schema_uri,
                         cache_status,
                         &cache_misses,

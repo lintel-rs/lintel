@@ -1,6 +1,6 @@
 use core::time::Duration;
 
-use lintel_check::diagnostics::offset_to_line_col;
+use lintel_check::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
 use lintel_check::validate::{CheckedFile, LintError, ValidateResult};
 
 use crate::format_checked_verbose;
@@ -35,22 +35,26 @@ impl Reporter for GithubReporter {
             let message = escape_workflow(error.message());
 
             let (line, col) = match error {
-                LintError::Parse(d) => {
-                    let content = d.src.inner();
-                    offset_to_line_col(content, d.span.offset())
+                LintError::Parse { src, span, .. }
+                | LintError::Validation { src, span, .. }
+                | LintError::Config { src, span, .. } => {
+                    offset_to_line_col(src.inner(), span.offset())
                 }
-                LintError::Validation(d) => {
-                    let content = d.src.inner();
-                    offset_to_line_col(content, d.span.offset())
-                }
-                LintError::File(_) => (1, 1),
+                LintError::Io { .. }
+                | LintError::SchemaFetch { .. }
+                | LintError::SchemaCompile { .. } => (1, 1),
             };
 
             let title = match error {
-                LintError::Parse(_) => "parse error",
-                LintError::Validation(d) if !d.instance_path.is_empty() => &d.instance_path,
-                LintError::Validation(_) => "validation error",
-                LintError::File(_) => "file error",
+                LintError::Parse { .. } => "parse error",
+                LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
+                    instance_path
+                }
+                LintError::Validation { .. } => "validation error",
+                LintError::Config { .. } => "config error",
+                LintError::Io { .. } => "io error",
+                LintError::SchemaFetch { .. } => "schema fetch error",
+                LintError::SchemaCompile { .. } => "schema compile error",
             };
 
             println!("::error file={path},line={line},col={col},title={title}::{message}");

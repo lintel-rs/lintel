@@ -1,5 +1,6 @@
 use core::time::Duration;
 
+use lintel_check::diagnostics::DEFAULT_LABEL;
 use lintel_check::validate::{CheckedFile, LintError, ValidateResult};
 
 use crate::format_checked_verbose;
@@ -16,12 +17,11 @@ impl Reporter for TextReporter {
         for error in &result.errors {
             let path = error.path();
             match error {
-                LintError::Validation(d) if !d.instance_path.is_empty() => {
-                    eprintln!(
-                        "error: {path}: {} (at {})",
-                        error.message(),
-                        d.instance_path
-                    );
+                LintError::Validation { instance_path, .. }
+                | LintError::Config { instance_path, .. }
+                    if instance_path != DEFAULT_LABEL =>
+                {
+                    eprintln!("error: {path}: {} (at {instance_path})", error.message(),);
                 }
                 _ => {
                     eprintln!("error: {path}: {}", error.message());
