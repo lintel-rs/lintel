@@ -1405,6 +1405,7 @@ mod tests {
     #[tokio::test]
     async fn catalog_matches_github_workflow_valid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(
@@ -1426,7 +1427,7 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
@@ -1441,6 +1442,7 @@ mod tests {
     #[tokio::test]
     async fn catalog_matches_github_workflow_invalid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(wf_dir.join("bad.yml"), "name: Broken\n")?;
@@ -1459,7 +1461,7 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
@@ -1474,6 +1476,7 @@ mod tests {
     #[tokio::test]
     async fn auto_discover_finds_github_workflows() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(
@@ -1494,7 +1497,7 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
@@ -1732,6 +1735,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_parsed_when_catalog_matches() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File has .cfg extension (unrecognized) but content is valid JSON
         fs::write(
             tmp.path().join("myapp.cfg"),
@@ -1757,7 +1761,7 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
@@ -1773,6 +1777,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_unparseable_skipped() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File matches catalog but content isn't parseable by any format
         fs::write(
             tmp.path().join("myapp.cfg"),
@@ -1793,7 +1798,7 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
@@ -1809,6 +1814,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_invalid_against_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File has .cfg extension, content is valid JSON but fails schema validation
         fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#)?;
 
@@ -1831,7 +1837,7 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
