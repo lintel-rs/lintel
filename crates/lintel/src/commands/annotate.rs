@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 use std::time::Instant;
 
+use ansi_term_codes::{BOLD, DIM, RESET};
 use anyhow::Result;
 
 /// Run the `annotate` command: add schema annotations to files.
@@ -30,11 +31,11 @@ pub async fn run(args: &lintel_annotate::AnnotateArgs, verbose: bool) -> Result<
     if std::io::stderr().is_terminal() {
         if updated > 0 {
             eprintln!(
-                "\x1b[1mAnnotated {annotated}, updated {updated} files\x1b[0m \x1b[2m(skipped {skipped}) in {ms}ms.\x1b[0m"
+                "{BOLD}Annotated {annotated}, updated {updated} files{RESET} {DIM}(skipped {skipped}) in {ms}ms.{RESET}"
             );
         } else {
             eprintln!(
-                "\x1b[1mAnnotated {annotated} files\x1b[0m \x1b[2m(skipped {skipped}) in {ms}ms.\x1b[0m"
+                "{BOLD}Annotated {annotated} files{RESET} {DIM}(skipped {skipped}) in {ms}ms.{RESET}"
             );
         }
     } else if updated > 0 {
