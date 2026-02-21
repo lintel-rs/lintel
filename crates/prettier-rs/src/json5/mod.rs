@@ -1,6 +1,6 @@
 pub mod parser;
 
-use std::fmt::Write;
+use core::fmt::Write;
 
 use anyhow::Result;
 
@@ -85,7 +85,7 @@ fn node_to_doc(node: &Node, options: &PrettierOptions) -> Doc {
             Doc::group(Doc::concat(vec![
                 Doc::text("["),
                 Doc::indent(Doc::concat(
-                    std::iter::once(Doc::Softline).chain(items).collect(),
+                    core::iter::once(Doc::Softline).chain(items).collect(),
                 )),
                 Doc::Softline,
                 Doc::text("]"),
@@ -140,7 +140,7 @@ fn node_to_doc(node: &Node, options: &PrettierOptions) -> Doc {
 
             Doc::group(Doc::concat(vec![
                 Doc::text("{"),
-                Doc::indent(Doc::concat(std::iter::once(open).chain(items).collect())),
+                Doc::indent(Doc::concat(core::iter::once(open).chain(items).collect())),
                 close,
                 Doc::text("}"),
             ]))

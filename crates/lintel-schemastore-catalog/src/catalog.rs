@@ -154,11 +154,13 @@ mod tests {
             schemastore::SchemaEntry {
                 name: "Foo".into(),
                 url: "https://example.com/foo.json".into(),
+                description: None,
                 file_match: vec![],
             },
             schemastore::SchemaEntry {
                 name: "Foo Again".into(),
                 url: "https://example.com/foo.json".into(),
+                description: None,
                 file_match: vec![],
             },
         ];
@@ -173,16 +175,19 @@ mod tests {
             schemastore::SchemaEntry {
                 name: "Foo".into(),
                 url: "https://example.com/a.json".into(),
+                description: None,
                 file_match: vec![],
             },
             schemastore::SchemaEntry {
                 name: "Foo".into(),
                 url: "https://example.com/b.json".into(),
+                description: None,
                 file_match: vec![],
             },
             schemastore::SchemaEntry {
                 name: "Foo".into(),
                 url: "https://example.com/c.json".into(),
+                description: None,
                 file_match: vec![],
             },
         ];

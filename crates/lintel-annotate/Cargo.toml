@@ -1,0 +1,24 @@
+[package]
+name = "lintel-annotate"
+version = "0.0.3"
+edition.workspace = true
+authors.workspace = true
+description = "Annotation-based linting for JSON and YAML files using JSON Schema"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "validation", "annotation", "linter"]
+categories = ["development-tools"]
+
+[dependencies]
+lintel-check = { version = "0.0.4", path = "../lintel-check" }
+bpaf = { version = "0.9", features = ["derive"] }
+humantime = "2"
+anyhow = "1"
+glob = "0.3"
+glob-match = "0.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+
+[lints]
+workspace = true

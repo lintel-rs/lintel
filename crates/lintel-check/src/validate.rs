@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, HashMap};
+use alloc::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -16,6 +17,11 @@ use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
 use crate::retriever::{CacheStatus, HttpClient, SchemaCache, ensure_cache_dir};
 use crate::validation_cache::{self, ValidationCacheStatus};
+
+/// Conservative limit for concurrent file reads to avoid exhausting file
+/// descriptors. 128 is well below the default soft limit on macOS (256) and
+/// Linux (1024) while still providing good throughput.
+const FD_CONCURRENCY_LIMIT: usize = 128;
 
 pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
@@ -36,14 +42,11 @@ pub struct ValidateArgs {
     /// Disable `SchemaStore` catalog matching
     pub no_catalog: bool,
 
-    /// Force file format for all inputs
-    pub format: Option<parsers::FileFormat>,
-
     /// Directory to search for `lintel.toml` (defaults to cwd)
     pub config_dir: Option<PathBuf>,
 
     /// TTL for cached schemas. `None` means no expiry.
-    pub schema_cache_ttl: Option<std::time::Duration>,
+    pub schema_cache_ttl: Option<core::time::Duration>,
 }
 
 /// A single lint error produced during validation.
@@ -73,7 +76,7 @@ impl LintError {
     }
 
     /// Byte offset in the source file (for sorting).
-    fn offset(&self) -> usize {
+    pub fn offset(&self) -> usize {
         match self {
             LintError::Parse(d) => d.span.offset(),
             LintError::Validation(d) => d.span.offset(),
@@ -138,7 +141,7 @@ struct ParsedFile {
 /// Returns `(config, config_dir, config_path)`.  When no config is found or
 /// cwd is unavailable the config is default and `config_path` is `None`.
 #[tracing::instrument(skip_all)]
-fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
+pub fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
     let start_dir = match search_dir {
         Some(d) => d.to_path_buf(),
         None => match std::env::current_dir() {
@@ -202,13 +205,13 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Validate `lintel.toml` against its built-in schema.
-fn validate_config(
+async fn validate_config(
     config_path: &Path,
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) -> Result<()> {
-    let content = fs::read_to_string(config_path)?;
+    let content = tokio::fs::read_to_string(config_path).await?;
     let config_value: Value = toml::from_str(&content)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {e}", config_path.display()))?;
     let schema_value: Value = serde_json::from_str(include_str!(concat!(
@@ -226,7 +229,7 @@ fn validate_config(
                 span: offset.into(),
                 path: path_str.clone(),
                 instance_path: ip,
-                message: error.to_string(),
+                message: truncate_error_value(error.to_string()),
             }));
         }
         let cf = CheckedFile {
@@ -249,7 +252,7 @@ fn validate_config(
 ///
 /// JSONC is tried first (superset of JSON, handles comments), then YAML and
 /// TOML which cover the most common config formats, followed by the rest.
-fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
+pub fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
     use parsers::FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
     const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
 
@@ -273,31 +276,21 @@ enum FileResult {
     Skip,
 }
 
-/// Process a single file: read, parse, resolve schema URI.
+/// Process a single file's already-read content: parse and resolve schema URI.
 fn process_one_file(
     path: &Path,
-    format_override: Option<FileFormat>,
+    content: String,
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
 ) -> FileResult {
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(e) => {
-            return FileResult::Error(LintError::File(FileDiagnostic {
-                path: path.display().to_string(),
-                message: format!("failed to read: {e}"),
-            }));
-        }
-    };
-
     let path_str = path.display().to_string();
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(&path_str);
 
-    let detected_format = format_override.or_else(|| parsers::detect_format(path));
+    let detected_format = parsers::detect_format(path);
 
     // For unrecognized extensions, only proceed if a catalog or config mapping matches.
     if detected_format.is_none() {
@@ -393,26 +386,52 @@ fn process_one_file(
     }
 }
 
-/// Parse each file in parallel, extract its schema URI, apply rewrites, and
-/// group by resolved schema URI.
+/// Read each file concurrently with tokio, parse its content, extract its
+/// schema URI, apply rewrites, and group by resolved schema URI.
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
-fn parse_and_group_files(
+async fn parse_and_group_files(
     files: &[PathBuf],
-    args: &ValidateArgs,
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
     errors: &mut Vec<LintError>,
 ) -> BTreeMap<String, Vec<ParsedFile>> {
-    use rayon::prelude::*;
+    // Read all files concurrently using tokio async I/O, with a semaphore
+    // to avoid exhausting file descriptors on large directories.
+    let semaphore = alloc::sync::Arc::new(tokio::sync::Semaphore::new(FD_CONCURRENCY_LIMIT));
+    let mut read_set = tokio::task::JoinSet::new();
+    for path in files {
+        let path = path.clone();
+        let sem = semaphore.clone();
+        read_set.spawn(async move {
+            let _permit = sem.acquire().await.expect("semaphore closed");
+            let result = tokio::fs::read_to_string(&path).await;
+            (path, result)
+        });
+    }
 
-    let results: Vec<FileResult> = files
-        .par_iter()
-        .map(|path| process_one_file(path, args.format, config, config_dir, compiled_catalogs))
-        .collect();
+    let mut file_contents = Vec::with_capacity(files.len());
+    while let Some(result) = read_set.join_next().await {
+        match result {
+            Ok(item) => file_contents.push(item),
+            Err(e) => tracing::warn!("file read task panicked: {e}"),
+        }
+    }
 
+    // Process files: parse content and resolve schema URIs.
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
-    for result in results {
+    for (path, content_result) in file_contents {
+        let content = match content_result {
+            Ok(c) => c,
+            Err(e) => {
+                errors.push(LintError::File(FileDiagnostic {
+                    path: path.display().to_string(),
+                    message: format!("failed to read: {e}"),
+                }));
+                continue;
+            }
+        };
+        let result = process_one_file(&path, content, config, config_dir, compiled_catalogs);
         match result {
             FileResult::Parsed { schema_uri, parsed } => {
                 schema_groups.entry(schema_uri).or_default().push(parsed);
@@ -433,7 +452,7 @@ fn parse_and_group_files(
 ///
 /// For remote URIs, checks the prefetched map first; for local URIs, reads
 /// from disk (with in-memory caching to avoid redundant I/O for shared schemas).
-fn fetch_schema_from_prefetched(
+async fn fetch_schema_from_prefetched(
     schema_uri: &str,
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
     local_cache: &mut HashMap<String, Value>,
@@ -453,7 +472,8 @@ fn fetch_schema_from_prefetched(
     } else if let Some(cached) = local_cache.get(schema_uri) {
         Ok((cached.clone(), None))
     } else {
-        fs::read_to_string(schema_uri)
+        tokio::fs::read_to_string(schema_uri)
+            .await
             .map_err(|e| format!("failed to read local schema {schema_uri}: {e}"))
             .and_then(|content| {
                 serde_json::from_str::<Value>(&content)
@@ -475,7 +495,7 @@ fn fetch_schema_from_prefetched(
 }
 
 /// Report the same error for every file in a schema group.
-fn report_group_error<P: std::borrow::Borrow<ParsedFile>>(
+fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
     message: &str,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
@@ -502,7 +522,7 @@ fn report_group_error<P: std::borrow::Borrow<ParsedFile>>(
 }
 
 /// Mark every file in a group as checked (no errors).
-fn mark_group_checked<P: std::borrow::Borrow<ParsedFile>>(
+fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     validation_cache_status: Option<ValidationCacheStatus>,
@@ -521,6 +541,39 @@ fn mark_group_checked<P: std::borrow::Borrow<ParsedFile>>(
         on_check(&cf);
         checked.push(cf);
     }
+}
+
+/// Truncate the value portion of error messages like
+/// `{very long json} is not valid under any of the schemas listed in the 'anyOf' keyword`
+/// so the text before the "is not valid" suffix is at most 256 characters,
+/// keeping both the start and end of the value for context.
+fn truncate_error_value(msg: String) -> String {
+    const MAX_VALUE_LEN: usize = 256;
+    const ELLIPSIS: &str = " ... ";
+    const SUFFIX: &str = " is not valid under any of the schemas listed in the '";
+
+    if let Some(pos) = msg.find(SUFFIX)
+        && pos > MAX_VALUE_LEN
+    {
+        let value: &str = &msg[..pos];
+        let tail = &msg[pos..];
+        let keep = MAX_VALUE_LEN - ELLIPSIS.len(); // 251
+        let head_len = keep / 2; // 125
+        let end_len = keep - head_len; // 126
+
+        // Find char boundaries for head and end portions
+        let head: String = value.chars().take(head_len).collect();
+        let end: String = value
+            .chars()
+            .rev()
+            .take(end_len)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        return format!("{head}{ELLIPSIS}{end}{tail}");
+    }
+    msg
 }
 
 /// Convert `(instance_path, message)` pairs into `LintError::Validation` diagnostics.
@@ -545,7 +598,7 @@ fn push_error_pairs(
 /// results in the validation cache.
 #[tracing::instrument(skip_all, fields(schema_uri, file_count = group.len()))]
 #[allow(clippy::too_many_arguments)]
-async fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
+async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validator: &jsonschema::Validator,
     schema_uri: &str,
     schema_hash: &str,
@@ -561,7 +614,12 @@ async fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
         let pf = item.borrow();
         let file_errors: Vec<(String, String)> = validator
             .iter_errors(&pf.instance)
-            .map(|error| (error.instance_path().to_string(), error.to_string()))
+            .map(|error| {
+                (
+                    error.instance_path().to_string(),
+                    truncate_error_value(error.to_string()),
+                )
+            })
             .collect();
 
         vcache
@@ -583,6 +641,74 @@ async fn validate_group<P: std::borrow::Borrow<ParsedFile>>(
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/// Fetch and compile all schema catalogs (default, `SchemaStore`, and custom registries).
+///
+/// Returns a list of compiled catalogs, printing warnings for any that fail to fetch.
+pub async fn fetch_compiled_catalogs<C: HttpClient>(
+    retriever: &SchemaCache<C>,
+    config: &config::Config,
+    no_catalog: bool,
+) -> Vec<CompiledCatalog> {
+    let mut compiled_catalogs = Vec::new();
+
+    if !no_catalog {
+        let catalog_span = tracing::info_span!("fetch_catalogs").entered();
+
+        #[allow(clippy::items_after_statements)]
+        type CatalogResult = (
+            String,
+            Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
+        );
+        let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
+
+        // Lintel catalog
+        if !config.no_default_catalog {
+            let r = retriever.clone();
+            let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
+            catalog_tasks.spawn(async move {
+                let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
+                    .await
+                    .map(|cat| CompiledCatalog::compile(&cat));
+                (label, result)
+            });
+        }
+
+        // SchemaStore catalog
+        let r = retriever.clone();
+        catalog_tasks.spawn(async move {
+            let result = catalog::fetch_catalog(&r)
+                .await
+                .map(|cat| CompiledCatalog::compile(&cat));
+            ("SchemaStore catalog".to_string(), result)
+        });
+
+        // Additional registries from lintel.toml
+        for registry_url in &config.registries {
+            let r = retriever.clone();
+            let url = registry_url.clone();
+            let label = format!("registry {url}");
+            catalog_tasks.spawn(async move {
+                let result = registry::fetch(&r, &url)
+                    .await
+                    .map(|cat| CompiledCatalog::compile(&cat));
+                (label, result)
+            });
+        }
+
+        while let Some(result) = catalog_tasks.join_next().await {
+            match result {
+                Ok((_, Ok(compiled))) => compiled_catalogs.push(compiled),
+                Ok((label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
+                Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
+            }
+        }
+
+        drop(catalog_span);
+    }
+
+    compiled_catalogs
+}
 
 /// # Errors
 ///
@@ -623,80 +749,25 @@ pub async fn run_with<C: HttpClient>(
     let files = collect_files(&args.globs, &args.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
-    let mut compiled_catalogs = Vec::new();
-
-    if !args.no_catalog {
-        let catalog_span = tracing::info_span!("fetch_catalogs").entered();
-
-        // Fetch all catalogs in parallel using JoinSet.
-        // Each task returns (label, result) so error messages stay specific.
-        #[allow(clippy::items_after_statements)]
-        type CatalogResult = (
-            String,
-            Result<CompiledCatalog, Box<dyn std::error::Error + Send + Sync>>,
-        );
-        let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
-
-        // Lintel catalog
-        let r = retriever.clone();
-        let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
-        catalog_tasks.spawn(async move {
-            let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
-                .await
-                .map(|cat| CompiledCatalog::compile(&cat));
-            (label, result)
-        });
-
-        // SchemaStore catalog
-        let r = retriever.clone();
-        catalog_tasks.spawn(async move {
-            let result = catalog::fetch_catalog(&r)
-                .await
-                .map(|cat| CompiledCatalog::compile(&cat));
-            ("SchemaStore catalog".to_string(), result)
-        });
-
-        // Additional registries from lintel.toml
-        for registry_url in &config.registries {
-            let r = retriever.clone();
-            let url = registry_url.clone();
-            let label = format!("registry {url}");
-            catalog_tasks.spawn(async move {
-                let result = registry::fetch(&r, &url)
-                    .await
-                    .map(|cat| CompiledCatalog::compile(&cat));
-                (label, result)
-            });
-        }
-
-        while let Some(result) = catalog_tasks.join_next().await {
-            match result {
-                Ok((_, Ok(compiled))) => compiled_catalogs.push(compiled),
-                Ok((label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
-                Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
-            }
-        }
-
-        drop(catalog_span);
-    }
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
 
     let mut errors: Vec<LintError> = Vec::new();
     let mut checked: Vec<CheckedFile> = Vec::new();
 
     // Validate lintel.toml against its own schema
     if let Some(config_path) = config_path {
-        validate_config(&config_path, &mut errors, &mut checked, &mut on_check)?;
+        validate_config(&config_path, &mut errors, &mut checked, &mut on_check).await?;
     }
 
     // Phase 1: Parse files and resolve schema URIs
     let schema_groups = parse_and_group_files(
         &files,
-        args,
         &config,
         &config_dir,
         &compiled_catalogs,
         &mut errors,
-    );
+    )
+    .await;
     tracing::info!(
         schema_count = schema_groups.len(),
         total_files = schema_groups.values().map(Vec::len).sum::<usize>(),
@@ -744,11 +815,11 @@ pub async fn run_with<C: HttpClient>(
 
     // Phase 2: Compile each schema once and validate all matching files
     let mut local_schema_cache: HashMap<String, Value> = HashMap::new();
-    let mut fetch_time = std::time::Duration::ZERO;
-    let mut hash_time = std::time::Duration::ZERO;
-    let mut vcache_time = std::time::Duration::ZERO;
-    let mut compile_time = std::time::Duration::ZERO;
-    let mut validate_time = std::time::Duration::ZERO;
+    let mut fetch_time = core::time::Duration::ZERO;
+    let mut hash_time = core::time::Duration::ZERO;
+    let mut vcache_time = core::time::Duration::ZERO;
+    let mut compile_time = core::time::Duration::ZERO;
+    let mut validate_time = core::time::Duration::ZERO;
 
     for (schema_uri, group) in &schema_groups {
         let _group_span = tracing::debug_span!(
@@ -776,7 +847,9 @@ pub async fn run_with<C: HttpClient>(
             &mut errors,
             &mut checked,
             &mut on_check,
-        ) else {
+        )
+        .await
+        else {
             fetch_time += t.elapsed();
             continue;
         };
@@ -907,8 +980,8 @@ pub async fn run_with<C: HttpClient>(
 mod tests {
     use super::*;
     use crate::retriever::HttpClient;
+    use core::error::Error;
     use std::collections::HashMap;
-    use std::error::Error;
     use std::path::Path;
 
     #[derive(Clone)]
@@ -962,7 +1035,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         }
@@ -988,7 +1060,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1049,7 +1120,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1073,7 +1143,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1097,7 +1166,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1116,7 +1184,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1135,7 +1202,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1160,7 +1226,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1181,7 +1246,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1219,7 +1283,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1251,7 +1314,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1274,7 +1336,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1312,7 +1373,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1348,7 +1408,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1384,6 +1443,7 @@ mod tests {
     #[tokio::test]
     async fn catalog_matches_github_workflow_valid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(
@@ -1405,11 +1465,10 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1421,6 +1480,7 @@ mod tests {
     #[tokio::test]
     async fn catalog_matches_github_workflow_invalid() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(wf_dir.join("bad.yml"), "name: Broken\n")?;
@@ -1439,11 +1499,10 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1455,6 +1514,7 @@ mod tests {
     #[tokio::test]
     async fn auto_discover_finds_github_workflows() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         let wf_dir = tmp.path().join(".github/workflows");
         fs::create_dir_all(&wf_dir)?;
         fs::write(
@@ -1475,11 +1535,10 @@ mod tests {
         let c = ValidateArgs {
             globs: vec![],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1505,7 +1564,7 @@ mod tests {
         fs::write(
             &f,
             format!(
-                "# $schema: {}\nname = \"hello\"\n",
+                "# :schema {}\nname = \"hello\"\n",
                 schema_path.to_string_lossy()
             ),
         )?;
@@ -1518,7 +1577,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1559,7 +1617,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1593,7 +1650,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1635,7 +1691,6 @@ mod tests {
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1680,7 +1735,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1707,7 +1761,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1720,6 +1773,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_parsed_when_catalog_matches() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File has .cfg extension (unrecognized) but content is valid JSON
         fs::write(
             tmp.path().join("myapp.cfg"),
@@ -1745,11 +1799,10 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1762,6 +1815,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_unparseable_skipped() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File matches catalog but content isn't parseable by any format
         fs::write(
             tmp.path().join("myapp.cfg"),
@@ -1782,11 +1836,10 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1799,6 +1852,7 @@ validate_formats = false
     #[tokio::test]
     async fn unrecognized_extension_invalid_against_schema() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
+        let cache_tmp = tempfile::tempdir()?;
         // File has .cfg extension, content is valid JSON but fails schema validation
         fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#)?;
 
@@ -1821,11 +1875,10 @@ validate_formats = false
         let c = ValidateArgs {
             globs: vec![pattern],
             exclude: vec![],
-            cache_dir: None,
+            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            format: None,
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
@@ -1862,7 +1915,6 @@ validate_formats = false
             force_schema_fetch: true,
             force_validation: false,
             no_catalog: true,
-            format: None,
             config_dir: None,
             schema_cache_ttl: None,
         };
@@ -1894,5 +1946,64 @@ validate_formats = false
             "expected at least one validation cache hit on second run"
         );
         Ok(())
+    }
+
+    // --- truncate_error_value ---
+
+    #[test]
+    fn truncate_short_anyof_message_unchanged() {
+        let msg =
+            r#"{"type":"bad"} is not valid under any of the schemas listed in the 'anyOf' keyword"#;
+        assert_eq!(truncate_error_value(msg.to_string()), msg);
+    }
+
+    #[test]
+    fn truncate_long_anyof_message() {
+        let long_value = "x".repeat(300);
+        let suffix =
+            " is not valid under any of the schemas listed in the 'anyOf' keyword (at /foo)";
+        let msg = format!("{long_value}{suffix}");
+        let result = truncate_error_value(msg);
+        assert!(result.contains(" ... "));
+        assert!(result.ends_with(suffix));
+        // Start of value is preserved
+        assert!(result.starts_with("xxxxx"));
+        // End of value is preserved
+        assert!(result.contains(&format!("xxxxx{suffix}")));
+        // Total value portion (before suffix) should be 256 chars
+        let value_part = &result[..result.find(suffix).expect("suffix must be present")];
+        assert_eq!(value_part.len(), 256);
+    }
+
+    #[test]
+    fn truncate_long_oneof_message() {
+        let long_value = "y".repeat(400);
+        let suffix = " is not valid under any of the schemas listed in the 'oneOf' keyword";
+        let msg = format!("{long_value}{suffix}");
+        let result = truncate_error_value(msg);
+        assert!(result.contains(" ... "));
+        assert!(result.ends_with(suffix));
+        assert!(result.starts_with("yyyyy"));
+    }
+
+    #[test]
+    fn truncate_shows_head_and_tail() {
+        // Use distinct chars so we can verify both ends are kept
+        let head = "H".repeat(200);
+        let tail = "T".repeat(200);
+        let value = format!("{head}{tail}");
+        let suffix = " is not valid under any of the schemas listed in the 'anyOf' keyword";
+        let msg = format!("{value}{suffix}");
+        let result = truncate_error_value(msg);
+        // Head portion preserved
+        assert!(result.starts_with("HHHHH"));
+        // Tail portion preserved before the suffix
+        assert!(result.contains(&format!("TTTTT{suffix}")));
+    }
+
+    #[test]
+    fn truncate_unrelated_message_unchanged() {
+        let msg = "\"name\" is a required property (at /foo)";
+        assert_eq!(truncate_error_value(msg.to_string()), msg);
     }
 }

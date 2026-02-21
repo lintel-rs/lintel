@@ -129,7 +129,7 @@ impl<'a> Parser<'a> {
     }
 
     fn take_pending_comments(&mut self) -> Vec<Comment> {
-        std::mem::take(&mut self.pending_comments)
+        core::mem::take(&mut self.pending_comments)
     }
 
     fn parse_value(&mut self) -> Result<Node, String> {

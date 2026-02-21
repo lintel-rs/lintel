@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ["lintel-v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
@@ -61,6 +62,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
 
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -129,9 +133,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  docker:
-    name: Publish Docker Image
-    runs-on: ubuntu-latest
+  docker-build:
+    name: Docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
@@ -155,12 +166,31 @@ jobs:
       - name: Tag and push
         run: |
           VERSION=${GITHUB_REF_NAME#lintel-v}
+          ARCH_TAG=${VERSION}-${{ matrix.arch }}
+
+          docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
+
+  docker-manifest:
+    name: Docker Manifest
+    needs: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          VERSION=${GITHUB_REF_NAME#lintel-v}
           MAJOR_MINOR=${VERSION%.*}
+          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-          docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
-          docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAJOR_MINOR}
-          docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAJOR_MINOR}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          for TAG in "${VERSION}" "${MAJOR_MINOR}" "latest"; do
+            docker manifest create ${IMAGE}:${TAG} \
+              ${IMAGE}:${VERSION}-amd64 \
+              ${IMAGE}:${VERSION}-arm64
+            docker manifest push ${IMAGE}:${TAG}
+          done

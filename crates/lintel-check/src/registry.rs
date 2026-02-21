@@ -46,9 +46,9 @@ pub fn resolve_urls(url: &str) -> Vec<String> {
 pub async fn fetch<C: HttpClient>(
     cache: &SchemaCache<C>,
     url: &str,
-) -> Result<Catalog, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Catalog, Box<dyn core::error::Error + Send + Sync>> {
     let urls = resolve_urls(url);
-    let mut last_err: Option<Box<dyn std::error::Error + Send + Sync>> = None;
+    let mut last_err: Option<Box<dyn core::error::Error + Send + Sync>> = None;
     for resolved in &urls {
         match cache.fetch(resolved).await {
             Ok((value, _status)) => {

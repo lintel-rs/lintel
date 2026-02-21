@@ -4,7 +4,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use bpaf::Bpaf;
 
-use lintel_cli_common::CliGlobalOptions;
+use lintel_cli_common::CLIGlobalOptions;
 
 /// Arguments for the format command
 #[derive(Debug, Clone, Bpaf)]
@@ -156,7 +156,7 @@ fn tool_name(kind: FormatKind) -> &'static str {
 /// # Errors
 ///
 /// Returns an error if file collection, reading, or formatting fails.
-pub fn run(args: &FormatArgs, global: &CliGlobalOptions) -> Result<bool> {
+pub fn run(args: &FormatArgs, global: &CLIGlobalOptions) -> Result<bool> {
     let files = collect_files(&args.paths, &args.exclude)?;
 
     if files.is_empty() {

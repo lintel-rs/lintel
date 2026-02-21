@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use core::fmt::Write;
 
 use anyhow::{Context, Result};
 
@@ -65,7 +65,7 @@ fn jsonc_array_to_doc(arr: &jsonc_parser::ast::Array, options: &PrettierOptions)
     Doc::group(Doc::concat(vec![
         Doc::text("["),
         Doc::indent(Doc::concat(
-            std::iter::once(Doc::Softline).chain(items).collect(),
+            core::iter::once(Doc::Softline).chain(items).collect(),
         )),
         Doc::Softline,
         Doc::text("]"),
@@ -107,7 +107,7 @@ fn jsonc_object_to_doc(obj: &jsonc_parser::ast::Object, options: &PrettierOption
 
     Doc::group(Doc::concat(vec![
         Doc::text("{"),
-        Doc::indent(Doc::concat(std::iter::once(open).chain(items).collect())),
+        Doc::indent(Doc::concat(core::iter::once(open).chain(items).collect())),
         close,
         Doc::text("}"),
     ]))

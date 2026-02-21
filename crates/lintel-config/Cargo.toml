@@ -1,12 +1,12 @@
 [package]
 name = "lintel-config"
-version = "0.0.1"
+version = "0.0.3"
 edition.workspace = true
-authors = ["Ian Macalinao <me@ianm.com>"]
+authors.workspace = true
 description = "Configuration types and loader for Lintel (lintel.toml)"
-license = "Apache-2.0"
-repository = "https://github.com/lintel-rs/lintel"
-homepage = "https://github.com/lintel-rs/lintel"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 keywords = ["json-schema", "validation", "config"]
 categories = ["development-tools"]
 

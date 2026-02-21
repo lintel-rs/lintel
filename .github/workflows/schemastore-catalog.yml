@@ -24,3 +24,4 @@ jobs:
         run: cargo run --release -p lintel-schemastore-catalog -- update
         env:
           GITHUB_TOKEN: ${{ secrets.SCHEMASTORE_CATALOG_GITHUB_PAT }}
+          LINTEL_LOG: info

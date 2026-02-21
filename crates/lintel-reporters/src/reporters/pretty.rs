@@ -1,0 +1,36 @@
+use core::time::Duration;
+use std::io::IsTerminal;
+
+use miette::Report;
+
+use lintel_check::validate::{CheckedFile, ValidateResult};
+
+use crate::format_checked_verbose;
+use crate::reporter::Reporter;
+
+/// Pretty reporter: fancy miette output with colors and timing.
+pub struct PrettyReporter {
+    pub verbose: bool,
+}
+
+impl Reporter for PrettyReporter {
+    fn report(&mut self, result: ValidateResult, elapsed: Duration) {
+        let n = result.files_checked();
+        for error in result.errors {
+            eprintln!("{:?}", Report::new_boxed(error.into_diagnostic()));
+        }
+
+        let ms = elapsed.as_millis();
+        if std::io::stderr().is_terminal() {
+            eprintln!("\x1b[1mChecked {n} files\x1b[0m \x1b[2min {ms}ms.\x1b[0m");
+        } else {
+            eprintln!("Checked {n} files in {ms}ms.");
+        }
+    }
+
+    fn on_file_checked(&mut self, file: &CheckedFile) {
+        if self.verbose {
+            eprintln!("{}", format_checked_verbose(file));
+        }
+    }
+}

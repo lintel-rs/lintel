@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use core::fmt::Write;
 
 use saphyr_parser::ScalarStyle;
 
@@ -722,7 +722,7 @@ fn group_quoted_segments<'a>(lines: &[&'a str]) -> Vec<Vec<&'a str>> {
         }
         if line.is_empty() {
             if !current.is_empty() {
-                segments.push(std::mem::take(&mut current));
+                segments.push(core::mem::take(&mut current));
             }
             segments.push(Vec::new());
         } else {

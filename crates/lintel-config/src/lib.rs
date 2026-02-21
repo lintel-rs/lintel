@@ -46,6 +46,11 @@ pub struct Config {
     #[serde(default)]
     pub schemas: HashMap<String, String>,
 
+    /// If true, skip the built-in Lintel catalog (only use `SchemaStore`
+    /// and any extra registries).
+    #[serde(default, rename = "no-default-catalog")]
+    pub no_default_catalog: bool,
+
     /// Additional schema catalog URLs to fetch alongside `SchemaStore`.
     /// Each URL should point to a JSON file with the same format as
     /// the `SchemaStore` catalog (`{"schemas": [...]}`).
@@ -134,7 +139,7 @@ impl Config {
 /// Apply rewrite rules to a schema URI. If the URI starts with any key in
 /// `rewrites`, that prefix is replaced with the corresponding value.
 /// The longest matching prefix wins.
-pub fn apply_rewrites<S: ::std::hash::BuildHasher>(
+pub fn apply_rewrites<S: ::core::hash::BuildHasher>(
     uri: &str,
     rewrites: &HashMap<String, String, S>,
 ) -> String {

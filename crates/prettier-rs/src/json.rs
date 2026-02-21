@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use core::fmt::Write;
 
 use serde_json::Value;
 
@@ -38,7 +38,7 @@ fn array_to_doc(arr: &[Value], options: &PrettierOptions) -> Doc {
     Doc::group(Doc::concat(vec![
         Doc::text("["),
         Doc::indent(Doc::concat(
-            std::iter::once(Doc::Softline).chain(items).collect(),
+            core::iter::once(Doc::Softline).chain(items).collect(),
         )),
         Doc::Softline,
         Doc::text("]"),
@@ -72,9 +72,9 @@ fn object_to_doc(obj: &serde_json::Map<String, Value>, options: &PrettierOptions
     let inner = if options.bracket_spacing {
         // In flat mode: { key: value }
         // In broken mode: {\n  key: value\n}
-        Doc::concat(std::iter::once(open).chain(items).collect())
+        Doc::concat(core::iter::once(open).chain(items).collect())
     } else {
-        Doc::concat(std::iter::once(open).chain(items).collect())
+        Doc::concat(core::iter::once(open).chain(items).collect())
     };
 
     Doc::group(Doc::concat(vec![

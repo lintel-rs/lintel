@@ -1,3 +1,5 @@
+extern crate alloc;
+
 mod ast;
 mod comments;
 mod parser;

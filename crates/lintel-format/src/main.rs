@@ -7,7 +7,7 @@ use bpaf::Bpaf;
 #[bpaf(options, version)]
 struct Cli {
     #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)]
-    global: lintel_cli_common::CliGlobalOptions,
+    global: lintel_cli_common::CLIGlobalOptions,
     #[bpaf(external(lintel_format::format_args))]
     args: lintel_format::FormatArgs,
 }

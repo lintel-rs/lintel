@@ -1,0 +1,41 @@
+name: Release GitHub Action
+
+on:
+  push:
+    tags: ["lintel-github-action-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-nix:
+    name: Build (x86_64-linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lintel
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build
+        run: nix build .#lintel-github-action
+
+      - name: Package
+        run: tar czf lintel-github-action-x86_64-unknown-linux-gnu.tar.gz -C result/bin lintel-github-action
+
+      - name: Extract version
+        id: version
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release to lintel-rs/action
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            lintel-github-action-x86_64-unknown-linux-gnu.tar.gz \
+            --repo lintel-rs/action \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes

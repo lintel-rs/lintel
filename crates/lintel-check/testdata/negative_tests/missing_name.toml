@@ -1,2 +1,2 @@
-# $schema: https://example.com/schema.json
+# :schema https://example.com/schema.json
 other = "stuff"
