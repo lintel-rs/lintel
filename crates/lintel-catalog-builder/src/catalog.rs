@@ -43,6 +43,8 @@ pub async fn write_catalog_json(output_dir: &Path, catalog: &Catalog) -> Result<
 
 #[cfg(test)]
 mod tests {
+    use alloc::collections::BTreeMap;
+
     use super::*;
 
     #[test]
@@ -60,7 +62,7 @@ mod tests {
             description: "A test".into(),
             url: "https://example.com/test.json".into(),
             file_match: vec!["*.test".into()],
-            versions: std::collections::BTreeMap::new(),
+            versions: BTreeMap::new(),
         }]);
         write_catalog_json(dir.path(), &catalog).await?;
 

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use tracing::{debug, warn};
 
 /// Recursively scan a JSON value for `$ref` strings that are absolute HTTP(S) URLs.
@@ -39,20 +39,47 @@ fn collect_refs(value: &serde_json::Value, refs: &mut HashSet<String>) {
 
 /// Extract a filename from a URL's last path segment.
 ///
+/// Falls back to the domain name with `.json` extension if the URL has no
+/// meaningful path segments (e.g. `https://meta.json-schema.tools`).
+///
 /// # Errors
 ///
-/// Returns an error if the URL cannot be parsed or has no path segments.
+/// Returns an error if the URL cannot be parsed.
 pub fn filename_from_url(url: &str) -> Result<String> {
     let parsed = url::Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     let segments: Vec<&str> = parsed
         .path_segments()
         .map(Iterator::collect)
         .unwrap_or_default();
-    let last = segments
-        .last()
-        .filter(|s| !s.is_empty())
-        .with_context(|| format!("URL has no path segments: {url}"))?;
-    Ok((*last).to_string())
+    if let Some(last) = segments.last().filter(|s| !s.is_empty()) {
+        return Ok((*last).to_string());
+    }
+    // No path segments — use domain as filename
+    let host = parsed
+        .host_str()
+        .with_context(|| format!("URL has no host: {url}"))?;
+    Ok(format!("{host}.json"))
+}
+
+/// Generate a unique filename in a directory, adding numeric suffixes on collision.
+///
+/// Given `base.json`, tries `base.json`, `base-2.json`, `base-3.json`, etc.
+fn unique_filename_in(dir: &Path, base: &str) -> String {
+    if !dir.join(base).exists() {
+        return base.to_string();
+    }
+    let (stem, ext) = match base.rfind('.') {
+        Some(pos) => (&base[..pos], &base[pos..]),
+        None => (base, ""),
+    };
+    let mut n = 2u32;
+    loop {
+        let candidate = format!("{stem}-{n}{ext}");
+        if !dir.join(&candidate).exists() {
+            return candidate;
+        }
+        n += 1;
+    }
 }
 
 /// Rewrite `$ref` URLs in a JSON value using the provided mapping.
@@ -93,16 +120,17 @@ pub fn rewrite_refs(value: &mut serde_json::Value, url_map: &HashMap<String, Str
 /// - `schema_dest`: where to write the rewritten schema
 /// - `shared_dir`: directory for dependency files (e.g. `schemas/<group>/_shared/`)
 /// - `base_url_for_shared`: the URL prefix for the shared directory
-/// - `already_downloaded`: set of URLs already downloaded (to avoid re-downloading)
+/// - `already_downloaded`: map of URL → local filename for already-downloaded deps
 ///
-/// Returns the set of URLs that were newly downloaded.
+/// Filenames in `_shared/` are disambiguated with numeric suffixes when
+/// different URLs produce the same last path segment.
 pub async fn resolve_and_rewrite(
     client: &reqwest::Client,
     schema_text: &str,
     schema_dest: &Path,
     shared_dir: &Path,
     base_url_for_shared: &str,
-    already_downloaded: &mut HashSet<String>,
+    already_downloaded: &mut HashMap<String, String>,
 ) -> Result<()> {
     let mut value: serde_json::Value =
         serde_json::from_str(schema_text).context("failed to parse schema JSON")?;
@@ -121,33 +149,32 @@ pub async fn resolve_and_rewrite(
 
     // Build URL → local path mapping and download deps
     let mut url_map: HashMap<String, String> = HashMap::new();
-    let mut to_process: Vec<(String, String)> = Vec::new(); // (url, local_text)
+    let mut to_process: Vec<(String, String, String)> = Vec::new(); // (url, local_text, filename)
 
     for ref_url in &external_refs {
-        if already_downloaded.contains(ref_url) {
-            // Already downloaded, just build the mapping
-            let filename = filename_from_url(ref_url)?;
-            let local_url = format!("{}/{}", base_url_for_shared.trim_end_matches('/'), filename);
+        if let Some(existing_filename) = already_downloaded.get(ref_url) {
+            // Already downloaded, just build the mapping using the stored filename
+            let local_url = format!(
+                "{}/{}",
+                base_url_for_shared.trim_end_matches('/'),
+                existing_filename,
+            );
             url_map.insert(ref_url.clone(), local_url);
             continue;
         }
 
-        let filename = filename_from_url(ref_url)?;
+        let base_filename = filename_from_url(ref_url)?;
+        tokio::fs::create_dir_all(shared_dir).await?;
+        // Disambiguate filename if another URL already produced the same name
+        let filename = unique_filename_in(shared_dir, &base_filename);
         let dest_path = shared_dir.join(&filename);
 
-        // Check for filename collisions in shared dir
-        if dest_path.exists() && !already_downloaded.contains(ref_url) {
-            bail!("filename collision in _shared/: {filename} (from URL: {ref_url})");
-        }
-
-        tokio::fs::create_dir_all(shared_dir).await?;
         match crate::download::download_one(client, ref_url, &dest_path).await {
             Ok(dep_text) => {
-                already_downloaded.insert(ref_url.clone());
-                let local_url =
-                    format!("{}/{}", base_url_for_shared.trim_end_matches('/'), filename);
+                already_downloaded.insert(ref_url.clone(), filename.clone());
+                let local_url = format!("{}/{filename}", base_url_for_shared.trim_end_matches('/'));
                 url_map.insert(ref_url.clone(), local_url);
-                to_process.push((ref_url.clone(), dep_text));
+                to_process.push((ref_url.clone(), dep_text, filename));
             }
             Err(e) => {
                 warn!(url = %ref_url, error = %e, "failed to download $ref dependency, keeping original URL");
@@ -161,8 +188,7 @@ pub async fn resolve_and_rewrite(
     tokio::fs::write(schema_dest, format!("{rewritten}\n")).await?;
 
     // Recursively process transitive deps
-    for (dep_url, dep_text) in to_process {
-        let dep_filename = filename_from_url(&dep_url)?;
+    for (_dep_url, dep_text, dep_filename) in to_process {
         let dep_dest = shared_dir.join(&dep_filename);
         Box::pin(resolve_and_rewrite(
             client,

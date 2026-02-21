@@ -1,3 +1,5 @@
+extern crate alloc;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 

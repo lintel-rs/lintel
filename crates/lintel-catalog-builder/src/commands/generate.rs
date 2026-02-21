@@ -1,3 +1,5 @@
+use alloc::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -43,7 +45,7 @@ pub async fn run(config_path: &Path, output_dir: Option<&Path>, concurrency: usi
         let shared_dir = group_dir.join("_shared");
         let base_url = config.catalog.base_url.trim_end_matches('/');
         let shared_base_url = format!("{base_url}/schemas/{group_name}/_shared");
-        let mut already_downloaded: HashSet<String> = HashSet::new();
+        let mut already_downloaded: HashMap<String, String> = HashMap::new();
 
         for (key, schema_def) in group_schemas {
             let filename = format!("{key}.json");
@@ -129,7 +131,7 @@ pub async fn run(config_path: &Path, output_dir: Option<&Path>, concurrency: usi
                 description: schema_def.description.clone(),
                 url: schema_url,
                 file_match: schema_def.file_match.clone(),
-                versions: std::collections::BTreeMap::new(),
+                versions: BTreeMap::new(),
             });
         }
     }
@@ -206,18 +208,47 @@ async fn process_source(
         tokio::fs::create_dir_all(schemas_dir.join(dir_name)).await?;
     }
 
-    // Classify each schema into an organize directory or the source default
+    // Classify each schema into an organize directory or the source default.
+    // Track filenames per directory to handle collisions (e.g. many schemas
+    // use "schema.json" as their URL's last segment). On collision, fall back
+    // to a slugified schema name with numeric suffix deduplication.
     let mut download_items: Vec<DownloadItem> = Vec::new();
     let mut entry_info: Vec<SourceSchemaInfo> = Vec::new();
+    let mut dir_filename_counts: HashMap<(String, String), usize> = HashMap::new();
+    let mut seen_urls: HashSet<String> = HashSet::new();
 
     for schema in &source_catalog.schemas {
+        // Skip duplicate URLs within the same source catalog
+        if !seen_urls.insert(schema.url.clone()) {
+            continue;
+        }
+
         let target_dir = classify_schema(schema, &source_config.organize, source_name)?;
-        let filename = filename_from_url(&schema.url)
+        let base_filename = filename_from_url(&schema.url)
             .unwrap_or_else(|_| format!("{}.json", slugify(&schema.name)));
+
+        // Deduplicate filenames within the same directory
+        let key = (target_dir.clone(), base_filename.clone());
+        let count = dir_filename_counts.entry(key).or_insert(0);
+        *count += 1;
+        let filename = if *count == 1 {
+            base_filename
+        } else {
+            // On collision, use slugified schema name instead
+            let slug_name = format!("{}.json", slugify(&schema.name));
+            let slug_key = (target_dir.clone(), slug_name.clone());
+            let slug_count = dir_filename_counts.entry(slug_key).or_insert(0);
+            *slug_count += 1;
+            if *slug_count == 1 {
+                slug_name
+            } else {
+                format!("{}-{}.json", slugify(&schema.name), slug_count)
+            }
+        };
 
         let dest_path = schemas_dir.join(&target_dir).join(&filename);
 
-        // Collision detection
+        // Final collision detection against all output paths (including groups)
         let canonical_dest = dest_path
             .canonicalize()
             .unwrap_or_else(|_| dest_path.clone());
@@ -304,7 +335,7 @@ async fn resolve_source_refs(
 ) -> Result<()> {
     let shared_dir = schemas_dir.join(source_name).join("_shared");
     let shared_base_url = format!("{base_url}/schemas/{source_name}/_shared");
-    let mut already_downloaded: HashSet<String> = HashSet::new();
+    let mut already_downloaded: HashMap<String, String> = HashMap::new();
 
     for (item, info) in download_items.iter().zip(entry_info.iter()) {
         if !downloaded.contains(&item.url) {
@@ -338,7 +369,7 @@ struct SourceSchemaInfo {
     url: String,
     local_url: String,
     file_match: Vec<String>,
-    versions: std::collections::BTreeMap<String, String>,
+    versions: BTreeMap<String, String>,
 }
 
 /// Classify a schema into an organize directory or the source default.
@@ -350,7 +381,7 @@ struct SourceSchemaInfo {
 /// Returns an error if a schema matches multiple organize entries (ambiguous).
 fn classify_schema(
     schema: &schema_catalog::SchemaEntry,
-    organize: &std::collections::BTreeMap<String, Vec<String>>,
+    organize: &BTreeMap<String, Vec<String>>,
     source_name: &str,
 ) -> Result<String> {
     let mut matched_dir: Option<&str> = None;
@@ -469,14 +500,14 @@ mod tests {
             description: String::new(),
             url: url.into(),
             file_match: file_match.into_iter().map(String::from).collect(),
-            versions: std::collections::BTreeMap::new(),
+            versions: BTreeMap::new(),
         }
     }
 
     #[test]
     fn classify_no_organize_uses_source_name() {
         let schema = make_schema("Test", "https://example.com/test.json", vec!["test.json"]);
-        let organize = std::collections::BTreeMap::new();
+        let organize = BTreeMap::new();
         assert_eq!(
             classify_schema(&schema, &organize, "mysource").expect("ok"),
             "mysource"
@@ -490,7 +521,7 @@ mod tests {
             "https://example.com/github-workflow.json",
             vec!["**/.github/workflows/*.yml"],
         );
-        let mut organize = std::collections::BTreeMap::new();
+        let mut organize = BTreeMap::new();
         organize.insert("github".to_string(), vec!["**.github**".to_string()]);
         assert_eq!(
             classify_schema(&schema, &organize, "schemastore").expect("ok"),
@@ -505,7 +536,7 @@ mod tests {
             "https://example.com/special.json",
             vec!["special.json"],
         );
-        let mut organize = std::collections::BTreeMap::new();
+        let mut organize = BTreeMap::new();
         organize.insert(
             "special-dir".to_string(),
             vec!["https://example.com/special.json".to_string()],
@@ -523,7 +554,7 @@ mod tests {
             "https://example.com/ambig.json",
             vec!["**/.github/workflows/*.yml"],
         );
-        let mut organize = std::collections::BTreeMap::new();
+        let mut organize = BTreeMap::new();
         organize.insert("dir1".to_string(), vec!["**.github**".to_string()]);
         organize.insert("dir2".to_string(), vec!["**.github**".to_string()]);
         assert!(classify_schema(&schema, &organize, "source").is_err());
@@ -536,7 +567,7 @@ mod tests {
             "https://example.com/unmatched.json",
             vec!["unmatched.yaml"],
         );
-        let mut organize = std::collections::BTreeMap::new();
+        let mut organize = BTreeMap::new();
         organize.insert("github".to_string(), vec!["**.github**".to_string()]);
         assert_eq!(
             classify_schema(&schema, &organize, "schemastore").expect("ok"),

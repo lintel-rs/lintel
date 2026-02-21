@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
