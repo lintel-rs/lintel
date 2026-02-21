@@ -1,15 +1,9 @@
 # lintel-config
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-config.svg
-[crates-url]: https://crates.io/crates/lintel-config
-[docs-badge]: https://docs.rs/lintel-config/badge.svg
-[docs-url]: https://docs.rs/lintel-config
-[license-badge]: https://img.shields.io/crates/l/lintel-config.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-config.svg)](https://crates.io/crates/lintel-config)
+[![docs.rs](https://docs.rs/lintel-config/badge.svg)](https://docs.rs/lintel-config)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-config.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel). Defines the `lintel.toml` schema, parses config files, and provides utilities for schema URI rewriting and path resolution.
 
@@ -24,10 +18,11 @@ Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel)
 ## Usage
 
 ```rust
-use lintel_config::{Config, find_and_load, apply_rewrites, resolve_double_slash};
+use lintel_config::{find_and_load, apply_rewrites, resolve_double_slash};
 
 // Load config by walking up from a directory
-let config = find_and_load(std::path::Path::new("."))?
+let config = find_and_load(std::path::Path::new("."))
+    .unwrap()
     .unwrap_or_default();
 
 // Check for custom schema mappings
@@ -38,6 +33,7 @@ if let Some(url) = config.find_schema_mapping("src/config.json", "config.json") 
 // Apply rewrite rules and resolve // paths
 let uri = apply_rewrites("http://localhost:8000/schema.json", &config.rewrite);
 let uri = resolve_double_slash(&uri, std::path::Path::new("/project"));
+drop(uri);
 ```
 
 ### Standalone binary
@@ -47,3 +43,7 @@ cargo run -p lintel-config
 ```
 
 Prints the JSON Schema for `lintel.toml` to stdout.
+
+## License
+
+Apache-2.0

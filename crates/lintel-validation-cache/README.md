@@ -1,15 +1,9 @@
 # lintel-validation-cache
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-validation-cache.svg
-[crates-url]: https://crates.io/crates/lintel-validation-cache
-[docs-badge]: https://docs.rs/lintel-validation-cache/badge.svg
-[docs-url]: https://docs.rs/lintel-validation-cache
-[license-badge]: https://img.shields.io/crates/l/lintel-validation-cache.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-validation-cache.svg)](https://crates.io/crates/lintel-validation-cache)
+[![docs.rs](https://docs.rs/lintel-validation-cache/badge.svg)](https://docs.rs/lintel-validation-cache)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-validation-cache.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Disk-backed cache for JSON Schema validation results. Caches the outcome of validating a file against a schema so that unchanged files can skip re-validation on subsequent runs.
 
@@ -22,15 +16,19 @@ Each cache entry is keyed by a SHA-256 digest of the file contents and schema UR
 ## Usage
 
 ```rust
-use lintel_validation_cache::ValidationCache;
+use lintel_validation_cache::{ValidationCache, schema_hash, ensure_cache_dir};
 
-let cache = ValidationCache::new(Some(cache_dir)).await?;
+let cache = ValidationCache::new(ensure_cache_dir(), false);
 
-// Check if a result is cached
-if let Some(result) = cache.get(&file_hash, &schema_uri).await? {
-    // Use cached result
-}
+// Compute a schema hash once per schema group
+let schema = serde_json::json!({"type": "object"});
+let hash = schema_hash(&schema);
 
-// Store a new result
-cache.set(&file_hash, &schema_uri, &result).await?;
+// Cache key = SHA-256(file_content + schema_hash + validate_formats)
+let key = ValidationCache::cache_key("file contents", &hash, true);
+drop(key);
 ```
+
+## License
+
+Apache-2.0

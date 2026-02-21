@@ -15,6 +15,10 @@
     cargo run -p lintel -- "$@"
   '';
 
+  scripts.cargo-furnish.exec = ''
+    cargo run --release -p cargo-furnish -- "$@"
+  '';
+
   git-hooks.hooks = {
     clippy = {
       enable = true;

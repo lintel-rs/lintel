@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![allow(unused_assignments)] // thiserror/miette derive macros trigger false positives
 
 extern crate alloc;
