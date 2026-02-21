@@ -23,6 +23,6 @@ jobs:
         with:
           name: lintel
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - run: nix build
+      - run: nix build .#all
       - run: nix flake check
       - run: nix run . -- version

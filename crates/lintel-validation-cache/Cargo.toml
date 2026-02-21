@@ -1,6 +1,6 @@
 [package]
 name = "lintel-validation-cache"
-version = "0.0.4"
+version = "0.0.5"
 edition.workspace = true
 authors.workspace = true
 description = "Disk-backed cache for JSON Schema validation results"

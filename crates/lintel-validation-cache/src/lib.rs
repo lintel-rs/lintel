@@ -34,7 +34,7 @@ struct CachedResult {
 
 /// A disk-backed cache for JSON Schema validation results.
 ///
-/// Results are keyed by `SHA-256(file_content + schema_json + validate_formats_byte)`.
+/// Results are keyed by `SHA-256(crate_version + file_content + schema_json + validate_formats_byte)`.
 /// Cache files are stored as `<cache_dir>/<sha256-hex>.json`.
 #[derive(Clone)]
 pub struct ValidationCache {
@@ -112,8 +112,12 @@ impl ValidationCache {
     }
 
     /// Compute the SHA-256 cache key from file content, a pre-computed schema hash, and format flag.
+    ///
+    /// The crate version is included in the hash so that upgrading lintel
+    /// automatically invalidates stale cache entries.
     pub fn cache_key(file_content: &str, schema_hash: &str, validate_formats: bool) -> String {
         let mut hasher = Sha256::new();
+        hasher.update(env!("CARGO_PKG_VERSION").as_bytes());
         hasher.update(file_content.as_bytes());
         hasher.update(schema_hash.as_bytes());
         hasher.update([u8::from(validate_formats)]);
