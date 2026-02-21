@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 extern crate alloc;
 
 use alloc::sync::Arc;

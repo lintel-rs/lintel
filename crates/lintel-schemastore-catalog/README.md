@@ -1,15 +1,9 @@
 # lintel-schemastore-catalog
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-schemastore-catalog.svg
-[crates-url]: https://crates.io/crates/lintel-schemastore-catalog
-[docs-badge]: https://docs.rs/lintel-schemastore-catalog/badge.svg
-[docs-url]: https://docs.rs/lintel-schemastore-catalog
-[license-badge]: https://img.shields.io/crates/l/lintel-schemastore-catalog.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-schemastore-catalog.svg)](https://crates.io/crates/lintel-schemastore-catalog)
+[![docs.rs](https://docs.rs/lintel-schemastore-catalog/badge.svg)](https://docs.rs/lintel-schemastore-catalog)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-schemastore-catalog.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 CLI tool that mirrors the entire [SchemaStore](https://www.schemastore.org/) catalog (catalog index + all schema files) into a git repo, keeping it up to date via CI.
 
@@ -34,7 +28,7 @@ lintel-schemastore-catalog version
 
 ### `generate`
 
-Fetch the SchemaStore catalog and download all schemas to a local directory.
+Fetch the `SchemaStore` catalog and download all schemas to a local directory.
 
 ```sh
 lintel-schemastore-catalog generate -o /tmp/catalog
@@ -68,3 +62,7 @@ schemas/
   releasaurus-config.json
   ...
 ```
+
+## License
+
+Apache-2.0

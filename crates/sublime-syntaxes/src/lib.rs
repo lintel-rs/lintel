@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use syntect::parsing::SyntaxSet;
 
 const SYNTAX_SET_BINARY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/syntaxes.bin"));
