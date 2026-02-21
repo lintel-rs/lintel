@@ -85,7 +85,7 @@ pub(crate) fn highlight_code_block(code: &str, lang: &str, width: Option<usize>)
                     let padding = term_width.saturating_sub(visible_width(highlighted));
                     out.push_str(bg_code);
                     out.push_str(highlighted);
-                    out.extend(std::iter::repeat_n(' ', padding));
+                    out.extend(core::iter::repeat_n(' ', padding));
                 } else {
                     out.push_str(highlighted);
                 }

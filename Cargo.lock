@@ -1273,11 +1273,8 @@ dependencies = [
  "glob-match",
  "humantime",
  "lintel-check",
- "rayon",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "tracing-tree",
 ]
 
 [[package]]
@@ -1331,7 +1328,6 @@ dependencies = [
  "miette",
  "rayon",
  "schemastore",
- "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",
@@ -1411,7 +1407,6 @@ dependencies = [
  "futures",
  "reqwest 0.12.28",
  "schemastore",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",
