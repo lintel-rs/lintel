@@ -3,11 +3,17 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use schema_catalog::{Catalog, SchemaEntry};
 
-/// Build an output catalog from a list of schema entries.
-pub fn build_output_catalog(entries: Vec<SchemaEntry>) -> Catalog {
+/// Build an output catalog from a list of schema entries and optional groups.
+pub fn build_output_catalog(
+    title: Option<String>,
+    entries: Vec<SchemaEntry>,
+    groups: Vec<schema_catalog::CatalogGroup>,
+) -> Catalog {
     Catalog {
         version: 1,
+        title,
         schemas: entries,
+        groups,
     }
 }
 
@@ -19,7 +25,7 @@ pub async fn write_catalog_json(output_dir: &Path, catalog: &Catalog) -> Result<
     let mut value =
         serde_json::to_value(catalog).context("failed to serialize catalog to JSON value")?;
     if let Some(obj) = value.as_object_mut() {
-        // Insert $schema at the beginning by rebuilding the map
+        // Rebuild map with preferred key order: $schema, version, title, ...
         let mut ordered = serde_json::Map::new();
         ordered.insert(
             "$schema".to_string(),
@@ -27,6 +33,12 @@ pub async fn write_catalog_json(output_dir: &Path, catalog: &Catalog) -> Result<
                 "https://json.schemastore.org/schema-catalog.json".to_string(),
             ),
         );
+        let priority_keys = ["version", "title"];
+        for key in priority_keys {
+            if let Some(v) = obj.remove(key) {
+                ordered.insert(key.to_string(), v);
+            }
+        }
         for (k, v) in obj.iter() {
             ordered.insert(k.clone(), v.clone());
         }
@@ -49,21 +61,27 @@ mod tests {
 
     #[test]
     fn build_output_catalog_sets_version() {
-        let catalog = build_output_catalog(vec![]);
+        let catalog = build_output_catalog(None, vec![], vec![]);
         assert_eq!(catalog.version, 1);
+        assert!(catalog.title.is_none());
         assert!(catalog.schemas.is_empty());
+        assert!(catalog.groups.is_empty());
     }
 
     #[tokio::test]
     async fn write_catalog_json_includes_schema_field() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let catalog = build_output_catalog(vec![SchemaEntry {
-            name: "Test".into(),
-            description: "A test".into(),
-            url: "https://example.com/test.json".into(),
-            file_match: vec!["*.test".into()],
-            versions: BTreeMap::new(),
-        }]);
+        let catalog = build_output_catalog(
+            None,
+            vec![SchemaEntry {
+                name: "Test".into(),
+                description: "A test".into(),
+                url: "https://example.com/test.json".into(),
+                file_match: vec!["*.test".into()],
+                versions: BTreeMap::new(),
+            }],
+            vec![],
+        );
         write_catalog_json(dir.path(), &catalog).await?;
 
         let content = tokio::fs::read_to_string(dir.path().join("catalog.json")).await?;

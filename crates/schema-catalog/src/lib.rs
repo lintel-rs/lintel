@@ -9,7 +9,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     pub schemas: Vec<SchemaEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<CatalogGroup>,
+}
+
+/// A group of related schemas in the catalog.
+///
+/// Groups provide richer metadata for catalog consumers that support them.
+/// Consumers that don't understand `groups` simply ignore the field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogGroup {
+    pub name: String,
+    pub description: String,
+    /// Schema names that belong to this group.
+    pub schemas: Vec<String>,
 }
 
 /// A single schema entry in the catalog.
@@ -50,6 +66,7 @@ mod tests {
     fn round_trip_catalog() {
         let catalog = Catalog {
             version: 1,
+            title: None,
             schemas: vec![SchemaEntry {
                 name: "Test Schema".into(),
                 description: "A test schema".into(),
@@ -57,6 +74,7 @@ mod tests {
                 file_match: vec!["*.test.json".into()],
                 versions: BTreeMap::new(),
             }],
+            groups: vec![],
         };
         let json = serde_json::to_string_pretty(&catalog).expect("serialize");
         let parsed: Catalog = serde_json::from_str(&json).expect("deserialize");

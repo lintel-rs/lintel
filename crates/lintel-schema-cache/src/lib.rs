@@ -26,6 +26,14 @@ pub enum CacheStatus {
     Disabled,
 }
 
+/// Response from a conditional HTTP request.
+pub struct ConditionalResponse {
+    /// Response body. `None` indicates a 304 Not Modified response.
+    pub body: Option<String>,
+    /// `ETag` header from the response, if present.
+    pub etag: Option<String>,
+}
+
 /// Trait for fetching content over HTTP.
 #[async_trait::async_trait]
 pub trait HttpClient: Clone + Send + Sync + 'static {
@@ -33,6 +41,28 @@ pub trait HttpClient: Clone + Send + Sync + 'static {
     ///
     /// Returns an error if the HTTP request fails or the response cannot be read.
     async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>>;
+
+    /// Fetch with conditional request support.
+    ///
+    /// If `etag` is `Some`, sends an `If-None-Match` header. Returns
+    /// `body: None` on 304 Not Modified.
+    ///
+    /// The default implementation ignores the `ETag` and delegates to [`get`](Self::get).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot be read.
+    async fn get_conditional(
+        &self,
+        uri: &str,
+        _etag: Option<&str>,
+    ) -> Result<ConditionalResponse, Box<dyn Error + Send + Sync>> {
+        let body = self.get(uri).await?;
+        Ok(ConditionalResponse {
+            body: Some(body),
+            etag: None,
+        })
+    }
 }
 
 /// Default HTTP client using reqwest.
@@ -50,6 +80,35 @@ impl HttpClient for ReqwestClient {
     async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
         let resp = self.0.get(uri).send().await?.error_for_status()?;
         Ok(resp.text().await?)
+    }
+
+    async fn get_conditional(
+        &self,
+        uri: &str,
+        etag: Option<&str>,
+    ) -> Result<ConditionalResponse, Box<dyn Error + Send + Sync>> {
+        let mut req = self.0.get(uri);
+        if let Some(etag) = etag {
+            req = req.header("If-None-Match", etag);
+        }
+        let resp = req.send().await?;
+        if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(ConditionalResponse {
+                body: None,
+                etag: None,
+            });
+        }
+        let resp = resp.error_for_status()?;
+        let etag = resp
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from);
+        let body = resp.text().await?;
+        Ok(ConditionalResponse {
+            body: Some(body),
+            etag,
+        })
     }
 }
 
@@ -117,28 +176,70 @@ impl<C: HttpClient> SchemaCache<C> {
         }
 
         // Check disk cache (unless skip_read is set)
-        if !self.skip_read
-            && let Some(ref cache_dir) = self.cache_dir
-        {
+        let mut stored_etag: Option<String> = None;
+        let mut cached_content: Option<String> = None;
+
+        if let Some(ref cache_dir) = self.cache_dir {
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
-            if cache_path.exists()
-                && !self.is_expired(&cache_path)
-                && let Ok(content) = tokio::fs::read_to_string(&cache_path).await
-                && let Ok(value) = serde_json::from_str::<Value>(&content)
-            {
+            let etag_path = cache_dir.join(format!("{hash}.etag"));
+
+            if cache_path.exists() {
+                if !self.skip_read && !self.is_expired(&cache_path) {
+                    // Fresh cache — return immediately
+                    if let Ok(content) = tokio::fs::read_to_string(&cache_path).await
+                        && let Ok(value) = serde_json::from_str::<Value>(&content)
+                    {
+                        self.memory_cache
+                            .lock()
+                            .expect("memory cache poisoned")
+                            .insert(uri.to_string(), value.clone());
+                        tracing::Span::current().record("status", "cache_hit");
+                        return Ok((value, CacheStatus::Hit));
+                    }
+                }
+
+                // Stale or skip_read — read ETag for conditional fetch
+                if let Ok(etag) = tokio::fs::read_to_string(&etag_path).await {
+                    stored_etag = Some(etag);
+                }
+                // Keep cached content for 304 fallback
+                if let Ok(content) = tokio::fs::read_to_string(&cache_path).await {
+                    cached_content = Some(content);
+                }
+            }
+        }
+
+        // Conditional network fetch
+        tracing::Span::current().record("status", "network_fetch");
+        let conditional = self
+            .client
+            .get_conditional(uri, stored_etag.as_deref())
+            .await?;
+
+        if conditional.body.is_none() {
+            // 304 Not Modified — use cached content
+            if let Some(content) = cached_content {
+                let value: Value = serde_json::from_str(&content)?;
                 self.memory_cache
                     .lock()
                     .expect("memory cache poisoned")
                     .insert(uri.to_string(), value.clone());
-                tracing::Span::current().record("status", "cache_hit");
+
+                // Touch the cache file to reset TTL
+                if let Some(ref cache_dir) = self.cache_dir {
+                    let hash = Self::hash_uri(uri);
+                    let cache_path = cache_dir.join(format!("{hash}.json"));
+                    let now = filetime::FileTime::now();
+                    let _ = filetime::set_file_mtime(&cache_path, now);
+                }
+
+                tracing::Span::current().record("status", "etag_hit");
                 return Ok((value, CacheStatus::Hit));
             }
         }
 
-        // Fetch from network
-        tracing::Span::current().record("status", "network_fetch");
-        let body = self.client.get(uri).await?;
+        let body = conditional.body.expect("non-304 response must have a body");
         let value: Value = serde_json::from_str(&body)?;
 
         // Populate in-memory cache
@@ -150,12 +251,17 @@ impl<C: HttpClient> SchemaCache<C> {
         let status = if let Some(ref cache_dir) = self.cache_dir {
             let hash = Self::hash_uri(uri);
             let cache_path = cache_dir.join(format!("{hash}.json"));
+            let etag_path = cache_dir.join(format!("{hash}.etag"));
             if let Err(e) = tokio::fs::write(&cache_path, &body).await {
                 tracing::warn!(
                     path = %cache_path.display(),
                     error = %e,
                     "failed to write schema to disk cache"
                 );
+            }
+            // Write ETag if present
+            if let Some(etag) = conditional.etag {
+                let _ = tokio::fs::write(&etag_path, &etag).await;
             }
             CacheStatus::Miss
         } else {

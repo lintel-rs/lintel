@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use lintel_schema_cache::{HttpClient, SchemaCache};
 use tracing::{debug, warn};
 
 /// Recursively scan a JSON value for `$ref` strings that are absolute HTTP(S) URLs.
@@ -124,8 +125,8 @@ pub fn rewrite_refs(value: &mut serde_json::Value, url_map: &HashMap<String, Str
 ///
 /// Filenames in `_shared/` are disambiguated with numeric suffixes when
 /// different URLs produce the same last path segment.
-pub async fn resolve_and_rewrite(
-    client: &reqwest::Client,
+pub async fn resolve_and_rewrite<C: HttpClient>(
+    cache: &SchemaCache<C>,
     schema_text: &str,
     schema_dest: &Path,
     shared_dir: &Path,
@@ -169,7 +170,7 @@ pub async fn resolve_and_rewrite(
         let filename = unique_filename_in(shared_dir, &base_filename);
         let dest_path = shared_dir.join(&filename);
 
-        match crate::download::download_one(client, ref_url, &dest_path).await {
+        match crate::download::download_one(cache, ref_url, &dest_path).await {
             Ok(dep_text) => {
                 already_downloaded.insert(ref_url.clone(), filename.clone());
                 let local_url = format!("{}/{filename}", base_url_for_shared.trim_end_matches('/'));
@@ -191,7 +192,7 @@ pub async fn resolve_and_rewrite(
     for (_dep_url, dep_text, dep_filename) in to_process {
         let dep_dest = shared_dir.join(&dep_filename);
         Box::pin(resolve_and_rewrite(
-            client,
+            cache,
             &dep_text,
             &dep_dest,
             shared_dir,

@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use futures::stream::{self, StreamExt};
+use lintel_schema_cache::{HttpClient, SchemaCache};
 use tracing::{debug, warn};
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this
@@ -15,29 +16,21 @@ pub struct DownloadItem {
     pub dest: std::path::PathBuf,
 }
 
-/// Download a single schema, validate it is parseable JSON, and write to disk.
-/// Returns the JSON text on success (needed for `$ref` scanning).
+/// Download a single schema via the cache, validate it is parseable JSON, and
+/// write to disk. Returns the JSON text on success (needed for `$ref` scanning).
 ///
-/// Schemas whose `Content-Length` exceeds [`MAX_SCHEMA_SIZE`] are skipped so
+/// Schemas whose serialized output exceeds [`MAX_SCHEMA_SIZE`] are skipped so
 /// that very large files don't bloat the output.
-pub async fn download_one(client: &reqwest::Client, url: &str, path: &Path) -> Result<String> {
+pub async fn download_one<C: HttpClient>(
+    cache: &SchemaCache<C>,
+    url: &str,
+    path: &Path,
+) -> Result<String> {
     debug!(url = %url, "fetching schema");
-    let resp = client.get(url).send().await?.error_for_status()?;
+    let (value, _status) = cache.fetch(url).await.map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    // Check Content-Length before reading the body.
-    if let Some(len) = resp.content_length()
-        && len > MAX_SCHEMA_SIZE
-    {
-        anyhow::bail!(
-            "schema too large ({} MiB, limit {} MiB)",
-            len / (1024 * 1024),
-            MAX_SCHEMA_SIZE / (1024 * 1024),
-        );
-    }
+    let text = serde_json::to_string_pretty(&value)?;
 
-    let text = resp.text().await?;
-
-    // Guard against servers that omit Content-Length.
     if text.len() as u64 > MAX_SCHEMA_SIZE {
         anyhow::bail!(
             "schema too large ({} MiB, limit {} MiB)",
@@ -45,10 +38,6 @@ pub async fn download_one(client: &reqwest::Client, url: &str, path: &Path) -> R
             MAX_SCHEMA_SIZE / (1024 * 1024),
         );
     }
-
-    // Validate that the response is valid JSON
-    let _: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| anyhow::anyhow!("response from {url} is not valid JSON: {e}"))?;
 
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -59,19 +48,19 @@ pub async fn download_one(client: &reqwest::Client, url: &str, path: &Path) -> R
 
 /// Download a batch of items concurrently. Returns the set of URLs that were
 /// successfully downloaded. Failed downloads are logged as warnings and skipped.
-pub async fn download_batch(
-    client: &reqwest::Client,
+pub async fn download_batch<C: HttpClient>(
+    cache: &SchemaCache<C>,
     items: &[DownloadItem],
     concurrency: usize,
 ) -> Result<HashSet<String>> {
     let total = items.len();
     let downloaded: HashSet<String> = stream::iter(items.iter().enumerate())
         .map(|(i, item)| {
-            let client = client.clone();
+            let cache = cache.clone();
             let url = item.url.clone();
             let dest = item.dest.clone();
             async move {
-                match download_one(&client, &url, &dest).await {
+                match download_one(&cache, &url, &dest).await {
                     Ok(_text) => {
                         debug!(url = %url, progress = format!("{}/{total}", i + 1), "downloaded");
                         Some(url)
