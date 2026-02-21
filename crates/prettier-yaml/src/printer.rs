@@ -641,7 +641,15 @@ fn format_multiline_quoted_wrap(
             output_quoted_wrap_segment(rest, output, indent, print_width, false);
             continue;
         }
-        output_quoted_wrap_segment(segment, output, indent, print_width, is_first_segment);
+        // If any line in this segment ends with `\` (backslash continuation),
+        // preserve the segment's line structure instead of word-wrapping it,
+        // since wrapping would break the escape continuation syntax.
+        let has_continuation = segment.iter().any(|l| l.trim_end().ends_with('\\'));
+        if has_continuation {
+            output_quoted_preserve_segment(segment, output, indent, is_first_segment);
+        } else {
+            output_quoted_wrap_segment(segment, output, indent, print_width, is_first_segment);
+        }
     }
     if closing_on_own_line {
         output.push('\n');
@@ -699,6 +707,29 @@ fn output_quoted_wrap_segment(
     // Trailing space if original segment ended with one
     if segment.last().is_some_and(|l| l.ends_with(' ')) {
         output.push(' ');
+    }
+}
+
+/// Preserve a segment's line structure (used for `\` continuation lines).
+fn output_quoted_preserve_segment(
+    segment: &[&str],
+    output: &mut String,
+    indent: &str,
+    is_first_in_output: bool,
+) {
+    for (i, line) in segment.iter().enumerate() {
+        if i == 0 && is_first_in_output {
+            output.push_str(line);
+        } else if i == 0 {
+            output.push_str(indent);
+            output.push_str(line);
+        } else {
+            output.push('\n');
+            if !line.is_empty() {
+                output.push_str(indent);
+            }
+            output.push_str(line);
+        }
     }
 }
 

@@ -876,16 +876,33 @@ impl<'a> AstBuilder<'a> {
                 None
             };
 
-            let key_trailing_comment = if value_start_line > key_end_line {
-                // For explicit keys, skip the colon line when looking for
-                // key trailing comments.
-                if explicit_colon_line == Some(key_end_line) {
-                    None
-                } else {
-                    self.find_trailing_comment(key_end_line).map(|c| c.text)
+            let key_trailing_comment = match value_start_line.cmp(&key_end_line) {
+                core::cmp::Ordering::Greater => {
+                    // For explicit keys, skip the colon line when looking for
+                    // key trailing comments.
+                    if explicit_colon_line == Some(key_end_line) {
+                        None
+                    } else {
+                        self.find_trailing_comment(key_end_line).map(|c| c.text)
+                    }
                 }
-            } else {
-                None
+                core::cmp::Ordering::Equal => {
+                    // Same line — collect trailing comment only when value is a
+                    // flow collection (e.g. `key: [    # comment`).  Prettier
+                    // renders this as `key: # comment\n  [...]`.
+                    let is_flow_value = self.peek().is_some_and(|(event, span)| {
+                        (matches!(event, Event::SequenceStart(..))
+                            && self.is_flow_sequence_at(span))
+                            || (matches!(event, Event::MappingStart(..))
+                                && self.is_flow_mapping_at(span))
+                    });
+                    if is_flow_value {
+                        self.find_trailing_comment(key_end_line).map(|c| c.text)
+                    } else {
+                        None
+                    }
+                }
+                core::cmp::Ordering::Less => None,
             };
             // Check if the value is an implicit null. Saphyr reports implicit
             // null positions at the NEXT token, which can be far away (e.g. a
