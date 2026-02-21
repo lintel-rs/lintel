@@ -229,7 +229,7 @@ async fn validate_config(
                 span: offset.into(),
                 path: path_str.clone(),
                 instance_path: ip,
-                message: error.to_string(),
+                message: truncate_error_value(error.to_string()),
             }));
         }
         let cf = CheckedFile {
@@ -543,6 +543,39 @@ fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     }
 }
 
+/// Truncate the value portion of error messages like
+/// `{very long json} is not valid under any of the schemas listed in the 'anyOf' keyword`
+/// so the text before the "is not valid" suffix is at most 256 characters,
+/// keeping both the start and end of the value for context.
+fn truncate_error_value(msg: String) -> String {
+    const MAX_VALUE_LEN: usize = 256;
+    const ELLIPSIS: &str = " ... ";
+    const SUFFIX: &str = " is not valid under any of the schemas listed in the '";
+
+    if let Some(pos) = msg.find(SUFFIX)
+        && pos > MAX_VALUE_LEN
+    {
+        let value: &str = &msg[..pos];
+        let tail = &msg[pos..];
+        let keep = MAX_VALUE_LEN - ELLIPSIS.len(); // 251
+        let head_len = keep / 2; // 125
+        let end_len = keep - head_len; // 126
+
+        // Find char boundaries for head and end portions
+        let head: String = value.chars().take(head_len).collect();
+        let end: String = value
+            .chars()
+            .rev()
+            .take(end_len)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        return format!("{head}{ELLIPSIS}{end}{tail}");
+    }
+    msg
+}
+
 /// Convert `(instance_path, message)` pairs into `LintError::Validation` diagnostics.
 fn push_error_pairs(
     pf: &ParsedFile,
@@ -581,7 +614,12 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
         let pf = item.borrow();
         let file_errors: Vec<(String, String)> = validator
             .iter_errors(&pf.instance)
-            .map(|error| (error.instance_path().to_string(), error.to_string()))
+            .map(|error| {
+                (
+                    error.instance_path().to_string(),
+                    truncate_error_value(error.to_string()),
+                )
+            })
             .collect();
 
         vcache
@@ -1908,5 +1946,64 @@ validate_formats = false
             "expected at least one validation cache hit on second run"
         );
         Ok(())
+    }
+
+    // --- truncate_error_value ---
+
+    #[test]
+    fn truncate_short_anyof_message_unchanged() {
+        let msg =
+            r#"{"type":"bad"} is not valid under any of the schemas listed in the 'anyOf' keyword"#;
+        assert_eq!(truncate_error_value(msg.to_string()), msg);
+    }
+
+    #[test]
+    fn truncate_long_anyof_message() {
+        let long_value = "x".repeat(300);
+        let suffix =
+            " is not valid under any of the schemas listed in the 'anyOf' keyword (at /foo)";
+        let msg = format!("{long_value}{suffix}");
+        let result = truncate_error_value(msg);
+        assert!(result.contains(" ... "));
+        assert!(result.ends_with(suffix));
+        // Start of value is preserved
+        assert!(result.starts_with("xxxxx"));
+        // End of value is preserved
+        assert!(result.contains(&format!("xxxxx{suffix}")));
+        // Total value portion (before suffix) should be 256 chars
+        let value_part = &result[..result.find(suffix).expect("suffix must be present")];
+        assert_eq!(value_part.len(), 256);
+    }
+
+    #[test]
+    fn truncate_long_oneof_message() {
+        let long_value = "y".repeat(400);
+        let suffix = " is not valid under any of the schemas listed in the 'oneOf' keyword";
+        let msg = format!("{long_value}{suffix}");
+        let result = truncate_error_value(msg);
+        assert!(result.contains(" ... "));
+        assert!(result.ends_with(suffix));
+        assert!(result.starts_with("yyyyy"));
+    }
+
+    #[test]
+    fn truncate_shows_head_and_tail() {
+        // Use distinct chars so we can verify both ends are kept
+        let head = "H".repeat(200);
+        let tail = "T".repeat(200);
+        let value = format!("{head}{tail}");
+        let suffix = " is not valid under any of the schemas listed in the 'anyOf' keyword";
+        let msg = format!("{value}{suffix}");
+        let result = truncate_error_value(msg);
+        // Head portion preserved
+        assert!(result.starts_with("HHHHH"));
+        // Tail portion preserved before the suffix
+        assert!(result.contains(&format!("TTTTT{suffix}")));
+    }
+
+    #[test]
+    fn truncate_unrelated_message_unchanged() {
+        let msg = "\"name\" is a required property (at /foo)";
+        assert_eq!(truncate_error_value(msg.to_string()), msg);
     }
 }
