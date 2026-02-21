@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.4...lintel-check-v0.0.5) - 2026-02-21
+
+### Added
+
+- show schema URL in validation error labels
+- improve validation error messages with schema path context
+- add `lintel cache` command and migrate file reads to tokio
+
+### Fixed
+
+- truncate long values in anyOf/oneOf validation error messages
+- isolate test schema cache to temp dirs to prevent cache corruption
+- point root-level validation errors at content, not modeline comments
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into error-check
+- consolidate diagnostics into single LintError enum with error codes
+- Merge remote-tracking branch 'origin/master' into clippy-lint
+- deny std_instead_of_alloc and std_instead_of_core clippy lints
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.3...lintel-check-v0.0.4) - 2026-02-20
 
 ### Other
