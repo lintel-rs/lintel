@@ -1,12 +1,19 @@
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::{cargo_toml, doc_injection, readme, workspace};
 
+const GREEN: &str = "\x1b[1;32m";
+const RED: &str = "\x1b[1;31m";
+const BOLD: &str = "\x1b[1m";
+const RESET: &str = "\x1b[0m";
+
 pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     let start = Instant::now();
     let mut total_diagnostics: usize = 0;
     let crate_count = crate_dirs.len();
+    let color = std::io::stderr().is_terminal();
 
     for crate_dir in crate_dirs {
         let (meta, cargo_diags) = match cargo_toml::check_cargo_toml(crate_dir, ws) {
@@ -39,20 +46,29 @@ pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     }
 
     let elapsed = start.elapsed();
+    let cs = if crate_count == 1 { "" } else { "s" };
 
     if total_diagnostics > 0 {
-        eprintln!(
-            "\nchecked {crate_count} crate{} in {elapsed:.0?}: found {total_diagnostics} issue{}.",
-            if crate_count == 1 { "" } else { "s" },
-            if total_diagnostics == 1 { "" } else { "s" },
-        );
+        let is = if total_diagnostics == 1 { "" } else { "s" };
+        if color {
+            eprintln!(
+                "\n{RED}Checked{RESET} {crate_count} crate{cs} in {elapsed:.0?}: {BOLD}{total_diagnostics} issue{is}{RESET}."
+            );
+        } else {
+            eprintln!(
+                "\nChecked {crate_count} crate{cs} in {elapsed:.0?}: {total_diagnostics} issue{is}."
+            );
+        }
         std::process::exit(1);
     }
 
-    eprintln!(
-        "checked {crate_count} crate{} in {elapsed:.0?}: no issues found.",
-        if crate_count == 1 { "" } else { "s" },
-    );
+    if color {
+        eprintln!(
+            "{GREEN}Checked{RESET} {crate_count} crate{cs} in {elapsed:.0?}: no issues found."
+        );
+    } else {
+        eprintln!("Checked {crate_count} crate{cs} in {elapsed:.0?}: no issues found.");
+    }
 }
 
 pub fn run_fix(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
