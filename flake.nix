@@ -25,10 +25,13 @@
           let
             inherit (pkgs) lib;
             testdataFilter = path: _type: (lib.hasInfix "testdata" path);
+            readmeFilter = path: _type: (builtins.match ".*README\\.md$" path) != null;
           in
           lib.cleanSourceWith {
             src = ./.;
-            filter = path: type: (craneLib.filterCargoSources path type) || (testdataFilter path type);
+            filter =
+              path: type:
+              (craneLib.filterCargoSources path type) || (testdataFilter path type) || (readmeFilter path type);
           };
 
         packages' = import ./nix/packages.nix { inherit craneLib pkgs src; };
