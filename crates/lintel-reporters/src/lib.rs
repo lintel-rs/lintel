@@ -1,7 +1,8 @@
 pub mod reporter;
 pub mod reporters;
 
-use std::time::{Duration, Instant};
+use core::time::Duration;
+use std::time::Instant;
 
 use anyhow::Result;
 use bpaf::{Bpaf, Parser};
@@ -163,7 +164,7 @@ pub fn merge_config(args: &mut ValidateArgs) {
     match cfg_result {
         Ok(cfg) => {
             // Config excludes first, then CLI excludes.
-            let cli_excludes = std::mem::take(&mut args.exclude);
+            let cli_excludes = core::mem::take(&mut args.exclude);
             args.exclude = cfg.exclude;
             args.exclude.extend(cli_excludes);
         }

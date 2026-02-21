@@ -2,6 +2,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use bpaf::Bpaf;
 use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
@@ -10,7 +11,53 @@ use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
 use lintel_check::validate;
 use schemastore::SchemaMatch;
 
-use crate::IdentifyArgs;
+// ---------------------------------------------------------------------------
+// CLI args
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Bpaf)]
+#[bpaf(generate(identify_args_inner))]
+#[allow(clippy::struct_excessive_bools)]
+pub struct IdentifyArgs {
+    /// Show detailed schema documentation
+    #[bpaf(long("explain"), switch)]
+    pub explain: bool,
+
+    #[bpaf(long("no-catalog"), switch)]
+    pub no_catalog: bool,
+
+    #[bpaf(long("cache-dir"), argument("DIR"))]
+    pub cache_dir: Option<String>,
+
+    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
+    #[bpaf(long("schema-cache-ttl"), argument("DURATION"))]
+    pub schema_cache_ttl: Option<String>,
+
+    /// Bypass schema cache reads (still writes fetched schemas to cache)
+    #[bpaf(long("force-schema-fetch"), switch)]
+    pub force_schema_fetch: bool,
+
+    /// Disable syntax highlighting in code blocks
+    #[bpaf(long("no-syntax-highlighting"), switch)]
+    pub no_syntax_highlighting: bool,
+
+    /// Print output directly instead of piping through a pager
+    #[bpaf(long("no-pager"), switch)]
+    pub no_pager: bool,
+
+    /// File to identify
+    #[bpaf(positional("FILE"))]
+    pub file: String,
+}
+
+/// Construct the bpaf parser for `IdentifyArgs`.
+pub fn identify_args() -> impl bpaf::Parser<IdentifyArgs> {
+    identify_args_inner()
+}
+
+// ---------------------------------------------------------------------------
+// Internal types
+// ---------------------------------------------------------------------------
 
 /// The source that resolved the schema URI for a file.
 #[derive(Debug)]
@@ -20,8 +67,8 @@ enum SchemaSource {
     Catalog,
 }
 
-impl std::fmt::Display for SchemaSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SchemaSource {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SchemaSource::Inline => write!(f, "inline"),
             SchemaSource::Config => write!(f, "config"),
@@ -59,7 +106,15 @@ impl<'a> From<SchemaMatch<'a>> for CatalogMatchInfo<'a> {
     }
 }
 
-#[allow(clippy::too_many_lines)]
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+#[allow(
+    clippy::too_many_lines,
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc
+)]
 pub async fn run<C: HttpClient>(
     args: IdentifyArgs,
     global: &CLIGlobalOptions,
@@ -282,7 +337,7 @@ fn pipe_to_pager(content: &str) {
             let _ = child.wait();
         }
         Err(_) => {
-            // Pager unavailable — print directly
+            // Pager unavailable -- print directly
             print!("{content}");
         }
     }
@@ -317,4 +372,76 @@ fn parse_file(
     eprintln!("{path_str}");
     eprintln!("  no schema found (unrecognized format)");
     std::process::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use bpaf::Parser;
+    use lintel_cli_common::cli_global_options;
+
+    // Helper to build the CLI parser matching the binary's structure.
+    fn test_cli() -> bpaf::OptionParser<(CLIGlobalOptions, IdentifyArgs)> {
+        bpaf::construct!(cli_global_options(), identify_args())
+            .to_options()
+            .descr("test identify args")
+    }
+
+    #[test]
+    fn cli_parses_identify_basic() -> anyhow::Result<()> {
+        let (_, args) = test_cli()
+            .run_inner(&["file.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        assert_eq!(args.file, "file.json");
+        assert!(!args.explain);
+        assert!(!args.no_catalog);
+        assert!(!args.force_schema_fetch);
+        assert!(args.cache_dir.is_none());
+        assert!(args.schema_cache_ttl.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_explain() -> anyhow::Result<()> {
+        let (_, args) = test_cli()
+            .run_inner(&["file.json", "--explain"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        assert_eq!(args.file, "file.json");
+        assert!(args.explain);
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_no_catalog() -> anyhow::Result<()> {
+        let (_, args) = test_cli()
+            .run_inner(&["--no-catalog", "file.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        assert_eq!(args.file, "file.json");
+        assert!(args.no_catalog);
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_identify_all_options() -> anyhow::Result<()> {
+        let (_, args) = test_cli()
+            .run_inner(&[
+                "--explain",
+                "--no-catalog",
+                "--force-schema-fetch",
+                "--cache-dir",
+                "/tmp/cache",
+                "--schema-cache-ttl",
+                "30m",
+                "tsconfig.json",
+            ])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        assert_eq!(args.file, "tsconfig.json");
+        assert!(args.explain);
+        assert!(args.no_catalog);
+        assert!(args.force_schema_fetch);
+        assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
+        assert_eq!(args.schema_cache_ttl.as_deref(), Some("30m"));
+        Ok(())
+    }
 }

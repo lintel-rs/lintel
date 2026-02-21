@@ -1,11 +1,14 @@
+extern crate alloc;
+
+use alloc::sync::Arc;
+use core::error::Error;
+use core::hash::{Hash, Hasher};
+use core::time::Duration;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::error::Error;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Mutex;
 
 /// Default TTL for cached schemas (12 hours).
 pub const DEFAULT_SCHEMA_CACHE_TTL: Duration = Duration::from_secs(12 * 60 * 60);
@@ -178,7 +181,7 @@ impl<C: HttpClient> SchemaCache<C> {
             .is_some_and(|age| age > ttl)
     }
 
-    fn hash_uri(uri: &str) -> String {
+    pub fn hash_uri(uri: &str) -> String {
         let mut hasher = DefaultHasher::new();
         uri.hash(&mut hasher);
         format!("{:016x}", hasher.finish())
@@ -371,7 +374,7 @@ mod tests {
 
         // Set mtime to 2 seconds ago
         let two_secs_ago = filetime::FileTime::from_system_time(
-            std::time::SystemTime::now() - std::time::Duration::from_secs(2),
+            std::time::SystemTime::now() - core::time::Duration::from_secs(2),
         );
         filetime::set_file_mtime(&cache_path, two_secs_ago)?;
 

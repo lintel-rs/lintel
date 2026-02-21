@@ -1,5 +1,7 @@
 #![allow(unused_assignments)] // thiserror/miette derive macros trigger false positives
 
+extern crate alloc;
+
 pub mod catalog;
 pub use lintel_config as config;
 pub use lintel_validation_cache as validation_cache;

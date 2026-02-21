@@ -81,3 +81,90 @@ impl core::fmt::Display for LogLevel {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use bpaf::Parser;
+
+    fn opts() -> bpaf::OptionParser<CLIGlobalOptions> {
+        cli_global_options().to_options()
+    }
+
+    #[test]
+    fn defaults() {
+        let parsed = opts().run_inner(&[]).unwrap();
+        assert!(!parsed.verbose);
+        assert_eq!(parsed.log_level, LogLevel::None);
+        assert!(parsed.colors.is_none());
+    }
+
+    #[test]
+    fn verbose_short() {
+        let parsed = opts().run_inner(&["-v"]).unwrap();
+        assert!(parsed.verbose);
+    }
+
+    #[test]
+    fn verbose_long() {
+        let parsed = opts().run_inner(&["--verbose"]).unwrap();
+        assert!(parsed.verbose);
+    }
+
+    #[test]
+    fn log_level_debug() {
+        let parsed = opts().run_inner(&["--log-level", "debug"]).unwrap();
+        assert_eq!(parsed.log_level, LogLevel::Debug);
+    }
+
+    #[test]
+    fn log_level_info() {
+        let parsed = opts().run_inner(&["--log-level", "info"]).unwrap();
+        assert_eq!(parsed.log_level, LogLevel::Info);
+    }
+
+    #[test]
+    fn log_level_warn() {
+        let parsed = opts().run_inner(&["--log-level", "warn"]).unwrap();
+        assert_eq!(parsed.log_level, LogLevel::Warn);
+    }
+
+    #[test]
+    fn log_level_error() {
+        let parsed = opts().run_inner(&["--log-level", "error"]).unwrap();
+        assert_eq!(parsed.log_level, LogLevel::Error);
+    }
+
+    #[test]
+    fn log_level_invalid() {
+        assert!(opts().run_inner(&["--log-level", "trace"]).is_err());
+    }
+
+    #[test]
+    fn colors_off() {
+        let parsed = opts().run_inner(&["--colors", "off"]).unwrap();
+        assert_eq!(parsed.colors, Some(ColorsArg::Off));
+    }
+
+    #[test]
+    fn colors_force() {
+        let parsed = opts().run_inner(&["--colors", "force"]).unwrap();
+        assert_eq!(parsed.colors, Some(ColorsArg::Force));
+    }
+
+    #[test]
+    fn colors_invalid() {
+        assert!(opts().run_inner(&["--colors", "auto"]).is_err());
+    }
+
+    #[test]
+    fn combined_flags() {
+        let parsed = opts()
+            .run_inner(&["-v", "--log-level", "debug", "--colors", "force"])
+            .unwrap();
+        assert!(parsed.verbose);
+        assert_eq!(parsed.log_level, LogLevel::Debug);
+        assert_eq!(parsed.colors, Some(ColorsArg::Force));
+    }
+}

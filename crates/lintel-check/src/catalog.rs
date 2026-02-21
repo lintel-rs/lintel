@@ -9,7 +9,7 @@ use crate::retriever::{HttpClient, SchemaCache};
 /// Returns an error if the catalog cannot be fetched or parsed.
 pub async fn fetch_catalog<C: HttpClient>(
     cache: &SchemaCache<C>,
-) -> Result<Catalog, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Catalog, Box<dyn core::error::Error + Send + Sync>> {
     let (value, _status) = cache.fetch(CATALOG_URL).await?;
     let catalog = schemastore::parse_catalog(value)?;
     Ok(catalog)

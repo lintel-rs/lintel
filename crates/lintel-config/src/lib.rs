@@ -139,7 +139,7 @@ impl Config {
 /// Apply rewrite rules to a schema URI. If the URI starts with any key in
 /// `rewrites`, that prefix is replaced with the corresponding value.
 /// The longest matching prefix wins.
-pub fn apply_rewrites<S: ::std::hash::BuildHasher>(
+pub fn apply_rewrites<S: ::core::hash::BuildHasher>(
     uri: &str,
     rewrites: &HashMap<String, String, S>,
 ) -> String {

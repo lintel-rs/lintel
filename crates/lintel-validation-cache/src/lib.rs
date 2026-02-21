@@ -117,7 +117,7 @@ impl ValidationCache {
     }
 
     /// Compute the SHA-256 cache key from file content, a pre-computed schema hash, and format flag.
-    fn cache_key(file_content: &str, schema_hash: &str, validate_formats: bool) -> String {
+    pub fn cache_key(file_content: &str, schema_hash: &str, validate_formats: bool) -> String {
         let mut hasher = Sha256::new();
         hasher.update(file_content.as_bytes());
         hasher.update(schema_hash.as_bytes());

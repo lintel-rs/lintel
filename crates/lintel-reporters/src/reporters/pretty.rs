@@ -1,5 +1,5 @@
+use core::time::Duration;
 use std::io::IsTerminal;
-use std::time::Duration;
 
 use miette::Report;
 
