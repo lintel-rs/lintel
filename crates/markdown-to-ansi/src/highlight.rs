@@ -1,22 +1,15 @@
 use std::sync::LazyLock;
 
 use syntect::highlighting::ThemeSet;
-use syntect::parsing::{SyntaxDefinition, SyntaxSet, SyntaxSetBuilder};
+use syntect::parsing::SyntaxSet;
 
 const RESET: &str = "\x1b[0m";
-const TOML_SYNTAX: &str = include_str!("../syntaxes/toml.sublime-syntax");
 
 static DEFAULTS: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 
 /// Extra syntax set for languages not in syntect's defaults (e.g. TOML).
-static EXTRAS: LazyLock<SyntaxSet> = LazyLock::new(|| {
-    let mut builder = SyntaxSetBuilder::new();
-    builder.add_plain_text_syntax();
-    if let Ok(toml) = SyntaxDefinition::load_from_str(TOML_SYNTAX, true, Some("TOML")) {
-        builder.add(toml);
-    }
-    builder.build()
-});
+/// Precompiled at build time via the `sublime-syntaxes` crate.
+static EXTRAS: LazyLock<SyntaxSet> = LazyLock::new(sublime_syntaxes::extra_syntax_set);
 
 pub(crate) static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
