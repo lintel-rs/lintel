@@ -14,9 +14,9 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.4", path = "../lintel-check" }
-lintel-cli-common = { version = "0.0.1", path = "../lintel-cli-common" }
-schemastore = { version = "0.0.4", path = "../schemastore" }
+lintel-check = { version = "0.0.5", path = "../lintel-check" }
+lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
+schemastore = { version = "0.0.5", path = "../schemastore" }
 jsonschema-explain = { version = "0.1.0", path = "../jsonschema-explain" }
 bpaf = { version = "0.9", features = ["derive"] }
 humantime = "2"

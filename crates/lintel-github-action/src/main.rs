@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use bpaf::Bpaf;
 use serde::Serialize;
 
-use lintel_check::diagnostics::offset_to_line_col;
+use lintel_check::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
 use lintel_check::validate::{self, LintError};
 use lintel_reporters::{ValidateArgs, merge_config, validate_args};
 
@@ -87,16 +87,24 @@ async fn main() -> ExitCode {
 fn error_to_annotation(error: &LintError) -> Annotation {
     let path = error.path().replace('\\', "/");
     let (line, _col) = match error {
-        LintError::Parse(d) => offset_to_line_col(d.src.inner(), d.span.offset()),
-        LintError::Validation(d) => offset_to_line_col(d.src.inner(), d.span.offset()),
-        LintError::File(_) => (1, 1),
+        LintError::Parse { src, span, .. }
+        | LintError::Validation { src, span, .. }
+        | LintError::Config { src, span, .. } => offset_to_line_col(src.inner(), span.offset()),
+        LintError::Io { .. } | LintError::SchemaFetch { .. } | LintError::SchemaCompile { .. } => {
+            (1, 1)
+        }
     };
 
     let title = match error {
-        LintError::Parse(_) => Some("parse error".to_string()),
-        LintError::Validation(d) if !d.instance_path.is_empty() => Some(d.instance_path.clone()),
-        LintError::Validation(_) => Some("validation error".to_string()),
-        LintError::File(_) => Some("file error".to_string()),
+        LintError::Parse { .. } => Some("parse error".to_string()),
+        LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
+            Some(instance_path.clone())
+        }
+        LintError::Validation { .. } => Some("validation error".to_string()),
+        LintError::Config { .. } => Some("config error".to_string()),
+        LintError::Io { .. } => Some("io error".to_string()),
+        LintError::SchemaFetch { .. } => Some("schema fetch error".to_string()),
+        LintError::SchemaCompile { .. } => Some("schema compile error".to_string()),
     };
 
     Annotation {

@@ -17,7 +17,7 @@ impl Reporter for PrettyReporter {
     fn report(&mut self, result: ValidateResult, elapsed: Duration) {
         let n = result.files_checked();
         for error in result.errors {
-            eprintln!("{:?}", Report::new_boxed(error.into_diagnostic()));
+            eprintln!("{:?}", Report::new(error));
         }
 
         let ms = elapsed.as_millis();

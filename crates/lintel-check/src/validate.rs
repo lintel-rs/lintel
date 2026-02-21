@@ -9,14 +9,12 @@ use serde_json::Value;
 
 use crate::catalog::{self, CompiledCatalog};
 use crate::config;
-use crate::diagnostics::{
-    FileDiagnostic, ParseDiagnostic, ValidationDiagnostic, find_instance_path_offset,
-};
+use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
 use crate::retriever::{CacheStatus, SchemaCache, ensure_cache_dir};
-use crate::validation_cache::{self, ValidationCacheStatus};
+use crate::validation_cache::{self, ValidationCacheStatus, ValidationError};
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
@@ -49,50 +47,9 @@ pub struct ValidateArgs {
     pub schema_cache_ttl: Option<core::time::Duration>,
 }
 
-/// A single lint error produced during validation.
-pub enum LintError {
-    Parse(ParseDiagnostic),
-    Validation(ValidationDiagnostic),
-    File(FileDiagnostic),
-}
-
-impl LintError {
-    /// File path associated with this error.
-    pub fn path(&self) -> &str {
-        match self {
-            LintError::Parse(d) => d.src.name(),
-            LintError::Validation(d) => &d.path,
-            LintError::File(d) => &d.path,
-        }
-    }
-
-    /// Human-readable error message.
-    pub fn message(&self) -> &str {
-        match self {
-            LintError::Parse(d) => &d.message,
-            LintError::Validation(d) => &d.message,
-            LintError::File(d) => &d.message,
-        }
-    }
-
-    /// Byte offset in the source file (for sorting).
-    pub fn offset(&self) -> usize {
-        match self {
-            LintError::Parse(d) => d.span.offset(),
-            LintError::Validation(d) => d.span.offset(),
-            LintError::File(_) => 0,
-        }
-    }
-
-    /// Convert into a boxed miette Diagnostic for rich rendering.
-    pub fn into_diagnostic(self) -> Box<dyn miette::Diagnostic + Send + Sync> {
-        match self {
-            LintError::Parse(d) => Box::new(d),
-            LintError::Validation(d) => Box::new(d),
-            LintError::File(d) => Box::new(d),
-        }
-    }
-}
+/// Re-exported from [`crate::diagnostics::LintError`] for backwards
+/// compatibility with existing `use lintel_check::validate::LintError` paths.
+pub use crate::diagnostics::LintError;
 
 /// A file that was checked and the schema it resolved to.
 pub struct CheckedFile {
@@ -223,14 +180,18 @@ async fn validate_config(
         let path_str = config_path.display().to_string();
         for error in validator.iter_errors(&config_value) {
             let ip = error.instance_path().to_string();
-            let offset = find_instance_path_offset(&content, &ip);
-            errors.push(LintError::Validation(ValidationDiagnostic {
+            let span = find_instance_path_span(&content, &ip);
+            errors.push(LintError::Config {
                 src: miette::NamedSource::new(&path_str, content.clone()),
-                span: offset.into(),
+                span: span.into(),
                 path: path_str.clone(),
-                instance_path: ip,
-                message: truncate_error_value(error.to_string()),
-            }));
+                instance_path: if ip.is_empty() {
+                    DEFAULT_LABEL.to_string()
+                } else {
+                    ip
+                },
+                message: clean_error_message(error.to_string()),
+            });
         }
         let cf = CheckedFile {
             path: path_str,
@@ -317,10 +278,10 @@ fn process_one_file(
                 {
                     match JsoncParser.parse(&content, &path_str) {
                         Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
-                        Err(jsonc_err) => return FileResult::Error(LintError::Parse(jsonc_err)),
+                        Err(jsonc_err) => return FileResult::Error(jsonc_err.into()),
                     }
                 } else {
-                    return FileResult::Error(LintError::Parse(parse_err));
+                    return FileResult::Error(parse_err.into());
                 }
             }
         }
@@ -424,10 +385,10 @@ async fn parse_and_group_files(
         let content = match content_result {
             Ok(c) => c,
             Err(e) => {
-                errors.push(LintError::File(FileDiagnostic {
+                errors.push(LintError::Io {
                     path: path.display().to_string(),
                     message: format!("failed to read: {e}"),
-                }));
+                });
                 continue;
             }
         };
@@ -488,7 +449,18 @@ async fn fetch_schema_from_prefetched(
     match result {
         Ok(value) => Some(value),
         Err(message) => {
-            report_group_error(&message, schema_uri, None, group, errors, checked, on_check);
+            report_group_error(
+                |path| LintError::SchemaFetch {
+                    path: path.to_string(),
+                    message: message.clone(),
+                },
+                schema_uri,
+                None,
+                group,
+                errors,
+                checked,
+                on_check,
+            );
             None
         }
     }
@@ -496,7 +468,7 @@ async fn fetch_schema_from_prefetched(
 
 /// Report the same error for every file in a schema group.
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
-    message: &str,
+    make_error: impl Fn(&str) -> LintError,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     group: &[P],
@@ -514,10 +486,7 @@ fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
         };
         on_check(&cf);
         checked.push(cf);
-        errors.push(LintError::File(FileDiagnostic {
-            path: pf.path.clone(),
-            message: message.to_string(),
-        }));
+        errors.push(make_error(&pf.path));
     }
 }
 
@@ -543,54 +512,50 @@ fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     }
 }
 
-/// Truncate the value portion of error messages like
-/// `{very long json} is not valid under any of the schemas listed in the 'anyOf' keyword`
-/// so the text before the "is not valid" suffix is at most 256 characters,
-/// keeping both the start and end of the value for context.
-fn truncate_error_value(msg: String) -> String {
-    const MAX_VALUE_LEN: usize = 256;
-    const ELLIPSIS: &str = " ... ";
-    const SUFFIX: &str = " is not valid under any of the schemas listed in the '";
-
-    if let Some(pos) = msg.find(SUFFIX)
-        && pos > MAX_VALUE_LEN
-    {
-        let value: &str = &msg[..pos];
-        let tail = &msg[pos..];
-        let keep = MAX_VALUE_LEN - ELLIPSIS.len(); // 251
-        let head_len = keep / 2; // 125
-        let end_len = keep - head_len; // 126
-
-        // Find char boundaries for head and end portions
-        let head: String = value.chars().take(head_len).collect();
-        let end: String = value
-            .chars()
-            .rev()
-            .take(end_len)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect();
-        return format!("{head}{ELLIPSIS}{end}{tail}");
+/// Clean up error messages from the `jsonschema` crate.
+///
+/// For `anyOf`/`oneOf` failures the crate dumps the entire JSON value into the
+/// message (e.g. `{...} is not valid under any of the schemas listed in the 'oneOf' keyword`).
+/// The source snippet already shows the value, so we strip the redundant prefix
+/// and keep only `"not valid under any of the schemas listed in the 'oneOf' keyword"`.
+///
+/// All other messages are returned unchanged.
+fn clean_error_message(msg: String) -> String {
+    const MARKER: &str = " is not valid under any of the schemas listed in the '";
+    if let Some(pos) = msg.find(MARKER) {
+        // pos points to " is not valid...", skip " is " (4 chars) to get "not valid..."
+        return msg[pos + 4..].to_string();
     }
     msg
 }
 
-/// Convert `(instance_path, message)` pairs into `LintError::Validation` diagnostics.
-fn push_error_pairs(
+/// Convert [`ValidationError`]s into [`LintError::Validation`] diagnostics.
+fn push_validation_errors(
     pf: &ParsedFile,
-    error_pairs: &[(String, String)],
+    schema_url: &str,
+    validation_errors: &[ValidationError],
     errors: &mut Vec<LintError>,
 ) {
-    for (ip, msg) in error_pairs {
-        let offset = find_instance_path_offset(&pf.content, ip);
-        errors.push(LintError::Validation(ValidationDiagnostic {
+    for ve in validation_errors {
+        let span = find_instance_path_span(&pf.content, &ve.instance_path);
+        let instance_path = if ve.instance_path.is_empty() {
+            DEFAULT_LABEL.to_string()
+        } else {
+            ve.instance_path.clone()
+        };
+        let label = format_label(&instance_path, &ve.schema_path);
+        let source_span: miette::SourceSpan = span.into();
+        errors.push(LintError::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
-            span: offset.into(),
+            span: source_span,
+            schema_span: source_span,
             path: pf.path.clone(),
-            instance_path: ip.clone(),
-            message: msg.clone(),
-        }));
+            instance_path,
+            label,
+            message: ve.message.clone(),
+            schema_url: schema_url.to_string(),
+            schema_path: ve.schema_path.clone(),
+        });
     }
 }
 
@@ -612,20 +577,19 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
 ) {
     for item in group {
         let pf = item.borrow();
-        let file_errors: Vec<(String, String)> = validator
+        let file_errors: Vec<ValidationError> = validator
             .iter_errors(&pf.instance)
-            .map(|error| {
-                (
-                    error.instance_path().to_string(),
-                    truncate_error_value(error.to_string()),
-                )
+            .map(|error| ValidationError {
+                instance_path: error.instance_path().to_string(),
+                message: clean_error_message(error.to_string()),
+                schema_path: error.schema_path().to_string(),
             })
             .collect();
 
         vcache
             .store(&pf.content, schema_hash, validate_formats, &file_errors)
             .await;
-        push_error_pairs(pf, &file_errors, errors);
+        push_validation_errors(pf, schema_uri, &file_errors, errors);
 
         let cf = CheckedFile {
             path: pf.path.clone(),
@@ -873,7 +837,7 @@ pub async fn run_with(
                 .await;
 
             if let Some(cached_errors) = cached {
-                push_error_pairs(pf, &cached_errors, &mut errors);
+                push_validation_errors(pf, schema_uri, &cached_errors, &mut errors);
                 let cf = CheckedFile {
                     path: pf.path.clone(),
                     schema: schema_uri.clone(),
@@ -925,8 +889,12 @@ pub async fn run_with(
                         );
                         continue;
                     }
+                    let msg = format!("failed to compile schema: {e}");
                     report_group_error(
-                        &format!("failed to compile schema: {e}"),
+                        |path| LintError::SchemaCompile {
+                            path: path.to_string(),
+                            message: msg.clone(),
+                        },
                         schema_uri,
                         cache_status,
                         &cache_misses,
@@ -1933,62 +1901,47 @@ validate_formats = false
         Ok(())
     }
 
-    // --- truncate_error_value ---
+    // --- clean_error_message ---
 
     #[test]
-    fn truncate_short_anyof_message_unchanged() {
+    fn clean_strips_anyof_value() {
         let msg =
             r#"{"type":"bad"} is not valid under any of the schemas listed in the 'anyOf' keyword"#;
-        assert_eq!(truncate_error_value(msg.to_string()), msg);
+        assert_eq!(
+            clean_error_message(msg.to_string()),
+            "not valid under any of the schemas listed in the 'anyOf' keyword"
+        );
     }
 
     #[test]
-    fn truncate_long_anyof_message() {
-        let long_value = "x".repeat(300);
-        let suffix =
-            " is not valid under any of the schemas listed in the 'anyOf' keyword (at /foo)";
-        let msg = format!("{long_value}{suffix}");
-        let result = truncate_error_value(msg);
-        assert!(result.contains(" ... "));
-        assert!(result.ends_with(suffix));
-        // Start of value is preserved
-        assert!(result.starts_with("xxxxx"));
-        // End of value is preserved
-        assert!(result.contains(&format!("xxxxx{suffix}")));
-        // Total value portion (before suffix) should be 256 chars
-        let value_part = &result[..result.find(suffix).expect("suffix must be present")];
-        assert_eq!(value_part.len(), 256);
+    fn clean_strips_oneof_value() {
+        let msg = r#"{"runs-on":"ubuntu-latest","steps":[]} is not valid under any of the schemas listed in the 'oneOf' keyword"#;
+        assert_eq!(
+            clean_error_message(msg.to_string()),
+            "not valid under any of the schemas listed in the 'oneOf' keyword"
+        );
     }
 
     #[test]
-    fn truncate_long_oneof_message() {
-        let long_value = "y".repeat(400);
-        let suffix = " is not valid under any of the schemas listed in the 'oneOf' keyword";
-        let msg = format!("{long_value}{suffix}");
-        let result = truncate_error_value(msg);
-        assert!(result.contains(" ... "));
-        assert!(result.ends_with(suffix));
-        assert!(result.starts_with("yyyyy"));
-    }
-
-    #[test]
-    fn truncate_shows_head_and_tail() {
-        // Use distinct chars so we can verify both ends are kept
-        let head = "H".repeat(200);
-        let tail = "T".repeat(200);
-        let value = format!("{head}{tail}");
+    fn clean_strips_long_value() {
+        let long_value = "x".repeat(5000);
         let suffix = " is not valid under any of the schemas listed in the 'anyOf' keyword";
-        let msg = format!("{value}{suffix}");
-        let result = truncate_error_value(msg);
-        // Head portion preserved
-        assert!(result.starts_with("HHHHH"));
-        // Tail portion preserved before the suffix
-        assert!(result.contains(&format!("TTTTT{suffix}")));
+        let msg = format!("{long_value}{suffix}");
+        assert_eq!(
+            clean_error_message(msg),
+            "not valid under any of the schemas listed in the 'anyOf' keyword"
+        );
     }
 
     #[test]
-    fn truncate_unrelated_message_unchanged() {
-        let msg = "\"name\" is a required property (at /foo)";
-        assert_eq!(truncate_error_value(msg.to_string()), msg);
+    fn clean_preserves_type_error() {
+        let msg = r#"12345 is not of types "null", "string""#;
+        assert_eq!(clean_error_message(msg.to_string()), msg);
+    }
+
+    #[test]
+    fn clean_preserves_required_property() {
+        let msg = "\"name\" is a required property";
+        assert_eq!(clean_error_message(msg.to_string()), msg);
     }
 }

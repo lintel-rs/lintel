@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/schemastore-v0.0.4...schemastore-v0.0.5) - 2026-02-21
+
+### Fixed
+
+- correct README code examples to pass doctests
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into claude-skill
+- Use inline badges in READMEs and add doc includes
+- Merge remote-tracking branch 'origin/master' into clippy-lint
+- deny std_instead_of_alloc and std_instead_of_core clippy lints
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/schemastore-v0.0.3...schemastore-v0.0.4) - 2026-02-20
 
 ### Other

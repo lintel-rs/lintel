@@ -15,15 +15,21 @@ pub enum ValidationCacheStatus {
     Miss,
 }
 
-#[derive(Serialize, Deserialize)]
-struct CachedError {
-    instance_path: String,
-    message: String,
+/// A single validation error with its location and schema context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidationError {
+    /// JSON Pointer to the failing instance (e.g. `/jobs/build`).
+    pub instance_path: String,
+    /// Human-readable error message.
+    pub message: String,
+    /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
+    #[serde(default)]
+    pub schema_path: String,
 }
 
 #[derive(Serialize, Deserialize)]
 struct CachedResult {
-    errors: Vec<CachedError>,
+    errors: Vec<ValidationError>,
 }
 
 /// A disk-backed cache for JSON Schema validation results.
@@ -46,9 +52,8 @@ impl ValidationCache {
 
     /// Look up a cached validation result.
     ///
-    /// Returns `(Some(errors), Hit)` on cache hit, where each error is
-    /// `(instance_path, message)`. Returns `(None, Miss)` on cache miss or
-    /// when `skip_read` is set.
+    /// Returns `(Some(errors), Hit)` on cache hit.
+    /// Returns `(None, Miss)` on cache miss or when `skip_read` is set.
     ///
     /// `schema_hash` should be obtained from [`schema_hash`] — pass the same
     /// value for all files in a schema group to avoid redundant serialization.
@@ -57,7 +62,7 @@ impl ValidationCache {
         file_content: &str,
         schema_hash: &str,
         validate_formats: bool,
-    ) -> (Option<Vec<(String, String)>>, ValidationCacheStatus) {
+    ) -> (Option<Vec<ValidationError>>, ValidationCacheStatus) {
         if self.skip_read {
             return (None, ValidationCacheStatus::Miss);
         }
@@ -73,13 +78,7 @@ impl ValidationCache {
             return (None, ValidationCacheStatus::Miss);
         };
 
-        let errors: Vec<(String, String)> = cached
-            .errors
-            .into_iter()
-            .map(|e| (e.instance_path, e.message))
-            .collect();
-
-        (Some(errors), ValidationCacheStatus::Hit)
+        (Some(cached.errors), ValidationCacheStatus::Hit)
     }
 
     /// Store a validation result to the disk cache.
@@ -94,19 +93,13 @@ impl ValidationCache {
         file_content: &str,
         schema_hash: &str,
         validate_formats: bool,
-        errors: &[(String, String)],
+        errors: &[ValidationError],
     ) {
         let key = Self::cache_key(file_content, schema_hash, validate_formats);
         let cache_path = self.cache_dir.join(format!("{key}.json"));
 
         let cached = CachedResult {
-            errors: errors
-                .iter()
-                .map(|(ip, msg)| CachedError {
-                    instance_path: ip.clone(),
-                    message: msg.clone(),
-                })
-                .collect(),
+            errors: errors.to_vec(),
         };
 
         let Ok(json) = serde_json::to_string(&cached) else {
@@ -206,15 +199,20 @@ mod tests {
         let cache = ValidationCache::new(tmp.path().to_path_buf(), false);
         let hash = schema_hash(&sample_schema());
 
-        let errors = vec![("/name".to_string(), "missing required property".to_string())];
+        let errors = vec![ValidationError {
+            instance_path: "/name".to_string(),
+            message: "missing required property".to_string(),
+            schema_path: "/required".to_string(),
+        }];
         cache.store("content", &hash, true, &errors).await;
 
         let (result, status) = cache.lookup("content", &hash, true).await;
         assert_eq!(status, ValidationCacheStatus::Hit);
         let result = result.expect("expected cache hit");
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].0, "/name");
-        assert_eq!(result[0].1, "missing required property");
+        assert_eq!(result[0].instance_path, "/name");
+        assert_eq!(result[0].message, "missing required property");
+        assert_eq!(result[0].schema_path, "/required");
         Ok(())
     }
 
@@ -251,7 +249,11 @@ mod tests {
                 "other",
                 &hash,
                 true,
-                &[("path".to_string(), "msg".to_string())],
+                &[ValidationError {
+                    instance_path: "path".to_string(),
+                    message: "msg".to_string(),
+                    schema_path: String::new(),
+                }],
             )
             .await;
         let (result, status) = cache_write.lookup("other", &hash, true).await;
