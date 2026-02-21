@@ -38,7 +38,6 @@ lintel-config = { version = "0.0.4", path = "../lintel-config" }
 serde_json = "1"
 
 [dev-dependencies]
-async-trait = "0.1"
 insta = { version = "1", features = ["filters"] }
 tempfile = "3"
 tokio = { version = "1", features = ["rt", "macros"] }

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use lintel_schema_cache::{HttpClient, SchemaCache};
+use lintel_schema_cache::SchemaCache;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, warn};
 
@@ -198,8 +198,8 @@ fn encode_ref_fragment(ref_str: &str) -> Option<String> {
 ///
 /// Filenames in `_shared/` are disambiguated with numeric suffixes when
 /// different URLs produce the same last path segment.
-pub async fn resolve_and_rewrite<C: HttpClient>(
-    cache: &SchemaCache<C>,
+pub async fn resolve_and_rewrite(
+    cache: &SchemaCache,
     schema_text: &str,
     schema_dest: &Path,
     shared_dir: &Path,

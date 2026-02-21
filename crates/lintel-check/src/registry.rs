@@ -1,4 +1,4 @@
-use crate::retriever::{HttpClient, SchemaCache};
+use crate::retriever::SchemaCache;
 use schemastore::Catalog;
 
 /// The default Lintel catalog registry (always fetched unless `--no-catalog`).
@@ -43,8 +43,8 @@ pub fn resolve_urls(url: &str) -> Vec<String> {
 /// # Errors
 ///
 /// Returns an error if none of the resolved URLs can be fetched or parsed.
-pub async fn fetch<C: HttpClient>(
-    cache: &SchemaCache<C>,
+pub async fn fetch(
+    cache: &SchemaCache,
     url: &str,
 ) -> Result<Catalog, Box<dyn core::error::Error + Send + Sync>> {
     let urls = resolve_urls(url);

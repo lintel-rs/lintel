@@ -13,7 +13,7 @@ use lintel_check::config;
 use lintel_check::discover;
 use lintel_check::parsers;
 use lintel_check::registry;
-use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
+use lintel_check::retriever::SchemaCache;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -133,10 +133,7 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // Catalog fetching
 // ---------------------------------------------------------------------------
 
-async fn fetch_catalogs<C: HttpClient>(
-    retriever: &SchemaCache<C>,
-    registries: &[String],
-) -> Vec<CompiledCatalog> {
+async fn fetch_catalogs(retriever: &SchemaCache, registries: &[String]) -> Vec<CompiledCatalog> {
     type CatalogResult = (
         String,
         Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
@@ -287,25 +284,21 @@ fn process_file(
 ///
 /// Panics if `--schema-cache-ttl` is provided with an unparseable duration.
 #[tracing::instrument(skip_all, name = "annotate")]
-pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<AnnotateResult> {
+pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     let config_dir = args
         .globs
         .iter()
         .find(|g| Path::new(g).is_dir())
         .map(PathBuf::from);
 
-    let schema_cache_ttl = args.schema_cache_ttl;
-
-    let cache_dir_path = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(
-        Some(cache_dir_path),
-        client,
-        false, // don't force schema fetch
-        schema_cache_ttl,
-    );
+    let mut builder = SchemaCache::builder();
+    if let Some(dir) = &args.cache_dir {
+        builder = builder.cache_dir(PathBuf::from(dir));
+    }
+    if let Some(ttl) = args.schema_cache_ttl {
+        builder = builder.ttl(ttl);
+    }
+    let retriever = builder.build();
 
     let (mut config, _config_dir) = load_config(config_dir.as_deref());
     config.exclude.extend(args.exclude.clone());

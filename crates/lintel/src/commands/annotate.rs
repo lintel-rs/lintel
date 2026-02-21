@@ -3,16 +3,10 @@ use std::time::Instant;
 
 use anyhow::Result;
 
-use lintel_check::retriever::HttpClient;
-
 /// Run the `annotate` command: add schema annotations to files.
-pub async fn run<C: HttpClient>(
-    args: &lintel_annotate::AnnotateArgs,
-    client: C,
-    verbose: bool,
-) -> Result<bool> {
+pub async fn run(args: &lintel_annotate::AnnotateArgs, verbose: bool) -> Result<bool> {
     let start = Instant::now();
-    let result = lintel_annotate::run(args, client).await?;
+    let result = lintel_annotate::run(args).await?;
     let had_errors = !result.errors.is_empty();
 
     if verbose {
