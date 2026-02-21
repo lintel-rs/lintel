@@ -21,7 +21,7 @@ Render JSON Schema as human-readable terminal documentation
 use jsonschema_explain::explain;
 use serde_json::Value;
 
-let schema: Value = serde_json::from_str(r#"{"type": "object"}"#)?;
+let schema: Value = serde_json::from_str(r#"{"type": "object"}"#).unwrap();
 let output = explain(&schema, "my-config", true, true);
 println!("{output}");
 ```

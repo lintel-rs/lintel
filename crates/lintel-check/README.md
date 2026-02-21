@@ -17,7 +17,7 @@ Core validation engine for [Lintel](https://github.com/lintel-rs/lintel). Valida
 
 ## Usage
 
-```rust
+```rust,ignore
 use lintel_check::validate::{self, ValidateArgs};
 use lintel_check::retriever::UreqClient;
 
