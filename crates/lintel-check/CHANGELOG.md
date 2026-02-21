@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.4...lintel-check-v0.0.5) - 2026-02-21
+
+### Added
+
+- add `lintel cache` command and migrate file reads to tokio
+
+### Fixed
+
+- correct README code examples to pass doctests
+- isolate test schema cache to temp dirs to prevent cache corruption
+- point root-level validation errors at content, not modeline comments
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into claude-skill
+- Fix doctest failures in README code examples
+- Clean up all crates: fix section ordering, READMEs, and metadata
+- Use inline badges in READMEs and add doc includes
+- Merge remote-tracking branch 'origin/master' into clippy-lint
+- deny std_instead_of_alloc and std_instead_of_core clippy lints
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.3...lintel-check-v0.0.4) - 2026-02-20
 
 ### Other

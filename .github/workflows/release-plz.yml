@@ -37,7 +37,7 @@ jobs:
           RELEASES: ${{ steps.release-plz.outputs.releases }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-v")) | .tag')
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^lintel-v\\d")) | .tag')
           if [ -n "$TAG" ]; then
             VERSION="${TAG#lintel-}"
             # Look up the tag ref — release-plz creates annotated tags,
@@ -59,7 +59,7 @@ jobs:
           RELEASES: ${{ steps.release-plz.outputs.releases }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-v")) | .tag')
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^lintel-v\\d")) | .tag')
           if [ -n "$TAG" ]; then
             gh workflow run release.yml --ref "$TAG"
           fi

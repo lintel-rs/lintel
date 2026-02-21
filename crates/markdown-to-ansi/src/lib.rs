@@ -1,10 +1,4 @@
-//! Render Markdown as ANSI-formatted terminal text.
-//!
-//! Uses pulldown-cmark for proper `CommonMark` parsing and syntect for
-//! syntax highlighting of fenced code blocks.
-//!
-//! This crate always emits ANSI escape codes. Callers that want plain-text
-//! output should use the raw markdown directly instead of calling this crate.
+#![doc = include_str!("../README.md")]
 
 mod highlight;
 mod render;

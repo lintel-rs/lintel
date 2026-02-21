@@ -1,14 +1,17 @@
 [package]
 name = "lintel-benchmark"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
+authors.workspace = true
 description = "Benchmarking harness for Lintel — runs validation against real-world repos and records timing results"
+license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-license.workspace = true
-authors.workspace = true
 keywords = ["json-schema", "benchmark", "validation"]
 categories = ["command-line-utilities", "development-tools"]
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = "1"
@@ -16,6 +19,3 @@ bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 chrono = "0.4"
 dirs = "6"
 walkdir = "2"
-
-[lints]
-workspace = true

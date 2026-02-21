@@ -3,20 +3,20 @@ name = "sublime-syntaxes"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
-repository.workspace = true
-license.workspace = true
-homepage.workspace = true
 description = "Precompiled Sublime Text syntax definitions for languages not in syntect's defaults"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 keywords = ["syntax-highlighting", "syntect", "sublime-syntax"]
 categories = ["text-processing"]
 
+[lints]
+workspace = true
+
 [dependencies]
-syntect = { version = "5", default-features = false, features = ["default-syntaxes"] }
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 
 [build-dependencies]
 syntect = { version = "5", default-features = false, features = [
     "default-syntaxes", "regex-fancy", "yaml-load",
 ] }
-
-[lints]
-workspace = true

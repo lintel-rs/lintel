@@ -1,6 +1,6 @@
 [package]
 name = "lintel-schemastore-catalog"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
 description = "Mirror the SchemaStore catalog into a self-hosted git repo"
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-schemastore = { version = "0.0.4", path = "../schemastore" }
+schemastore = { version = "0.0.5", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

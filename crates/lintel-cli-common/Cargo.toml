@@ -1,6 +1,6 @@
 [package]
 name = "lintel-cli-common"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors.workspace = true
 description = "Shared CLI global options for Lintel command-line tools"
@@ -10,8 +10,8 @@ homepage.workspace = true
 keywords = ["json-schema", "validation", "linter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
-[dependencies]
-bpaf = { version = "0.9", features = ["derive", "bright-color"] }
-
 [lints]
 workspace = true
+
+[dependencies]
+bpaf = { version = "0.9", features = ["derive", "bright-color"] }

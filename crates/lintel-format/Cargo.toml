@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 prettier-rs = { version = "0.1.0", path = "../prettier-rs" }
-lintel-cli-common = { version = "0.0.1", path = "../lintel-cli-common" }
+lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
 taplo = "0.14"
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 anyhow = "1"
