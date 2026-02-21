@@ -1,9 +1,12 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crate::{cargo_toml, doc_injection, readme, workspace};
 
 pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
+    let start = Instant::now();
     let mut total_diagnostics: usize = 0;
+    let crate_count = crate_dirs.len();
 
     for crate_dir in crate_dirs {
         let (meta, cargo_diags) = match cargo_toml::check_cargo_toml(crate_dir, ws) {
@@ -35,13 +38,21 @@ pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
         }
     }
 
+    let elapsed = start.elapsed();
+
     if total_diagnostics > 0 {
         eprintln!(
-            "\nfound {total_diagnostics} issue{}.",
-            if total_diagnostics == 1 { "" } else { "s" }
+            "\nchecked {crate_count} crate{} in {elapsed:.0?}: found {total_diagnostics} issue{}.",
+            if crate_count == 1 { "" } else { "s" },
+            if total_diagnostics == 1 { "" } else { "s" },
         );
         std::process::exit(1);
     }
+
+    eprintln!(
+        "checked {crate_count} crate{} in {elapsed:.0?}: no issues found.",
+        if crate_count == 1 { "" } else { "s" },
+    );
 }
 
 pub fn run_fix(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
