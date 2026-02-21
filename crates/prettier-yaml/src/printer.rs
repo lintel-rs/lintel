@@ -10,7 +10,8 @@ use crate::print::flow::{format_flow_mapping, format_flow_sequence};
 use crate::print::mapping_item::format_block_mapping;
 use crate::print::misc::{comment_indent, comment_indent_capped, indent_str};
 use crate::utilities::{
-    has_node_props, is_block_scalar_value, is_null_value, is_simple_value, needs_space_before_colon,
+    has_node_props, is_block_collection, is_block_scalar_value, is_null_value, is_simple_value,
+    needs_space_before_colon,
 };
 
 pub(crate) fn format_stream(stream: &YamlStream, options: &YamlFormatOptions) -> String {
@@ -413,10 +414,27 @@ fn format_quoted_scalar(
     // Check if we have a multi-line raw source (originally multi-line in source)
     let raw_is_multiline = raw_source.is_some_and(|r| r.contains('\n'));
 
-    if contains_newline
-        && raw_is_multiline
-        && let Some(raw) = raw_source
-    {
+    // Check if raw source uses \ continuation (backslash at end of line folds newline)
+    let has_backslash_continuation =
+        raw_source.is_some_and(|r| r.split('\n').any(|line| line.trim_end().ends_with('\\')));
+
+    // Enter multiline path when:
+    // 1. Value has actual newlines AND raw is multiline (original case, all modes)
+    // 2. Raw has \ continuation (always preserve multiline form regardless of prose wrap)
+    // 3. Raw is multiline but value folded (no newlines) in preserve mode
+    let enter_multiline = raw_is_multiline
+        && (contains_newline
+            || has_backslash_continuation
+            || options.prose_wrap == ProseWrap::Preserve);
+
+    if enter_multiline && let Some(raw) = raw_source {
+        // For \ continuation without actual newlines: always use preserve mode
+        // since word-wrapping doesn't understand escape continuations
+        if has_backslash_continuation && !contains_newline {
+            format_multiline_double_quoted_continuation(raw, output, indent);
+            return;
+        }
+
         // Use single quotes if singleQuote option is set and content has no single quotes
         let use_single_multiline =
             options.single_quote && !contains_single && !value.contains('\\');
@@ -543,6 +561,41 @@ fn format_multiline_quoted_preserve(lines: &[&str], output: &mut String, indent:
         output.push_str(indent);
     }
     output.push('"');
+}
+
+/// Format a double-quoted string with `\` continuation (backslash-escaped newlines).
+/// Always preserves the multiline form regardless of prose wrap mode,
+/// since word-wrapping doesn't understand escape continuations.
+fn format_multiline_double_quoted_continuation(
+    raw_source: &str,
+    output: &mut String,
+    indent: usize,
+) {
+    let indent_s = if indent == 0 {
+        String::new()
+    } else {
+        indent_str(indent)
+    };
+    let lines: Vec<&str> = raw_source.split('\n').collect();
+
+    // Trim lines: first line trim end, middle lines trim both, last content line trim start
+    let last_content_idx = if lines.len() > 1 && lines.last() == Some(&"") {
+        lines.len() - 2
+    } else {
+        lines.len() - 1
+    };
+    let mut trimmed: Vec<&str> = Vec::with_capacity(lines.len());
+    for (i, line) in lines.iter().enumerate() {
+        if i == 0 {
+            trimmed.push(line.trim_end());
+        } else if i == last_content_idx {
+            trimmed.push(line.trim_start());
+        } else {
+            trimmed.push(line.trim());
+        }
+    }
+
+    format_multiline_quoted_preserve(&trimmed, output, &indent_s);
 }
 
 /// Always mode: join consecutive non-empty lines with space, re-wrap at `print_width`.
@@ -906,7 +959,23 @@ pub(crate) fn format_block_sequence(
                 }
             }
             _ => {
-                if is_null_value(&item.value) && !has_node_props(&item.value) {
+                if let Some(ind_comment) = &item.indicator_comment {
+                    // Comment on the `- ` indicator line with value on next line:
+                    // output `- #comment\n<indent>value`
+                    output.push_str("- ");
+                    output.push_str(ind_comment);
+                    output.push('\n');
+                    let ci = indent_str(item_content_indent);
+                    output.push_str(&ci);
+                    format_node(
+                        &item.value,
+                        output,
+                        item_content_indent,
+                        options,
+                        false,
+                        true,
+                    );
+                } else if is_null_value(&item.value) && !has_node_props(&item.value) {
                     // Prettier uses "- " prefix even for null items when there's
                     // a trailing comment, so the comment starts at column indent+2
                     if item.trailing_comment.is_some() {
@@ -992,6 +1061,16 @@ fn format_sequence_mapping_item(
     let value_indent = entry_indent + tw;
 
     output.push_str("- ");
+
+    // Handle indicator comment: `- # comment` on its own line, entries below
+    let _has_indicator_comment = if let Some(ind_comment) = &item.indicator_comment {
+        output.push_str(ind_comment);
+        output.push('\n');
+        output.push_str(&entry_indent_s);
+        true
+    } else {
+        false
+    };
     let has_props = m.tag.is_some() || m.anchor.is_some();
     if let Some(tag) = &m.tag {
         output.push_str(tag);
@@ -1023,42 +1102,57 @@ fn format_sequence_mapping_item(
         output.push_str(&entry_indent_s);
     }
     let first = &m.entries[0];
-    format_node(&first.key, output, entry_indent, options, false, true);
-    if needs_space_before_colon(&first.key) {
-        output.push(' ');
-    }
-    output.push(':');
 
-    if is_block_scalar_value(&first.value) {
-        output.push(' ');
-        format_node(&first.value, output, value_indent, options, false, true);
-    } else if is_simple_value(&first.value) {
-        output.push(' ');
-        format_node(&first.value, output, entry_indent, options, false, true);
-        if let Some(comment) = &first.trailing_comment {
+    // Check if the first entry needs explicit key format (? key : value)
+    let first_needs_explicit = first.is_explicit_key
+        && (!is_null_value(&first.value)
+            || is_block_collection(&first.key)
+            || is_block_scalar_value(&first.key)
+            || !first.between_comments.is_empty())
+        || first.question_mark_comment.is_some();
+
+    if first_needs_explicit {
+        // Compact explicit key: `- ? key\n  : value`
+        // Use entry_indent so `:` aligns with `?` at seq_indent+2
+        crate::print::mapping_item::format_explicit_key_entry(first, output, entry_indent, options);
+    } else {
+        format_node(&first.key, output, entry_indent, options, false, true);
+        if needs_space_before_colon(&first.key) {
             output.push(' ');
-            output.push_str(comment);
         }
-        output.push('\n');
-    } else if is_null_value(&first.value) {
-        if has_node_props(&first.value) {
+        output.push(':');
+
+        if is_block_scalar_value(&first.value) {
+            output.push(' ');
+            format_node(&first.value, output, value_indent, options, false, true);
+        } else if is_simple_value(&first.value) {
             output.push(' ');
             format_node(&first.value, output, entry_indent, options, false, true);
+            if let Some(comment) = &first.trailing_comment {
+                output.push(' ');
+                output.push_str(comment);
+            }
+            output.push('\n');
+        } else if is_null_value(&first.value) {
+            if has_node_props(&first.value) {
+                output.push(' ');
+                format_node(&first.value, output, entry_indent, options, false, true);
+            }
+            if let Some(comment) = &first.trailing_comment {
+                output.push(' ');
+                output.push_str(comment);
+            }
+            output.push('\n');
+        } else {
+            if has_node_props(&first.value) {
+                output.push(' ');
+            }
+            if let Some(comment) = &first.trailing_comment {
+                output.push(' ');
+                output.push_str(comment);
+            }
+            format_node(&first.value, output, value_indent, options, false, false);
         }
-        if let Some(comment) = &first.trailing_comment {
-            output.push(' ');
-            output.push_str(comment);
-        }
-        output.push('\n');
-    } else {
-        if has_node_props(&first.value) {
-            output.push(' ');
-        }
-        if let Some(comment) = &first.trailing_comment {
-            output.push(' ');
-            output.push_str(comment);
-        }
-        format_node(&first.value, output, value_indent, options, false, false);
     }
 
     // Remaining entries at entry indent (seq_indent + 2)
@@ -1074,6 +1168,26 @@ fn format_sequence_mapping_item(
         if entry.blank_line_before && !output.ends_with("\n\n") {
             output.push('\n');
         }
+
+        // Check if this entry needs explicit key format
+        let entry_needs_explicit = entry.is_explicit_key
+            && (!is_null_value(&entry.value)
+                || is_block_collection(&entry.key)
+                || is_block_scalar_value(&entry.key)
+                || !entry.between_comments.is_empty())
+            || entry.question_mark_comment.is_some();
+
+        if entry_needs_explicit {
+            output.push_str(&entry_indent_s);
+            crate::print::mapping_item::format_explicit_key_entry(
+                entry,
+                output,
+                entry_indent,
+                options,
+            );
+            continue;
+        }
+
         output.push_str(&entry_indent_s);
         format_node(&entry.key, output, entry_indent, options, false, true);
         if needs_space_before_colon(&entry.key) {

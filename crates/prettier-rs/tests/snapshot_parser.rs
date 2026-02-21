@@ -131,17 +131,17 @@ fn parse_options(lines: &[&str]) -> (String, PrettierOptions, bool) {
             }
             "trailingComma" => {
                 options.trailing_comma = match value.trim_matches('"') {
-                    "all" => TrailingComma::All,
                     "es5" => TrailingComma::Es5,
                     "none" => TrailingComma::None,
+                    // "all" | _
                     _ => TrailingComma::All,
                 };
             }
             "quoteProps" => {
                 options.quote_props = match value.trim_matches('"') {
-                    "as-needed" => QuoteProps::AsNeeded,
                     "consistent" => QuoteProps::Consistent,
                     "preserve" => QuoteProps::Preserve,
+                    // "as-needed" | _
                     _ => QuoteProps::AsNeeded,
                 };
             }
@@ -155,7 +155,7 @@ fn parse_options(lines: &[&str]) -> (String, PrettierOptions, bool) {
                 options.prose_wrap = match value.trim_matches('"') {
                     "always" => ProseWrap::Always,
                     "never" => ProseWrap::Never,
-                    "preserve" => ProseWrap::Preserve,
+                    // "preserve" | _
                     _ => ProseWrap::Preserve,
                 };
             }
@@ -178,14 +178,13 @@ fn unescape_template_literal(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some('\\') => result.push('\\'),
+                Some('\\') | None => result.push('\\'),
                 Some('`') => result.push('`'),
                 Some('$') => result.push('$'),
                 Some(other) => {
                     result.push('\\');
                     result.push(other);
                 }
-                None => result.push('\\'),
             }
         } else {
             result.push(c);

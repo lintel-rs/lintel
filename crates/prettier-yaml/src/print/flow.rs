@@ -2,7 +2,7 @@ use crate::YamlFormatOptions;
 use crate::ast::{MappingNode, Node, SequenceNode};
 use crate::print::misc::{indent_str, renders_multiline};
 use crate::printer::format_node;
-use crate::utilities::{is_collection, is_null_value};
+use crate::utilities::{has_node_props, is_collection, is_null_value, needs_space_before_colon};
 
 pub(crate) fn format_flow_mapping(
     mapping: &MappingNode,
@@ -98,11 +98,21 @@ fn format_flow_mapping_flat(
             continue;
         }
         format_node(&entry.key, &mut part, indent, options, false, true);
-        if is_null_value(&entry.value) {
-            // Null value: just the key, no ": ~"
+        if is_null_value(&entry.value) && !has_node_props(&entry.value) {
+            // Null value without tag/anchor: just the key, no ": ~"
+        } else if is_null_value(&entry.value) && has_node_props(&entry.value) {
+            // Null value with tag/anchor (e.g. `foo: !!str`): keep colon and props
+            if needs_space_before_colon(&entry.key) {
+                part.push_str(" : ");
+            } else {
+                part.push_str(": ");
+            }
+            format_node(&entry.value, &mut part, indent, options, false, true);
+            // Remove trailing empty value, keep just the props
+            part.push(' ');
         } else {
-            // Alias keys need space before colon (e.g. `*foo : bar`)
-            if matches!(&entry.key, Node::Alias(_)) {
+            // Alias/tagged keys need space before colon
+            if needs_space_before_colon(&entry.key) {
                 part.push_str(" : ");
             } else {
                 part.push_str(": ");
@@ -343,18 +353,27 @@ fn format_flow_sequence_flat(
                 parts.push(part);
                 continue;
             }
-            if entry.is_explicit_key {
+            let value_is_null = is_null_value(&entry.value) && !has_node_props(&entry.value);
+            let key_renders_multiline = renders_multiline(&entry.key, indent, options);
+            // Keep `?` for explicit keys with null values (e.g. `[? 1, ? 2]`)
+            // or when the key renders multiline
+            if entry.is_explicit_key && (value_is_null || key_renders_multiline) {
                 part.push_str("? ");
             }
             format_node(&entry.key, &mut part, indent, options, false, true);
-            if !is_null_value(&entry.value) {
-                // Alias keys need space before colon
-                if matches!(&entry.key, Node::Alias(_)) {
+            if !value_is_null {
+                // Alias/tagged keys need space before colon
+                if needs_space_before_colon(&entry.key) {
                     part.push_str(" : ");
                 } else {
                     part.push_str(": ");
                 }
-                format_node(&entry.value, &mut part, indent, options, false, true);
+                if is_null_value(&entry.value) && has_node_props(&entry.value) {
+                    format_node(&entry.value, &mut part, indent, options, false, true);
+                    part.push(' ');
+                } else {
+                    format_node(&entry.value, &mut part, indent, options, false, true);
+                }
             }
             parts.push(part);
             continue;
@@ -538,4 +557,8 @@ fn format_flow_sequence_broken(
     }
     output.push_str(&outer_indent_s);
     output.push(']');
+    if let Some(comment) = &seq.closing_comment {
+        output.push(' ');
+        output.push_str(comment);
+    }
 }

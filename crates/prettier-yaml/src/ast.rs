@@ -101,6 +101,8 @@ pub(crate) struct SequenceNode {
     pub flow_source: Option<String>,
     pub middle_comments: Vec<Comment>,
     pub trailing_comments: Vec<Comment>, // comments after last item before SequenceEnd
+    /// Inline comment on the closing `]` of a flow sequence (e.g. `] # comment`)
+    pub closing_comment: Option<String>,
 }
 
 pub(crate) struct SequenceItem {
@@ -110,6 +112,9 @@ pub(crate) struct SequenceItem {
     pub blank_line_before: bool,
     /// Whether this item has a `# prettier-ignore` leading comment
     pub prettier_ignore: bool,
+    /// Inline comment on the `- ` indicator line when value is on the next line.
+    /// e.g. `- #comment\n    value` → `indicator_comment` = Some("#comment")
+    pub indicator_comment: Option<String>,
 }
 
 pub(crate) struct AliasNode {

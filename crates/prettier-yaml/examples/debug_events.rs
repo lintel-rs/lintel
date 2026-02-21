@@ -1,6 +1,14 @@
 use saphyr_parser::{Event, Parser};
 fn main() {
     let inputs = vec![
+        (
+            "trailing-comments-explicit",
+            "? # lala\n - seq1\n: # lala\n - #lala\n  seq2\n",
+        ),
+        (
+            "set-comment",
+            "set:\n  a: !!set\n    ? X\n    ? Y\n  # Flow\n  b: !!set { Z }\n",
+        ),
         ("set.yml", "- 123\n  # 456\n"),
         ("in-empty-item", "a:\n  #123"),
         ("issue-10922", "foo: bar\n\n# End Comment\n"),
@@ -39,31 +47,34 @@ fn main() {
             "tags-on-empty",
             "- !!str\n- !!null : a\n  b: !!str\n- !!str : !!null\n",
         ),
+        (
+            "spec-9-3-bare-documents",
+            "Bare\ndocument\n...\n# No document\n...\n|\n%!PS-Adobe-2.0 # Not the first line\n",
+        ),
     ];
     for (name, input) in inputs {
-        println!("=== {} ===", name);
-        println!("Input: {:?}", input);
+        println!("=== {name} ===");
+        println!("Input: {input:?}");
         let parser = Parser::new_from_str(input);
         for result in parser {
-            let (event, span) = result.unwrap();
+            let (event, span) = result.expect("parse event");
             let evt_name = match &event {
                 Event::StreamStart => "StreamStart".to_string(),
                 Event::StreamEnd => "StreamEnd".to_string(),
-                Event::DocumentStart(e) => format!("DocumentStart(explicit={})", e),
+                Event::DocumentStart(e) => format!("DocumentStart(explicit={e})"),
                 Event::DocumentEnd => "DocumentEnd".to_string(),
-                Event::MappingStart(a, t) => format!("MappingStart(anchor={}, tag={:?})", a, t),
+                Event::MappingStart(a, t) => format!("MappingStart(anchor={a}, tag={t:?})"),
                 Event::MappingEnd => "MappingEnd".to_string(),
-                Event::SequenceStart(a, t) => format!("SequenceStart(anchor={}, tag={:?})", a, t),
+                Event::SequenceStart(a, t) => format!("SequenceStart(anchor={a}, tag={t:?})"),
                 Event::SequenceEnd => "SequenceEnd".to_string(),
                 Event::Scalar(v, s, a, t) => {
-                    format!("Scalar({:?}, {:?}, anchor={}, tag={:?})", v, s, a, t)
+                    format!("Scalar({v:?}, {s:?}, anchor={a}, tag={t:?})")
                 }
-                Event::Alias(id) => format!("Alias({})", id),
-                _ => format!("{:?}", event),
+                Event::Alias(id) => format!("Alias({id})"),
+                Event::Nothing => format!("{event:?}"),
             };
             println!(
-                "  {} start={}:{} end={}:{}",
-                evt_name,
+                "  {evt_name} start={}:{} end={}:{}",
                 span.start.line(),
                 span.start.col(),
                 span.end.line(),

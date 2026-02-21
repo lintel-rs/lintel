@@ -18,7 +18,9 @@ pub(crate) fn comment_indent(
     options: &YamlFormatOptions,
 ) -> String {
     let tw = options.tab_width;
-    // Snap the source column UP to the nearest tab_width boundary
+    // Snap the source column UP to the nearest tab_width boundary.
+    // This normalizes off-grid indentation to the nearest structural
+    // indent level (e.g., 1-space indent with tab_width=2 becomes 2).
     let snapped = if tw > 0 {
         comment.col.div_ceil(tw) * tw
     } else {

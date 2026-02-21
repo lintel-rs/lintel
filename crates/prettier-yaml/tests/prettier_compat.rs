@@ -69,9 +69,10 @@ fn run_fixture_dir(dir: &str) {
         eprintln!();
     }
 
-    if strict && failed > 0 {
-        panic!("{dir}: {failed}/{total} tests failed (PRETTIER_STRICT=1)");
-    }
+    assert!(
+        !(strict && failed > 0),
+        "{dir}: {failed}/{total} tests failed (PRETTIER_STRICT=1)"
+    );
 }
 
 /// Simple line-by-line diff for readable failure output.

@@ -132,10 +132,10 @@ pub(crate) fn format_block_mapping(
             && !has_node_props(&entry.value)
             && (is_set
                 || entry.trailing_comment.is_some()
-                || entry.key_trailing_comment.is_some()))
+                || entry.key_trailing_comment.is_some()
+                || is_multiline_key(&entry.key)))
             || (entry.is_explicit_key
                 && (is_block_collection(&entry.key) || is_block_scalar_value(&entry.key)))
-            || is_multiline_key(&entry.key)
             || (entry.is_explicit_key && !entry.between_comments.is_empty())
             || entry.question_mark_comment.is_some()
             || (entry.is_explicit_key && !entry.leading_comments.is_empty())
@@ -263,7 +263,7 @@ pub(crate) fn format_block_mapping(
         if comment.blank_line_before && !output.ends_with("\n\n") {
             output.push('\n');
         }
-        let ci = comment_indent_capped(comment, indent, value_indent, options);
+        let ci = comment_indent_capped(comment, indent, indent + tw, options);
         output.push_str(&ci);
         output.push_str(&comment.text);
         output.push('\n');
@@ -432,6 +432,7 @@ fn format_key_comments_and_value(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn format_explicit_key_entry(
     entry: &MappingEntry,
     output: &mut String,
@@ -459,8 +460,30 @@ pub(crate) fn format_explicit_key_entry(
         output.push(' ');
     }
 
-    // Key
-    format_node(&entry.key, output, key_indent, options, false, true);
+    // Key — for single-entry block mappings with simple entries, format
+    // inline as `key: value` (compact block mapping syntax like `? earth: blue`)
+    let is_compact_key_map = matches!(&entry.key, Node::Mapping(m) if !m.flow
+        && m.entries.len() == 1
+        && m.anchor.is_none() && m.tag.is_none()
+        && is_simple_value(&m.entries[0].key)
+        && (is_simple_value(&m.entries[0].value) || is_null_value(&m.entries[0].value)));
+    if is_compact_key_map {
+        // Format the single entry inline: `key: value`
+        if let Node::Mapping(m) = &entry.key {
+            let e = &m.entries[0];
+            format_node(&e.key, output, key_indent, options, false, true);
+            if needs_space_before_colon(&e.key) {
+                output.push(' ');
+            }
+            output.push(':');
+            if !is_null_value(&e.value) {
+                output.push(' ');
+                format_node(&e.value, output, key_indent, options, false, true);
+            }
+        }
+    } else {
+        format_node(&entry.key, output, key_indent, options, false, true);
+    }
     if let Some(comment) = &entry.key_trailing_comment {
         output.push(' ');
         output.push_str(comment);
@@ -489,9 +512,13 @@ pub(crate) fn format_explicit_key_entry(
         output.push_str(&comment.text);
     }
 
-    if is_simple_value(&entry.value) {
+    // When the colon line has a comment (`: # comment`), the value must go
+    // on a new line — never inline after the colon.
+    let colon_has_comment = entry.colon_comment.is_some();
+
+    if is_simple_value(&entry.value) && !colon_has_comment {
         output.push(' ');
-        format_node(&entry.value, output, indent, options, false, true);
+        format_node(&entry.value, output, value_indent, options, false, true);
         if let Some(comment) = &entry.trailing_comment {
             output.push(' ');
             output.push_str(comment);
@@ -503,15 +530,43 @@ pub(crate) fn format_explicit_key_entry(
             output.push_str(comment);
         }
         output.push('\n');
-    } else if is_block_scalar_value(&entry.value) {
+    } else if is_block_scalar_value(&entry.value) && !colon_has_comment {
         // Block scalar value inline after `:`
         output.push(' ');
         format_node(&entry.value, output, value_indent, options, false, true);
+    } else if colon_has_comment {
+        // Colon has a comment — value goes on the next line
+        format_node(&entry.value, output, value_indent, options, false, false);
     } else {
         // Compact form for sequences: `: - item`
+        // For single-entry block mappings: `: key: value` (compact block mapping)
         // For other complex values: newline then indent
         let is_block_seq = matches!(&entry.value, Node::Sequence(s) if !s.flow);
-        if is_block_seq && !has_node_props(&entry.value) {
+        let is_compact_block_map = matches!(&entry.value, Node::Mapping(m) if !m.flow && m.entries.len() == 1
+            && m.anchor.is_none() && m.tag.is_none()
+            && is_simple_value(&m.entries[0].key)
+            && (is_simple_value(&m.entries[0].value) || is_null_value(&m.entries[0].value)));
+        if is_compact_block_map && !has_node_props(&entry.value) {
+            // Format single-entry block mapping inline: `: key: value`
+            output.push(' ');
+            if let Node::Mapping(m) = &entry.value {
+                let e = &m.entries[0];
+                format_node(&e.key, output, value_indent, options, false, true);
+                if needs_space_before_colon(&e.key) {
+                    output.push(' ');
+                }
+                output.push(':');
+                if !is_null_value(&e.value) {
+                    output.push(' ');
+                    format_node(&e.value, output, value_indent, options, false, true);
+                }
+            }
+            if let Some(comment) = &entry.trailing_comment {
+                output.push(' ');
+                output.push_str(comment);
+            }
+            output.push('\n');
+        } else if is_block_seq && !has_node_props(&entry.value) {
             output.push(' ');
             format_node(&entry.value, output, value_indent, options, false, true);
         } else {

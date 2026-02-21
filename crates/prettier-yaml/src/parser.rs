@@ -95,6 +95,19 @@ impl<'a> AstBuilder<'a> {
                     break;
                 }
                 Event::DocumentStart(_) => {
+                    // Before building the next document, check if saphyr skipped
+                    // an empty document between `...` markers. This happens when
+                    // the source has `...\n# comment\n...\n` — saphyr merges the
+                    // empty document, but prettier treats it as a separate doc.
+                    if !documents.is_empty()
+                        && let Some(synthetic) = self.check_skipped_empty_document(last_doc_end)
+                    {
+                        last_doc_end = synthetic
+                            .end_comments
+                            .last()
+                            .map_or(last_doc_end, |c| c.line);
+                        documents.push(synthetic);
+                    }
                     documents.push(self.build_document(last_doc_end)?);
                     last_doc_end = self.last_content_end_line();
                 }
@@ -341,8 +354,13 @@ impl<'a> AstBuilder<'a> {
                     let idx = line_num.saturating_sub(1);
                     if idx < self.source_lines.len() {
                         let raw = self.source_lines[idx];
+                        // Strip trailing inline comment from plain scalar source
+                        // (comments are already captured separately)
+                        let without_comment = self
+                            .comment_start_col_on_line(line_num)
+                            .map_or(raw, |col| &raw[..col]);
                         if line_num == start_line {
-                            let content: String = raw.chars().skip(start_col).collect();
+                            let content: String = without_comment.chars().skip(start_col).collect();
                             let trimmed = content.trim();
                             if trimmed.is_empty() {
                                 lines.push(String::new());
@@ -350,7 +368,7 @@ impl<'a> AstBuilder<'a> {
                                 lines.push(trimmed.to_string());
                             }
                         } else {
-                            let trimmed = raw.trim();
+                            let trimmed = without_comment.trim();
                             if trimmed.is_empty() {
                                 lines.push(String::new());
                             } else {
@@ -466,21 +484,51 @@ impl<'a> AstBuilder<'a> {
                 if src.starts_with('#') {
                     continue;
                 }
+                // Check if this line contains a tag or anchor, either at the
+                // start or anywhere in the line (e.g. `key: !!tag`)
                 if src.starts_with('!') || src.starts_with('&') {
+                    props_line = l;
+                    break;
+                }
+                if let Some(tag) = &tag_str
+                    && src.contains(tag.as_str())
+                {
+                    props_line = l;
+                    break;
+                }
+                if let Some(anc) = &anchor
+                    && src.contains(&format!("&{anc}"))
+                {
                     props_line = l;
                     break;
                 }
                 break;
             }
 
-            if let Some(comment) = self.find_trailing_comment(props_line) {
+            // For flow sequences, only capture a trailing comment on props_line
+            // as a middle comment if the first item does NOT start on the same line.
+            // When items exist on the tag line (e.g. `!!seq [ a, b, # comment]`),
+            // the comment belongs to the last item, not the tag.
+            let first_item_on_props_line = flow
+                && self.peek().is_some_and(|(e, s)| {
+                    !matches!(e, Event::SequenceEnd) && s.start.line() == props_line
+                });
+            if !first_item_on_props_line
+                && let Some(comment) = self.find_trailing_comment(props_line)
+            {
                 middle_comments.push(comment);
             }
             if props_line < content_line {
                 let standalone = self.collect_comments_between_lines(props_line, content_line);
                 middle_comments.extend(standalone);
             }
+            // Only capture trailing comment on content_line as a middle comment
+            // when the tag/anchor is on the SAME line. When they're on different
+            // lines, any trailing comment on content_line belongs to the first
+            // item, not to the sequence's tag-to-content gap.
             if middle_comments.is_empty()
+                && props_line == content_line
+                && !first_item_on_props_line
                 && let Some(comment) = self.find_trailing_comment(content_line)
             {
                 middle_comments.push(comment);
@@ -497,11 +545,19 @@ impl<'a> AstBuilder<'a> {
 
             let item_start_line = self.peek().map_or(0, |(_, s)| s.start.line());
 
-            // For block scalars, item_start_line may point to the value content
-            // (far from the "- " prefix). Find the actual sequence item marker line.
-            let marker_line = if !flow && item_start_line > prev_end_line + 1 {
+            // For block scalars or values starting on the next line,
+            // item_start_line may differ from the "- " prefix line. Find the
+            // actual sequence item marker line by scanning source.
+            let marker_line = if !flow && item_start_line > prev_end_line {
                 let seq_col = span.start.col();
-                (prev_end_line + 1..=item_start_line)
+                // Search from prev_end_line (inclusive for first item, where the
+                // SequenceStart line IS the marker line) through item_start_line.
+                let search_start = if items.is_empty() {
+                    prev_end_line
+                } else {
+                    prev_end_line + 1
+                };
+                (search_start..=item_start_line)
                     .find(|&line_1| {
                         let idx = line_1.saturating_sub(1);
                         if idx < self.source_lines.len() {
@@ -526,6 +582,31 @@ impl<'a> AstBuilder<'a> {
                 self.has_blank_line_immediately_before(marker_line)
             };
 
+            // Capture inline comment on the `- ` indicator line when the value
+            // starts on a later line AND the only content after `- ` is a comment.
+            // e.g. `- #comment\n  value` → indicator_comment = "#comment"
+            // If there's any non-comment content (tag, anchor, value, block scalar
+            // indicator), the comment belongs to that content instead.
+            let indicator_comment = if !flow && marker_line < item_start_line {
+                let marker_idx = marker_line.saturating_sub(1);
+                let is_comment_only = marker_idx < self.source_lines.len() && {
+                    let after_dash = self.source_lines[marker_idx]
+                        .trim_start()
+                        .strip_prefix("- ")
+                        .unwrap_or("");
+                    let content = after_dash.trim_start();
+                    // The only content after `- ` is a comment
+                    content.starts_with('#')
+                };
+                if is_comment_only {
+                    self.find_trailing_comment(marker_line).map(|c| c.text)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let value = self.build_node()?.unwrap_or(Node::Scalar(ScalarNode {
                 value: String::new(),
                 style: ScalarStyle::Plain,
@@ -539,9 +620,30 @@ impl<'a> AstBuilder<'a> {
                 middle_comments: vec![],
             }));
 
-            let _block_body_end = self.last_block_scalar_body_end.take();
-            let content_end = self.last_content_end_line();
-            let trailing_comment = self.find_trailing_comment(content_end).map(|c| c.text);
+            // For block scalar values, use the actual body end line instead of
+            // the span end (which may extend past trailing blank lines).
+            let content_end = if let Some(body_end_0idx) = self.last_block_scalar_body_end.take() {
+                body_end_0idx + 1 // convert 0-indexed to 1-indexed
+            } else {
+                self.last_content_end_line()
+            };
+
+            // In flow sequences, only attach a trailing comment to the item
+            // if it's the last item on its source line. Otherwise, the comment
+            // belongs to a later item (e.g. `[a, b, c, # comment]` — the
+            // comment belongs to `c`, not `a` or `b`).
+            let trailing_comment = if flow {
+                let next_on_same_line = self
+                    .peek()
+                    .is_some_and(|(_, s)| s.start.line() == content_end);
+                if next_on_same_line {
+                    None
+                } else {
+                    self.find_trailing_comment(content_end).map(|c| c.text)
+                }
+            } else {
+                self.find_trailing_comment(content_end).map(|c| c.text)
+            };
 
             let prettier_ignore = leading_comments
                 .iter()
@@ -553,6 +655,7 @@ impl<'a> AstBuilder<'a> {
                 trailing_comment,
                 blank_line_before,
                 prettier_ignore,
+                indicator_comment,
             });
 
             prev_end_line = content_end;
@@ -565,9 +668,28 @@ impl<'a> AstBuilder<'a> {
         let trailing_comments =
             self.collect_comments_between_lines_at_depth(prev_end_line, seq_end_line + 1, seq_col);
 
-        if let Some((Event::SequenceEnd, _)) = self.peek() {
-            self.advance();
-        }
+        // Capture closing bracket comment for flow sequences (e.g. `] # comment`)
+        // Only capture when this is a non-nested flow sequence (in_flow_context == 1).
+        // For nested flow sequences, the comment typically belongs to the parent
+        // context as a trailing comment on its item.
+        let closing_comment = if flow {
+            if let Some((Event::SequenceEnd, s)) = self.peek() {
+                let end_line = s.start.line();
+                self.advance();
+                if self.in_flow_context == 1 {
+                    self.find_trailing_comment(end_line).map(|c| c.text)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            if let Some((Event::SequenceEnd, _)) = self.peek() {
+                self.advance();
+            }
+            None
+        };
 
         if flow {
             self.in_flow_context -= 1;
@@ -581,6 +703,7 @@ impl<'a> AstBuilder<'a> {
             flow_source,
             middle_comments,
             trailing_comments,
+            closing_comment,
         }))
     }
 
@@ -634,12 +757,23 @@ impl<'a> AstBuilder<'a> {
             let mut props_line = content_line;
             for l in (1..content_line).rev() {
                 let src = self.source_lines[l - 1].trim_start();
-                // Skip past sequence item indicator `- ` or mapping key prefix if present
                 let src = src.strip_prefix("- ").unwrap_or(src);
                 if src.starts_with('#') {
                     continue;
                 }
                 if src.starts_with('!') || src.starts_with('&') {
+                    props_line = l;
+                    break;
+                }
+                if let Some(tag) = &tag_str
+                    && src.contains(tag.as_str())
+                {
+                    props_line = l;
+                    break;
+                }
+                if let Some(anc) = &anchor
+                    && src.contains(&format!("&{anc}"))
+                {
                     props_line = l;
                     break;
                 }
@@ -653,7 +787,12 @@ impl<'a> AstBuilder<'a> {
                 let standalone = self.collect_comments_between_lines(props_line, content_line);
                 middle_comments.extend(standalone);
             }
+            // Only capture trailing comment on content_line as a middle comment
+            // when the tag/anchor is on the SAME line. When they're on different
+            // lines, any trailing comment on content_line belongs to the first
+            // entry, not to the mapping's tag-to-content gap.
             if middle_comments.is_empty()
+                && props_line == content_line
                 && let Some(comment) = self.find_trailing_comment(content_line)
             {
                 middle_comments.push(comment);
@@ -718,13 +857,48 @@ impl<'a> AstBuilder<'a> {
 
             let key_end_line = self.last_event_end_line();
             let value_start_line = self.peek().map_or(key_end_line, |(_, s)| s.start.line());
-            let key_trailing_comment = if value_start_line > key_end_line {
-                self.find_trailing_comment(key_end_line).map(|c| c.text)
+
+            // For explicit keys, find the colon (`:`) indicator line between
+            // key_end and value_start. The `:` line should not be treated as key
+            // trailing — its comment is a `colon_comment` instead.
+            let explicit_colon_line = if is_explicit_key && value_start_line > key_end_line {
+                (key_end_line..=value_start_line).find(|&line_1| {
+                    let idx = line_1.saturating_sub(1);
+                    idx < self.source_lines.len()
+                        && self.source_lines[idx].trim_start().starts_with(':')
+                })
             } else {
                 None
             };
-            let between_comments =
-                self.collect_comments_between_lines(key_end_line, value_start_line);
+
+            let key_trailing_comment = if value_start_line > key_end_line {
+                // For explicit keys, skip the colon line when looking for
+                // key trailing comments.
+                if explicit_colon_line == Some(key_end_line) {
+                    None
+                } else {
+                    self.find_trailing_comment(key_end_line).map(|c| c.text)
+                }
+            } else {
+                None
+            };
+            // Check if the value is an implicit null. Saphyr reports implicit
+            // null positions at the NEXT token, which can be far away (e.g. a
+            // sibling entry in the parent mapping). Don't collect between_comments
+            // in that case, as they may belong to outer/sibling entries.
+            let value_is_implicit_null = if let Some((Event::Scalar(v, style, ..), s)) = self.peek()
+            {
+                *style == ScalarStyle::Plain
+                    && (v == "~" || v.is_empty())
+                    && self.is_implicit_null(s, v, *style)
+            } else {
+                false
+            };
+            let between_comments = if value_is_implicit_null {
+                vec![]
+            } else {
+                self.collect_comments_between_lines(key_end_line, value_start_line)
+            };
 
             // Also check between_comments for prettier-ignore
             if !has_prettier_ignore {
@@ -737,18 +911,8 @@ impl<'a> AstBuilder<'a> {
             // (`:`) line. E.g. `? key\n: # comment\n  value`. This is stored as
             // `colon_comment` (NOT between_comments) so it doesn't force explicit
             // key format. The printer renders it on its own line between key and value.
-            let colon_comment = if is_explicit_key
-                && key_trailing_comment.is_none()
-                && value_start_line > key_end_line
-            {
-                let mut found = None;
-                for line in (key_end_line + 1)..value_start_line {
-                    if let Some(c) = self.find_trailing_comment(line) {
-                        found = Some(c);
-                        break;
-                    }
-                }
-                found
+            let colon_comment = if let Some(colon_line) = explicit_colon_line {
+                self.find_trailing_comment(colon_line)
             } else {
                 None
             };
@@ -823,8 +987,13 @@ impl<'a> AstBuilder<'a> {
                     between_comments
                 };
 
-            let _block_body_end = self.last_block_scalar_body_end.take();
-            let content_end = self.last_content_end_line();
+            // For block scalar values, use the actual body end line instead of
+            // the span end (which may extend past trailing blank lines).
+            let content_end = if let Some(body_end_0idx) = self.last_block_scalar_body_end.take() {
+                body_end_0idx + 1 // convert 0-indexed to 1-indexed
+            } else {
+                self.last_content_end_line()
+            };
             let trailing_comment = self.find_trailing_comment(content_end).map(|c| c.text);
 
             // Capture raw source for prettier-ignore entries (only when the
@@ -967,11 +1136,29 @@ impl<'a> AstBuilder<'a> {
         // Walk backwards through container end events (MappingEnd, SequenceEnd)
         // to find the actual last content event. Container end events in saphyr
         // report the position of the NEXT sibling, not the actual content end.
+        //
+        // Also skip zero-length null scalars, but ONLY when immediately preceded
+        // by a container end in the walk. These are trailing null values (e.g. in
+        // !!set mappings) whose positions come from the NEXT token.
         let mut idx = self.pos - 1;
+        let mut after_container_end = false;
         loop {
             let event = &self.events[idx];
             match &event.0 {
                 Event::MappingEnd | Event::SequenceEnd => {
+                    after_container_end = true;
+                    if idx == 0 {
+                        return event.1.end.line();
+                    }
+                    idx -= 1;
+                }
+                Event::Scalar(v, ..)
+                    if after_container_end
+                        && (v == "~" || v.is_empty())
+                        && event.1.start == event.1.end =>
+                {
+                    // Zero-length null scalar right after container end — skip it.
+                    after_container_end = false;
                     if idx == 0 {
                         return event.1.end.line();
                     }
@@ -983,12 +1170,12 @@ impl<'a> AstBuilder<'a> {
                     let start_line = event.1.start.line();
                     // When the span ends at column 0, the content actually finished on the
                     // previous line. Adjust to avoid picking up comments on the next line.
-                    // Exception: implicit null scalars where start == end at col 0 — don't adjust.
-                    return if col == 0 && line > 1 && start_line < line {
+                    let result = if col == 0 && line > 1 && start_line < line {
                         line - 1
                     } else {
                         line
                     };
+                    return result;
                 }
             }
         }
@@ -1324,11 +1511,15 @@ impl<'a> AstBuilder<'a> {
 
         let start_byte = self.to_byte(span.start.index());
 
+        // Saphyr's span.start may point to:
+        // 1. The opening quote itself (span includes delimiter)
+        // 2. The first content character (span excludes delimiter)
+        // Check start_byte first to avoid finding the closing quote of a previous string.
         let mut open_pos = None;
-        if start_byte == 0 {
-            if !self.source.is_empty() && self.source.as_bytes()[0] == quote_char {
-                open_pos = Some(0);
-            }
+        if start_byte < self.source.len() && self.source.as_bytes()[start_byte] == quote_char {
+            open_pos = Some(start_byte);
+        } else if start_byte == 0 {
+            // Already checked above
         } else {
             for i in (0..start_byte).rev() {
                 if self.source.as_bytes()[i] == quote_char {
@@ -1338,12 +1529,6 @@ impl<'a> AstBuilder<'a> {
                 if start_byte - i > 5 {
                     break;
                 }
-            }
-            if open_pos.is_none()
-                && start_byte < self.source.len()
-                && self.source.as_bytes()[start_byte] == quote_char
-            {
-                open_pos = Some(start_byte);
             }
         }
 
@@ -1480,6 +1665,13 @@ impl<'a> AstBuilder<'a> {
             let prev_content = self.source_lines[prev_idx].trim();
             if prev_content.is_empty() || prev_content.starts_with('#') {
                 continue; // skip blank lines and comments
+            }
+            // Only check lines at same or shallower indent than the key.
+            // Deeper-indented `?` lines belong to nested mappings.
+            let prev_indent =
+                self.source_lines[prev_idx].len() - self.source_lines[prev_idx].trim_start().len();
+            if prev_indent > col {
+                break;
             }
             if prev_content == "?"
                 || prev_content.starts_with("? ")
@@ -1721,8 +1913,61 @@ impl<'a> AstBuilder<'a> {
         }
     }
 
-    /// Mark all comments within a block scalar body as used.
-    /// Block scalar bodies can contain lines that look like comments (starting with `#`)
+    /// Check if saphyr skipped an empty document between `...` markers.
+    /// For input like `...\n# comment\n...\n`, saphyr produces only one `DocumentEnd`
+    /// but prettier treats this as two documents. Returns a synthetic empty document
+    /// if a `...` marker is found between the previous document end and the next document start.
+    fn check_skipped_empty_document(&mut self, prev_doc_end_line: usize) -> Option<YamlDoc> {
+        let next_doc_start_line = self.peek().map(|(_, s)| s.start.line())?;
+
+        // Look for a `...` marker between the previous doc end and next doc start
+        let mut doc_end_marker_line = None;
+        for line_idx in prev_doc_end_line..next_doc_start_line {
+            if line_idx < self.source_lines.len() {
+                let trimmed = self.source_lines[line_idx].trim();
+                if trimmed == "..." || trimmed.starts_with("... ") || trimmed.starts_with("...#") {
+                    doc_end_marker_line = Some(line_idx + 1); // 1-indexed
+                }
+            }
+        }
+
+        let end_line = doc_end_marker_line?;
+
+        // Collect comments between prev_doc_end and the `...` marker
+        let preamble_comments: Vec<String> = self
+            .collect_comments_between_lines(prev_doc_end_line, end_line)
+            .into_iter()
+            .map(|c| c.text)
+            .collect();
+
+        if preamble_comments.is_empty() {
+            return None;
+        }
+
+        Some(YamlDoc {
+            explicit_start: false,
+            explicit_end: true,
+            preamble: preamble_comments,
+            root: None,
+            end_comments: vec![],
+            start_comment: None,
+            end_marker_comment: None,
+            body_leading_comments: vec![],
+            root_trailing_comment: None,
+            raw_body_source: None,
+        })
+    }
+
+    /// Get the column where a non-whole-line comment starts on the given line, if any.
+    fn comment_start_col_on_line(&self, line: usize) -> Option<usize> {
+        for (i, comment) in self.comments.iter().enumerate() {
+            if !self.used_comment_lines[i] && !comment.whole_line && comment.line == line {
+                return Some(comment.col);
+            }
+        }
+        None
+    }
+
     fn find_trailing_comment(&mut self, line: usize) -> Option<Comment> {
         for (i, comment) in self.comments.iter().enumerate() {
             if !self.used_comment_lines[i] && !comment.whole_line && comment.line == line {

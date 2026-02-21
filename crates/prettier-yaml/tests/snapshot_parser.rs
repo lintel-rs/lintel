@@ -146,7 +146,6 @@ fn parse_options(lines: &[&str]) -> (String, YamlFormatOptions, bool) {
                 options.prose_wrap = match value.trim_matches('"') {
                     "always" => ProseWrap::Always,
                     "never" => ProseWrap::Never,
-                    "preserve" => ProseWrap::Preserve,
                     _ => ProseWrap::Preserve,
                 };
             }
@@ -167,14 +166,13 @@ fn unescape_template_literal(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some('\\') => result.push('\\'),
+                Some('\\') | None => result.push('\\'),
                 Some('`') => result.push('`'),
                 Some('$') => result.push('$'),
                 Some(other) => {
                     result.push('\\');
                     result.push(other);
                 }
-                None => result.push('\\'),
             }
         } else {
             result.push(c);
