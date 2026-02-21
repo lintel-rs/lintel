@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.5...lintel-check-v0.0.6) - 2026-02-21
+
+### Other
+
+- add SchemaCacheBuilder and centralize TTL defaulting
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.4...lintel-check-v0.0.5) - 2026-02-21
 
 ### Added

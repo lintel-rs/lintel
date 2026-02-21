@@ -1,6 +1,6 @@
 [package]
 name = "lintel-schemastore-catalog"
-version = "0.0.4"
+version = "0.0.5"
 edition.workspace = true
 authors.workspace = true
 description = "Mirror the SchemaStore catalog into a self-hosted git repo"

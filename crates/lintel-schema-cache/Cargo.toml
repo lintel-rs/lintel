@@ -1,6 +1,6 @@
 [package]
 name = "lintel-schema-cache"
-version = "0.0.5"
+version = "0.0.6"
 edition.workspace = true
 authors.workspace = true
 description = "Disk-backed schema cache with HTTP fetching and JSON parsing"

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.3...lintel-github-action-v0.0.4) - 2026-02-21
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.2...lintel-github-action-v0.0.3) - 2026-02-21
 
 ### Added
