@@ -7,9 +7,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{
-    CacheStatus, HttpClient, ReqwestClient, SchemaCache, ensure_cache_dir,
-};
+use lintel_check::retriever::{CacheStatus, HttpCache, ensure_cache_dir};
 use lintel_check::validate;
 use lintel_check::validation_cache;
 
@@ -51,25 +49,21 @@ pub struct TraceArgs {
     pub file: String,
 }
 
-pub async fn run<C: HttpClient>(
-    cmd: CacheCommand,
-    _global: &CLIGlobalOptions,
-    client: C,
-) -> Result<bool> {
+pub async fn run(cmd: CacheCommand, _global: &CLIGlobalOptions) -> Result<bool> {
     match cmd {
         CacheCommand::InspectSchema(args) => {
             inspect_schema(args)?;
             Ok(false)
         }
         CacheCommand::Trace(args) => {
-            trace(args, client).await?;
+            trace(args).await?;
             Ok(false)
         }
     }
 }
 
 fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
-    let hash = SchemaCache::<ReqwestClient>::hash_uri(&args.url);
+    let hash = HttpCache::hash_uri(&args.url);
     let cache_dir = match args.cache_dir {
         Some(dir) => PathBuf::from(dir),
         None => ensure_cache_dir(),
@@ -109,7 +103,7 @@ fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
     Ok(())
 }
 
-async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
+async fn trace(args: TraceArgs) -> Result<()> {
     let file_path = Path::new(&args.file);
     if !file_path.exists() {
         bail!("file not found: {}", args.file);
@@ -138,14 +132,14 @@ async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(schema_cache_dir.clone()), client, false, ttl);
+    let retriever = HttpCache::new(Some(schema_cache_dir.clone()), false, ttl);
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
     let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
 
     let compiled_catalogs =
-        trace_catalog::<C>(&retriever, &cfg, args.no_catalog, &schema_cache_dir).await;
+        trace_catalog(&retriever, &cfg, args.no_catalog, &schema_cache_dir).await;
 
     // Parse file and resolve schema
     let detected_format = parsers::detect_format(file_path);
@@ -179,8 +173,8 @@ async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
     Ok(())
 }
 
-async fn trace_catalog<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+async fn trace_catalog(
+    retriever: &HttpCache,
     cfg: &config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
@@ -192,7 +186,7 @@ async fn trace_catalog<C: HttpClient>(
         println!("  status: disabled (--no-catalog)");
     } else {
         let catalog_url = lintel_check::catalog::CATALOG_URL;
-        let catalog_hash = SchemaCache::<C>::hash_uri(catalog_url);
+        let catalog_hash = HttpCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
         println!("  hash: {catalog_hash}");
@@ -264,8 +258,8 @@ fn trace_schema_resolution(
     Some((schema_uri, is_remote))
 }
 
-async fn trace_schema_cache<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+async fn trace_schema_cache(
+    retriever: &HttpCache,
     schema_uri: &str,
     is_remote: bool,
     schema_cache_dir: &Path,
@@ -273,7 +267,7 @@ async fn trace_schema_cache<C: HttpClient>(
     println!();
     println!("schema cache:");
     if is_remote {
-        let schema_hash = SchemaCache::<C>::hash_uri(schema_uri);
+        let schema_hash = HttpCache::hash_uri(schema_uri);
         let schema_cache_path = schema_cache_dir.join(format!("{schema_hash}.json"));
         println!("  hash: {schema_hash}");
         println!("  path: {}", schema_cache_path.display());
@@ -306,8 +300,8 @@ async fn trace_schema_cache<C: HttpClient>(
     }
 }
 
-async fn trace_validation_cache<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+async fn trace_validation_cache(
+    retriever: &HttpCache,
     schema_uri: &str,
     is_remote: bool,
     cfg: &config::Config,

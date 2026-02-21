@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use lintel_schema_cache::{HttpClient, SchemaCache};
+use lintel_http_cache::HttpCache;
 use tracing::{debug, warn};
 
 /// Recursively scan a JSON value for `$ref` strings that are absolute HTTP(S) URLs.
@@ -125,8 +125,8 @@ pub fn rewrite_refs(value: &mut serde_json::Value, url_map: &HashMap<String, Str
 ///
 /// Filenames in `_shared/` are disambiguated with numeric suffixes when
 /// different URLs produce the same last path segment.
-pub async fn resolve_and_rewrite<C: HttpClient>(
-    cache: &SchemaCache<C>,
+pub async fn resolve_and_rewrite(
+    cache: &HttpCache,
     schema_text: &str,
     schema_dest: &Path,
     shared_dir: &Path,

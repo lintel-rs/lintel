@@ -11,7 +11,7 @@ use lintel_check::config;
 use lintel_check::discover;
 use lintel_check::parsers;
 use lintel_check::registry;
-use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
+use lintel_check::retriever::{HttpCache, ensure_cache_dir};
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -131,10 +131,7 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // Catalog fetching
 // ---------------------------------------------------------------------------
 
-async fn fetch_catalogs<C: HttpClient>(
-    retriever: &SchemaCache<C>,
-    registries: &[String],
-) -> Vec<CompiledCatalog> {
+async fn fetch_catalogs(retriever: &HttpCache, registries: &[String]) -> Vec<CompiledCatalog> {
     type CatalogResult = (
         String,
         Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
@@ -285,7 +282,7 @@ fn process_file(
 ///
 /// Panics if `--schema-cache-ttl` is provided with an unparseable duration.
 #[tracing::instrument(skip_all, name = "annotate")]
-pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<AnnotateResult> {
+pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     let config_dir = args
         .globs
         .iter()
@@ -298,9 +295,8 @@ pub async fn run<C: HttpClient>(args: &AnnotateArgs, client: C) -> Result<Annota
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(
+    let retriever = HttpCache::new(
         Some(cache_dir_path),
-        client,
         false, // don't force schema fetch
         schema_cache_ttl,
     );

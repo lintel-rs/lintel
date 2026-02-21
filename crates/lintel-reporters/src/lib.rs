@@ -7,7 +7,7 @@ use std::time::Instant;
 use anyhow::Result;
 use bpaf::{Bpaf, Parser};
 
-use lintel_check::retriever::{CacheStatus, HttpClient};
+use lintel_check::retriever::CacheStatus;
 use lintel_check::validate::{self, CheckedFile};
 use lintel_check::validation_cache::ValidationCacheStatus;
 
@@ -194,16 +194,12 @@ pub fn make_reporter(kind: ReporterKind, verbose: bool) -> Box<dyn Reporter> {
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run<C: HttpClient>(
-    args: &mut ValidateArgs,
-    client: C,
-    reporter: &mut dyn Reporter,
-) -> Result<bool> {
+pub async fn run(args: &mut ValidateArgs, reporter: &mut dyn Reporter) -> Result<bool> {
     merge_config(args);
 
     let lib_args = validate::ValidateArgs::from(&*args);
     let start = Instant::now();
-    let result = validate::run_with(&lib_args, client, |file| {
+    let result = validate::run_with(&lib_args, None, |file| {
         reporter.on_file_checked(file);
     })
     .await?;

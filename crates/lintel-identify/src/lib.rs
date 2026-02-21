@@ -7,7 +7,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{HttpClient, SchemaCache, ensure_cache_dir};
+use lintel_check::retriever::{HttpCache, ensure_cache_dir};
 use lintel_check::validate;
 use schemastore::SchemaMatch;
 
@@ -115,11 +115,7 @@ impl<'a> From<SchemaMatch<'a>> for CatalogMatchInfo<'a> {
     clippy::missing_panics_doc,
     clippy::missing_errors_doc
 )]
-pub async fn run<C: HttpClient>(
-    args: IdentifyArgs,
-    global: &CLIGlobalOptions,
-    client: C,
-) -> Result<bool> {
+pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> {
     let file_path = Path::new(&args.file);
     if !file_path.exists() {
         anyhow::bail!("file not found: {}", args.file);
@@ -146,7 +142,7 @@ pub async fn run<C: HttpClient>(
         .cache_dir
         .as_ref()
         .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(cache_dir), client, args.force_schema_fetch, ttl);
+    let retriever = HttpCache::new(Some(cache_dir), args.force_schema_fetch, ttl);
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);

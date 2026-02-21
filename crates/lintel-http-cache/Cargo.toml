@@ -1,21 +1,22 @@
 [package]
-name = "lintel-schema-cache"
+name = "lintel-http-cache"
 version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
-description = "Disk-backed cache for JSON Schema files with pluggable HTTP and jsonschema integration"
+description = "Disk-backed HTTP cache with JSON parsing for schema files"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-keywords = ["json-schema", "cache", "schema"]
+keywords = ["json-schema", "cache", "http"]
 categories = ["caching", "development-tools"]
 
 [dependencies]
 jsonschema = { version = "0.42", features = ["resolve-async"] }
-async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "fs"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 serde_json = "1"
+async-trait = "0.1"
+sha2 = "0.10"
 dirs = "6"
 filetime = "0.2"
 tracing = "0.1"

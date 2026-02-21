@@ -185,31 +185,16 @@ async fn main() -> ExitCode {
             setup_tracing(&global);
             setup_miette(&global);
             let mut reporter = make_reporter(reporter_kind, global.verbose);
-            lintel_reporters::run(
-                &mut args,
-                lintel_check::retriever::ReqwestClient::default(),
-                reporter.as_mut(),
-            )
-            .await
+            lintel_reporters::run(&mut args, reporter.as_mut()).await
         }
         Commands::Identify(global, args) => {
             setup_tracing(&global);
             setup_miette(&global);
-            lintel_identify::run(
-                args,
-                &global,
-                lintel_check::retriever::ReqwestClient::default(),
-            )
-            .await
+            lintel_identify::run(args, &global).await
         }
         Commands::Annotate(global, args) => {
             setup_tracing(&global);
-            commands::annotate::run(
-                &args,
-                lintel_check::retriever::ReqwestClient::default(),
-                global.verbose,
-            )
-            .await
+            commands::annotate::run(&args, global.verbose).await
         }
         Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
@@ -221,12 +206,7 @@ async fn main() -> ExitCode {
         },
         Commands::Cache(global, cmd) => {
             setup_tracing(&global);
-            commands::cache::run(
-                cmd,
-                &global,
-                lintel_check::retriever::ReqwestClient::default(),
-            )
-            .await
+            commands::cache::run(cmd, &global).await
         }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));

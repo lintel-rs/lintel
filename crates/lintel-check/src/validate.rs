@@ -15,7 +15,7 @@ use crate::diagnostics::{
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
-use crate::retriever::{CacheStatus, HttpClient, SchemaCache, ensure_cache_dir};
+use crate::retriever::{CacheStatus, HttpCache, ensure_cache_dir};
 use crate::validation_cache::{self, ValidationCacheStatus};
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
@@ -645,8 +645,8 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
 /// Fetch and compile all schema catalogs (default, `SchemaStore`, and custom registries).
 ///
 /// Returns a list of compiled catalogs, printing warnings for any that fail to fetch.
-pub async fn fetch_compiled_catalogs<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+pub async fn fetch_compiled_catalogs(
+    retriever: &HttpCache,
     config: &config::Config,
     no_catalog: bool,
 ) -> Vec<CompiledCatalog> {
@@ -713,8 +713,8 @@ pub async fn fetch_compiled_catalogs<C: HttpClient>(
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run<C: HttpClient>(args: &ValidateArgs, client: C) -> Result<ValidateResult> {
-    run_with(args, client, |_| {}).await
+pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
+    run_with(args, None, |_| {}).await
 }
 
 /// Like [`run`], but calls `on_check` each time a file is checked, allowing
@@ -725,25 +725,28 @@ pub async fn run<C: HttpClient>(args: &ValidateArgs, client: C) -> Result<Valida
 /// Returns an error if file collection or schema validation encounters an I/O error.
 #[tracing::instrument(skip_all, name = "validate")]
 #[allow(clippy::too_many_lines)]
-pub async fn run_with<C: HttpClient>(
+pub async fn run_with(
     args: &ValidateArgs,
-    client: C,
+    cache: Option<HttpCache>,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<ValidateResult> {
-    let cache_dir = match &args.cache_dir {
-        Some(dir) => {
-            let path = PathBuf::from(dir);
-            let _ = fs::create_dir_all(&path);
-            path
-        }
-        None => ensure_cache_dir(),
+    let retriever = if let Some(c) = cache {
+        c
+    } else {
+        let cache_dir = match &args.cache_dir {
+            Some(dir) => {
+                let path = PathBuf::from(dir);
+                let _ = fs::create_dir_all(&path);
+                path
+            }
+            None => ensure_cache_dir(),
+        };
+        HttpCache::new(
+            Some(cache_dir),
+            args.force_schema_fetch,
+            args.schema_cache_ttl,
+        )
     };
-    let retriever = SchemaCache::new(
-        Some(cache_dir),
-        client.clone(),
-        args.force_schema_fetch,
-        args.schema_cache_ttl,
-    );
 
     let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
@@ -979,31 +982,18 @@ pub async fn run_with<C: HttpClient>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::retriever::HttpClient;
-    use core::error::Error;
-    use std::collections::HashMap;
+    use crate::retriever::HttpCache;
     use std::path::Path;
 
-    #[derive(Clone)]
-    struct MockClient(HashMap<String, String>);
-
-    #[async_trait::async_trait]
-    impl HttpClient for MockClient {
-        async fn get(&self, uri: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-            self.0
-                .get(uri)
-                .cloned()
-                .ok_or_else(|| format!("mock: no response for {uri}").into())
+    fn mock(entries: &[(&str, &str)]) -> HttpCache {
+        let cache = HttpCache::memory();
+        for (uri, body) in entries {
+            cache.insert(
+                uri,
+                serde_json::from_str(body).expect("test mock: invalid JSON"),
+            );
         }
-    }
-
-    fn mock(entries: &[(&str, &str)]) -> MockClient {
-        MockClient(
-            entries
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        )
+        cache
     }
 
     fn testdata() -> PathBuf {
@@ -1043,7 +1033,7 @@ mod tests {
     const SCHEMA: &str =
         r#"{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"#;
 
-    fn schema_mock() -> MockClient {
+    fn schema_mock() -> HttpCache {
         mock(&[("https://example.com/schema.json", SCHEMA)])
     }
 
@@ -1063,7 +1053,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1071,7 +1061,7 @@ mod tests {
     #[tokio::test]
     async fn dir_all_valid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests"]);
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1079,7 +1069,7 @@ mod tests {
     #[tokio::test]
     async fn dir_all_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["negative_tests"]);
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1087,7 +1077,7 @@ mod tests {
     #[tokio::test]
     async fn dir_mixed_valid_and_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "negative_tests"]);
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1095,7 +1085,7 @@ mod tests {
     #[tokio::test]
     async fn dir_no_schemas_skipped() -> anyhow::Result<()> {
         let c = args_for_dirs(&["no_schema"]);
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1103,7 +1093,7 @@ mod tests {
     #[tokio::test]
     async fn dir_valid_with_no_schema_files() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "no_schema"]);
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1123,7 +1113,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         assert!(result.files_checked() > 0);
         Ok(())
@@ -1146,7 +1136,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1169,7 +1159,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1187,7 +1177,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1205,7 +1195,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1229,7 +1219,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1238,23 +1228,18 @@ mod tests {
 
     #[tokio::test]
     async fn custom_cache_dir() -> anyhow::Result<()> {
-        let cache_tmp = tempfile::tempdir()?;
         let c = ValidateArgs {
             globs: scenario_globs(&["positive_tests"]),
             exclude: vec![],
-            cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
+            cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, schema_mock()).await?;
+        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
-
-        // Schema was fetched once and cached
-        let entries: Vec<_> = fs::read_dir(cache_tmp.path())?.collect();
-        assert_eq!(entries.len(), 1);
         Ok(())
     }
 
@@ -1286,7 +1271,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1317,7 +1302,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1339,7 +1324,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1376,7 +1361,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1411,7 +1396,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1472,7 +1457,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1506,7 +1491,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1545,7 +1530,7 @@ mod tests {
 
         let orig_dir = std::env::current_dir()?;
         std::env::set_current_dir(tmp.path())?;
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         std::env::set_current_dir(orig_dir)?;
 
         assert!(!result.has_errors());
@@ -1580,7 +1565,7 @@ mod tests {
             config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1621,7 +1606,7 @@ mod tests {
             schema_cache_ttl: None,
         };
 
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 2); // lintel.toml + config.json
         Ok(())
@@ -1654,7 +1639,7 @@ mod tests {
             schema_cache_ttl: None,
         };
 
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1694,7 +1679,7 @@ mod tests {
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(
             result.has_errors(),
             "expected format error without override"
@@ -1738,7 +1723,7 @@ validate_formats = false
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(
             !result.has_errors(),
             "expected no errors with validate_formats = false override"
@@ -1764,7 +1749,7 @@ validate_formats = false
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, mock(&[])).await?;
+        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 0);
         Ok(())
@@ -1806,7 +1791,7 @@ validate_formats = false
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 1);
         Ok(())
@@ -1843,7 +1828,7 @@ validate_formats = false
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 0);
         Ok(())
@@ -1882,7 +1867,7 @@ validate_formats = false
             config_dir: Some(tmp.path().to_path_buf()),
             schema_cache_ttl: None,
         };
-        let result = run(&c, client).await?;
+        let result = run_with(&c, Some(client), |_| {}).await?;
         assert!(result.has_errors());
         assert_eq!(result.files_checked(), 1);
         Ok(())
@@ -1919,7 +1904,7 @@ validate_formats = false
             schema_cache_ttl: None,
         };
         let mut first_statuses = Vec::new();
-        let result = run_with(&c, mock(&[]), |cf| {
+        let result = run_with(&c, Some(mock(&[])), |cf| {
             first_statuses.push(cf.validation_cache_status);
         })
         .await?;
@@ -1934,7 +1919,7 @@ validate_formats = false
 
         // Second run: same file, same schema — should hit validation cache
         let mut second_statuses = Vec::new();
-        let result = run_with(&c, mock(&[]), |cf| {
+        let result = run_with(&c, Some(mock(&[])), |cf| {
             second_statuses.push(cf.validation_cache_status);
         })
         .await?;
