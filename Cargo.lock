@@ -1255,7 +1255,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-benchmark"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1355,14 +1355,14 @@ dependencies = [
 
 [[package]]
 name = "lintel-cli-common"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "bpaf",
 ]
 
 [[package]]
 name = "lintel-config"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "glob-match",
@@ -1375,7 +1375,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1405,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1432,7 +1432,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schemastore-catalog"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validation-cache"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2298,7 +2298,7 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "globset",

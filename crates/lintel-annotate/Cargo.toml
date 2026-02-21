@@ -1,6 +1,6 @@
 [package]
 name = "lintel-annotate"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
 description = "Annotation-based linting for JSON and YAML files using JSON Schema"
@@ -14,7 +14,7 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.4", path = "../lintel-check" }
+lintel-check = { version = "0.0.5", path = "../lintel-check" }
 bpaf = { version = "0.9", features = ["derive"] }
 humantime = "2"
 anyhow = "1"
