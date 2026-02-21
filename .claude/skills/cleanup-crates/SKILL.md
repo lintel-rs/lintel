@@ -20,5 +20,5 @@ description: >
 - **`description`** — concise, factual, matches the README's first paragraph after badges.
 - **`keywords`** — 1–5 lowercase. Include `"json-schema"` for lintel-related crates.
 - **`categories`** — 1–2 valid crates.io categories.
-- **`--body`** — use `\\n` for newlines. Include a Usage or Features section at minimum.
+- **`--readme`** — use `\\n` for newlines. Include a Usage or Features section at minimum.
 - Link to the project as `[Lintel](https://github.com/lintel-rs/lintel)` in lintel-\* crate descriptions.

@@ -7,14 +7,14 @@ pub fn run(
     crate_dirs: &[PathBuf],
     ws: &workspace::WorkspaceInfo,
     description: Option<String>,
-    body: Option<String>,
+    readme: Option<String>,
     keywords: Option<String>,
     categories: Option<String>,
     force: bool,
 ) {
     // Unescape \n in text arguments
     let description = description.as_deref().map(unescape_newlines);
-    let body = body.as_deref().map(unescape_newlines);
+    let readme_body = readme.as_deref().map(unescape_newlines);
 
     let keywords: Option<Vec<String>> = keywords
         .as_deref()
@@ -52,7 +52,7 @@ pub fn run(
             crate_dir,
             &meta.name,
             meta.description.as_deref(),
-            body.as_deref(),
+            readme_body.as_deref(),
             repo,
             license_text,
             force,

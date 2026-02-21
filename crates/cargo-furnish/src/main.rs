@@ -39,8 +39,8 @@ enum Commands {
         #[bpaf(long("description"), argument("TEXT"))]
         description: Option<String>,
         /// README body markdown (inserted between description and License section)
-        #[bpaf(long("body"), argument("TEXT"))]
-        body: Option<String>,
+        #[bpaf(long("readme"), argument("TEXT"))]
+        readme: Option<String>,
         /// Comma-separated keywords
         #[bpaf(long("keywords"), argument("K1,K2,..."))]
         keywords: Option<String>,
@@ -78,7 +78,7 @@ fn main() -> miette::Result<()> {
         }
         Commands::Update {
             description,
-            body,
+            readme,
             keywords,
             categories,
             force,
@@ -89,7 +89,7 @@ fn main() -> miette::Result<()> {
                 &crate_dirs,
                 &ws,
                 description,
-                body,
+                readme,
                 keywords,
                 categories,
                 force,

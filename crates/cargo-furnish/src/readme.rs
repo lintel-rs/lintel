@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use core::fmt::Write;
 use std::path::Path;
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
@@ -92,8 +92,52 @@ pub struct MissingLicenseSection {
     pub crate_name: String,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("README.md is missing the GitHub CI badge")]
+#[diagnostic(
+    code(furnish::missing_ci_badge),
+    severity(Warning),
+    help("cargo furnish update --force {crate_name}")
+)]
+pub struct MissingCiBadge {
+    #[source_code]
+    pub src: NamedSource<String>,
+    #[label("expected [![CI][ci-badge]][ci-url] badge")]
+    pub span: SourceSpan,
+    pub crate_name: String,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("README.md is the default template with no custom content")]
+#[diagnostic(
+    code(furnish::default_readme),
+    severity(Warning),
+    help(
+        "cargo furnish update --readme \"...\" {crate_name}\n\n\
+         A good README should include:\n  \
+         - A short description of what the crate does\n  \
+         - A quick-start example showing basic usage\n  \
+         - Links to relevant documentation or related crates\n\n\
+         The --readme flag accepts markdown that is inserted between\n\
+         the description and the License section."
+    )
+)]
+pub struct DefaultReadme {
+    #[source_code]
+    pub src: NamedSource<String>,
+    #[label("this README has no content beyond the auto-generated template")]
+    pub span: SourceSpan,
+    pub crate_name: String,
+}
+
 /// Check if README exists and is well-formed. Returns diagnostics.
-pub fn check_readme(crate_dir: &Path, crate_name: &str) -> Vec<Box<dyn Diagnostic + Send + Sync>> {
+pub fn check_readme(
+    crate_dir: &Path,
+    crate_name: &str,
+    description: Option<&str>,
+    repository: &str,
+    license_text: &str,
+) -> Vec<Box<dyn Diagnostic + Send + Sync>> {
     let readme_path = crate_dir.join("README.md");
     let mut diagnostics: Vec<Box<dyn Diagnostic + Send + Sync>> = Vec::new();
 
@@ -130,6 +174,14 @@ pub fn check_readme(crate_dir: &Path, crate_name: &str) -> Vec<Box<dyn Diagnosti
         }));
     }
 
+    if !content.contains("[ci-badge]") {
+        diagnostics.push(Box::new(MissingCiBadge {
+            src: src(),
+            span: (0, first_line_len).into(),
+            crate_name: crate_name.to_string(),
+        }));
+    }
+
     if !content.contains("[license-badge]") {
         diagnostics.push(Box::new(MissingLicenseBadge {
             src: src(),
@@ -144,6 +196,16 @@ pub fn check_readme(crate_dir: &Path, crate_name: &str) -> Vec<Box<dyn Diagnosti
         diagnostics.push(Box::new(MissingLicenseSection {
             src: src(),
             span: last_line_span,
+            crate_name: crate_name.to_string(),
+        }));
+    }
+
+    // Check if the README is just the default template with no custom body
+    let default = generate_readme(crate_name, description, None, repository, license_text);
+    if content == default {
+        diagnostics.push(Box::new(DefaultReadme {
+            src: src(),
+            span: (0, first_line_len).into(),
             crate_name: crate_name.to_string(),
         }));
     }
@@ -180,6 +242,7 @@ pub fn generate_readme(
     out.push('\n');
     out.push_str("[![Crates.io][crates-badge]][crates-url]\n");
     out.push_str("[![docs.rs][docs-badge]][docs-url]\n");
+    out.push_str("[![CI][ci-badge]][ci-url]\n");
     out.push_str("[![License][license-badge]][license-url]\n");
     out.push('\n');
     let _ = writeln!(
@@ -189,6 +252,11 @@ pub fn generate_readme(
     let _ = writeln!(out, "[crates-url]: https://crates.io/crates/{crate_name}");
     let _ = writeln!(out, "[docs-badge]: https://docs.rs/{crate_name}/badge.svg");
     let _ = writeln!(out, "[docs-url]: https://docs.rs/{crate_name}");
+    let _ = writeln!(
+        out,
+        "[ci-badge]: {repository}/actions/workflows/ci.yml/badge.svg"
+    );
+    let _ = writeln!(out, "[ci-url]: {repository}/actions/workflows/ci.yml");
     let _ = writeln!(
         out,
         "[license-badge]: https://img.shields.io/crates/l/{crate_name}.svg"
