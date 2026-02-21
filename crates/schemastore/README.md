@@ -1,19 +1,13 @@
 # schemastore
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/schemastore.svg
-[crates-url]: https://crates.io/crates/schemastore
-[docs-badge]: https://docs.rs/schemastore/badge.svg
-[docs-url]: https://docs.rs/schemastore
-[license-badge]: https://img.shields.io/crates/l/schemastore.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/schemastore.svg)](https://crates.io/crates/schemastore)
+[![docs.rs](https://docs.rs/schemastore/badge.svg)](https://docs.rs/schemastore)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/schemastore.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Parse and match files against the [SchemaStore](https://www.schemastore.org/) catalog.
 
-SchemaStore is a community-maintained collection of JSON Schema definitions for common configuration files. This crate deserializes the catalog and matches file paths to their corresponding schemas using the `fileMatch` glob patterns.
+`SchemaStore` is a community-maintained collection of JSON Schema definitions for common configuration files. This crate deserializes the catalog and matches file paths to their corresponding schemas using the `fileMatch` glob patterns.
 
 ## Usage
 
@@ -36,7 +30,7 @@ compiled.find_schema(".github/workflows/ci.yml", "ci.yml");
 
 ## API
 
-- `CATALOG_URL` — the well-known URL for the SchemaStore catalog JSON
+- `CATALOG_URL` — the well-known URL for the `SchemaStore` catalog JSON
 - `Catalog` / `SchemaEntry` — serde types for the catalog
 - `parse_catalog(Value)` — deserialize the catalog from a `serde_json::Value`
 - `CompiledCatalog::compile(&Catalog)` — pre-compile all `fileMatch` globs
@@ -47,3 +41,7 @@ Bare filename patterns (e.g. `tsconfig.json`) are automatically expanded to also
 ## Design
 
 This crate is `#![no_std]` — it only depends on `alloc`, `serde`, `serde_json`, and `glob-match`. No HTTP client is included; callers fetch the catalog JSON themselves.
+
+## License
+
+Apache-2.0

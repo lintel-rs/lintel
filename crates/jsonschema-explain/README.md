@@ -1,5 +1,10 @@
 # jsonschema-explain
 
+[![Crates.io](https://img.shields.io/crates/v/jsonschema-explain.svg)](https://crates.io/crates/jsonschema-explain)
+[![docs.rs](https://docs.rs/jsonschema-explain/badge.svg)](https://docs.rs/jsonschema-explain)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/jsonschema-explain.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
+
 Render JSON Schema as human-readable terminal documentation, similar to a man page.
 
 Takes a `serde_json::Value` containing a JSON Schema and produces formatted text with optional ANSI color output. No dependencies beyond `serde_json`.
@@ -72,3 +77,7 @@ PROPERTIES
   - Blue for inline code (backtick-delimited text)
   - Dim for URLs, metadata labels, variant numbers
 - **No wrapping** - output is not pre-wrapped, letting the terminal or pager handle line wrapping at the actual terminal width
+
+## License
+
+Apache-2.0

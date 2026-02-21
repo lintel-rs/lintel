@@ -1,15 +1,9 @@
 # lintel-validation-cache
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-validation-cache.svg
-[crates-url]: https://crates.io/crates/lintel-validation-cache
-[docs-badge]: https://docs.rs/lintel-validation-cache/badge.svg
-[docs-url]: https://docs.rs/lintel-validation-cache
-[license-badge]: https://img.shields.io/crates/l/lintel-validation-cache.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-validation-cache.svg)](https://crates.io/crates/lintel-validation-cache)
+[![docs.rs](https://docs.rs/lintel-validation-cache/badge.svg)](https://docs.rs/lintel-validation-cache)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-validation-cache.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Disk-backed cache for JSON Schema validation results. Caches the outcome of validating a file against a schema so that unchanged files can skip re-validation on subsequent runs.
 
@@ -34,3 +28,7 @@ if let Some(result) = cache.get(&file_hash, &schema_uri).await? {
 // Store a new result
 cache.set(&file_hash, &schema_uri, &result).await?;
 ```
+
+## License
+
+Apache-2.0

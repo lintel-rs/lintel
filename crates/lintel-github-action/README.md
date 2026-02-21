@@ -1,9 +1,9 @@
 # lintel-github-action
 
-[![License][license-badge]][license-url]
-
-[license-badge]: https://img.shields.io/crates/l/lintel-github-action.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-github-action.svg)](https://crates.io/crates/lintel-github-action)
+[![docs.rs](https://docs.rs/lintel-github-action/badge.svg)](https://docs.rs/lintel-github-action)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-github-action.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 GitHub Action binary for [Lintel](https://github.com/lintel-rs/lintel). Creates a GitHub Check Run named "Lintel" with inline annotations on pull requests using the [Checks API](https://docs.github.com/en/rest/checks/runs).
 
@@ -26,3 +26,7 @@ GitHub Action binary for [Lintel](https://github.com/lintel-rs/lintel). Creates 
 ## Usage
 
 This binary is used by the [lintel-rs/action](https://github.com/lintel-rs/action) GitHub Action. See that repository for usage instructions.
+
+## License
+
+Apache-2.0

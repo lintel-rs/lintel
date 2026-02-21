@@ -1,15 +1,9 @@
 # lintel-schema-cache
 
-[![Crates.io][crates-badge]][crates-url]
-[![docs.rs][docs-badge]][docs-url]
-[![License][license-badge]][license-url]
-
-[crates-badge]: https://img.shields.io/crates/v/lintel-schema-cache.svg
-[crates-url]: https://crates.io/crates/lintel-schema-cache
-[docs-badge]: https://docs.rs/lintel-schema-cache/badge.svg
-[docs-url]: https://docs.rs/lintel-schema-cache
-[license-badge]: https://img.shields.io/crates/l/lintel-schema-cache.svg
-[license-url]: https://github.com/lintel-rs/lintel/blob/master/LICENSE
+[![Crates.io](https://img.shields.io/crates/v/lintel-schema-cache.svg)](https://crates.io/crates/lintel-schema-cache)
+[![docs.rs](https://docs.rs/lintel-schema-cache/badge.svg)](https://docs.rs/lintel-schema-cache)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/lintel-schema-cache.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Disk-backed cache for JSON Schema files. Fetches schemas over HTTP and stores them locally for fast subsequent lookups.
 
@@ -46,3 +40,7 @@ impl HttpClient for MyClient {
 
 let cache = SchemaCache::new(None, MyClient);
 ```
+
+## License
+
+Apache-2.0

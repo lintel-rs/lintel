@@ -42,7 +42,7 @@ pub struct ReadmeMissingError {
 pub struct MissingCratesBadge {
     #[source_code]
     pub src: NamedSource<String>,
-    #[label("expected [![Crates.io][crates-badge]][crates-url] badge")]
+    #[label("expected [![Crates.io](...)](...) badge")]
     pub span: SourceSpan,
     pub crate_name: String,
 }
@@ -57,7 +57,7 @@ pub struct MissingCratesBadge {
 pub struct MissingDocsBadge {
     #[source_code]
     pub src: NamedSource<String>,
-    #[label("expected [![docs.rs][docs-badge]][docs-url] badge")]
+    #[label("expected [![docs.rs](...)](...) badge")]
     pub span: SourceSpan,
     pub crate_name: String,
 }
@@ -72,7 +72,7 @@ pub struct MissingDocsBadge {
 pub struct MissingLicenseBadge {
     #[source_code]
     pub src: NamedSource<String>,
-    #[label("expected [![License][license-badge]][license-url] badge")]
+    #[label("expected [![License](...)](...) badge")]
     pub span: SourceSpan,
     pub crate_name: String,
 }
@@ -102,7 +102,7 @@ pub struct MissingLicenseSection {
 pub struct MissingCiBadge {
     #[source_code]
     pub src: NamedSource<String>,
-    #[label("expected [![CI][ci-badge]][ci-url] badge")]
+    #[label("expected [![CI](...)](...) badge")]
     pub span: SourceSpan,
     pub crate_name: String,
 }
@@ -156,7 +156,7 @@ pub fn check_readme(
     // Point diagnostics at the first line of the file
     let first_line_len = content.lines().next().map_or(1, |l| l.len().max(1));
 
-    if !content.contains("[crates-badge]") {
+    if !content.contains("img.shields.io/crates/v/") {
         diagnostics.push(Box::new(MissingCratesBadge {
             src: src(),
             span: (0, first_line_len).into(),
@@ -164,7 +164,7 @@ pub fn check_readme(
         }));
     }
 
-    if !content.contains("[docs-badge]") {
+    if !content.contains("docs.rs/") {
         diagnostics.push(Box::new(MissingDocsBadge {
             src: src(),
             span: (0, first_line_len).into(),
@@ -172,7 +172,7 @@ pub fn check_readme(
         }));
     }
 
-    if !content.contains("[ci-badge]") {
+    if !content.contains("actions/workflows/") {
         diagnostics.push(Box::new(MissingCiBadge {
             src: src(),
             span: (0, first_line_len).into(),
@@ -180,7 +180,7 @@ pub fn check_readme(
         }));
     }
 
-    if !content.contains("[license-badge]") {
+    if !content.contains("img.shields.io/crates/l/") {
         diagnostics.push(Box::new(MissingLicenseBadge {
             src: src(),
             span: (0, first_line_len).into(),
@@ -214,30 +214,26 @@ pub fn check_readme(
 
 /// Check whether the README body region contains only the description (or nothing).
 ///
-/// The "body region" is everything between the last badge-reference link line
-/// (e.g. `[license-url]: ...`) and the `## License` heading.  If stripping the
-/// description from that region leaves only whitespace, the README is default.
+/// The "body region" is everything between the last badge line
+/// (a line starting with `[![`) and the `## License` heading. If stripping
+/// the description from that region leaves only whitespace, the README is default.
 fn is_default_readme(content: &str, description: Option<&str>) -> bool {
-    // Find the end of badge-reference links: last line starting with `[`
-    // that contains `]: ` (a markdown reference link definition).
     let lines: Vec<&str> = content.lines().collect();
 
-    let last_ref_idx = lines
-        .iter()
-        .rposition(|l| l.starts_with('[') && l.contains("]: "));
+    // Last inline badge line (starts with `[![`)
+    let last_badge_idx = lines.iter().rposition(|l| l.starts_with("[!["));
     let license_idx = lines.iter().position(|l| l.starts_with("## License"));
 
-    let (Some(ref_end), Some(lic_start)) = (last_ref_idx, license_idx) else {
-        // Can't determine structure — not a furnish-generated README at all.
+    let (Some(badge_end), Some(lic_start)) = (last_badge_idx, license_idx) else {
         return false;
     };
 
-    if ref_end >= lic_start {
+    if badge_end >= lic_start {
         return false;
     }
 
     // Collect non-empty lines in the body region
-    let body: String = lines[ref_end + 1..lic_start]
+    let body: String = lines[badge_end + 1..lic_start]
         .iter()
         .copied()
         .filter(|l| !l.is_empty())
@@ -283,28 +279,22 @@ pub fn generate_readme(
 
     let _ = writeln!(out, "# {crate_name}");
     out.push('\n');
-    out.push_str("[![Crates.io][crates-badge]][crates-url]\n");
-    out.push_str("[![docs.rs][docs-badge]][docs-url]\n");
-    out.push_str("[![CI][ci-badge]][ci-url]\n");
-    out.push_str("[![License][license-badge]][license-url]\n");
-    out.push('\n');
     let _ = writeln!(
         out,
-        "[crates-badge]: https://img.shields.io/crates/v/{crate_name}.svg"
+        "[![Crates.io](https://img.shields.io/crates/v/{crate_name}.svg)](https://crates.io/crates/{crate_name})"
     );
-    let _ = writeln!(out, "[crates-url]: https://crates.io/crates/{crate_name}");
-    let _ = writeln!(out, "[docs-badge]: https://docs.rs/{crate_name}/badge.svg");
-    let _ = writeln!(out, "[docs-url]: https://docs.rs/{crate_name}");
     let _ = writeln!(
         out,
-        "[ci-badge]: {repository}/actions/workflows/ci.yml/badge.svg"
+        "[![docs.rs](https://docs.rs/{crate_name}/badge.svg)](https://docs.rs/{crate_name})"
     );
-    let _ = writeln!(out, "[ci-url]: {repository}/actions/workflows/ci.yml");
     let _ = writeln!(
         out,
-        "[license-badge]: https://img.shields.io/crates/l/{crate_name}.svg"
+        "[![CI]({repository}/actions/workflows/ci.yml/badge.svg)]({repository}/actions/workflows/ci.yml)"
     );
-    let _ = writeln!(out, "[license-url]: {repository}/blob/master/LICENSE");
+    let _ = writeln!(
+        out,
+        "[![License](https://img.shields.io/crates/l/{crate_name}.svg)]({repository}/blob/master/LICENSE)"
+    );
 
     if let Some(desc) = description {
         out.push('\n');

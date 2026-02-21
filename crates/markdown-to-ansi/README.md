@@ -1,5 +1,10 @@
 # markdown-to-ansi
 
+[![Crates.io](https://img.shields.io/crates/v/markdown-to-ansi.svg)](https://crates.io/crates/markdown-to-ansi)
+[![docs.rs](https://docs.rs/markdown-to-ansi/badge.svg)](https://docs.rs/markdown-to-ansi)
+[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/markdown-to-ansi.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
+
 Render Markdown as ANSI-formatted terminal text.
 
 Uses [pulldown-cmark](https://crates.io/crates/pulldown-cmark) for CommonMark
@@ -41,3 +46,7 @@ let inline = markdown_to_ansi::render_inline("Use `foo` for **bar**", &opts);
 - **Inline markup** — `code` in blue, **bold**, _italic_, and
   [links](https://example.com) as OSC 8 terminal hyperlinks
 - **Soft breaks** — converted to spaces (paragraph reflow)
+
+## License
+
+Apache-2.0
