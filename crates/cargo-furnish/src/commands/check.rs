@@ -3,12 +3,6 @@ use std::path::PathBuf;
 use crate::{cargo_toml, doc_injection, readme, workspace};
 
 pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
-    let repo = ws
-        .repository
-        .as_deref()
-        .unwrap_or("https://github.com/lintel-rs/lintel");
-    let license_text = ws.license.as_deref().unwrap_or("Apache-2.0");
-
     let mut total_diagnostics: usize = 0;
 
     for crate_dir in crate_dirs {
@@ -21,13 +15,7 @@ pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
             }
         };
 
-        let readme_diags = readme::check_readme(
-            crate_dir,
-            &meta.name,
-            meta.description.as_deref(),
-            repo,
-            license_text,
-        );
+        let readme_diags = readme::check_readme(crate_dir, &meta.name, meta.description.as_deref());
         let doc_diags = doc_injection::check_doc_include(crate_dir, &meta.name);
 
         let diag_count = cargo_diags.len() + readme_diags.len() + doc_diags.len();

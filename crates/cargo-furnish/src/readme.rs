@@ -135,8 +135,6 @@ pub fn check_readme(
     crate_dir: &Path,
     crate_name: &str,
     description: Option<&str>,
-    repository: &str,
-    license_text: &str,
 ) -> Vec<Box<dyn Diagnostic + Send + Sync>> {
     let readme_path = crate_dir.join("README.md");
     let mut diagnostics: Vec<Box<dyn Diagnostic + Send + Sync>> = Vec::new();
@@ -200,9 +198,10 @@ pub fn check_readme(
         }));
     }
 
-    // Check if the README is just the default template with no custom body
-    let default = generate_readme(crate_name, description, None, repository, license_text);
-    if content == default {
+    // Check if the README is just the default template with no custom body.
+    // Extract the region between the last badge-ref line and "## License",
+    // strip the one-line description if present — anything left is custom content.
+    if is_default_readme(&content, description) {
         diagnostics.push(Box::new(DefaultReadme {
             src: src(),
             span: (0, first_line_len).into(),
@@ -211,6 +210,50 @@ pub fn check_readme(
     }
 
     diagnostics
+}
+
+/// Check whether the README body region contains only the description (or nothing).
+///
+/// The "body region" is everything between the last badge-reference link line
+/// (e.g. `[license-url]: ...`) and the `## License` heading.  If stripping the
+/// description from that region leaves only whitespace, the README is default.
+fn is_default_readme(content: &str, description: Option<&str>) -> bool {
+    // Find the end of badge-reference links: last line starting with `[`
+    // that contains `]: ` (a markdown reference link definition).
+    let lines: Vec<&str> = content.lines().collect();
+
+    let last_ref_idx = lines
+        .iter()
+        .rposition(|l| l.starts_with('[') && l.contains("]: "));
+    let license_idx = lines.iter().position(|l| l.starts_with("## License"));
+
+    let (Some(ref_end), Some(lic_start)) = (last_ref_idx, license_idx) else {
+        // Can't determine structure — not a furnish-generated README at all.
+        return false;
+    };
+
+    if ref_end >= lic_start {
+        return false;
+    }
+
+    // Collect non-empty lines in the body region
+    let body: String = lines[ref_end + 1..lic_start]
+        .iter()
+        .copied()
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if body.is_empty() {
+        return true;
+    }
+
+    // If the only content is the description line, it's still default
+    if let Some(desc) = description {
+        body.trim() == desc.trim()
+    } else {
+        false
+    }
 }
 
 /// Get the span of the last non-empty line in the content.
