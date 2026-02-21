@@ -1,0 +1,33 @@
+[package]
+name = "lintel-catalog-builder"
+version = "0.0.1"
+edition.workspace = true
+authors.workspace = true
+description = "Build a custom schema catalog from local schemas and external sources"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "catalog"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+schema-catalog = { version = "0.0.1", path = "../schema-catalog" }
+bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-tree = "0.4"
+url = "2"
+glob-match = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
