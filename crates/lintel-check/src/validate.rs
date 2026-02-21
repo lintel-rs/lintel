@@ -18,6 +18,11 @@ use crate::registry;
 use crate::retriever::{CacheStatus, HttpClient, SchemaCache, ensure_cache_dir};
 use crate::validation_cache::{self, ValidationCacheStatus};
 
+/// Conservative limit for concurrent file reads to avoid exhausting file
+/// descriptors. 128 is well below the default soft limit on macOS (256) and
+/// Linux (1024) while still providing good throughput.
+const FD_CONCURRENCY_LIMIT: usize = 128;
+
 pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
     pub globs: Vec<String>,
@@ -200,13 +205,13 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Validate `lintel.toml` against its built-in schema.
-fn validate_config(
+async fn validate_config(
     config_path: &Path,
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) -> Result<()> {
-    let content = fs::read_to_string(config_path)?;
+    let content = tokio::fs::read_to_string(config_path).await?;
     let config_value: Value = toml::from_str(&content)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {e}", config_path.display()))?;
     let schema_value: Value = serde_json::from_str(include_str!(concat!(
@@ -271,23 +276,14 @@ enum FileResult {
     Skip,
 }
 
-/// Process a single file: read, parse, resolve schema URI.
+/// Process a single file's already-read content: parse and resolve schema URI.
 fn process_one_file(
     path: &Path,
+    content: String,
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
 ) -> FileResult {
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(e) => {
-            return FileResult::Error(LintError::File(FileDiagnostic {
-                path: path.display().to_string(),
-                message: format!("failed to read: {e}"),
-            }));
-        }
-    };
-
     let path_str = path.display().to_string();
     let file_name = path
         .file_name()
@@ -390,25 +386,52 @@ fn process_one_file(
     }
 }
 
-/// Parse each file in parallel, extract its schema URI, apply rewrites, and
-/// group by resolved schema URI.
+/// Read each file concurrently with tokio, parse its content, extract its
+/// schema URI, apply rewrites, and group by resolved schema URI.
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
-fn parse_and_group_files(
+async fn parse_and_group_files(
     files: &[PathBuf],
     config: &config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
     errors: &mut Vec<LintError>,
 ) -> BTreeMap<String, Vec<ParsedFile>> {
-    use rayon::prelude::*;
+    // Read all files concurrently using tokio async I/O, with a semaphore
+    // to avoid exhausting file descriptors on large directories.
+    let semaphore = alloc::sync::Arc::new(tokio::sync::Semaphore::new(FD_CONCURRENCY_LIMIT));
+    let mut read_set = tokio::task::JoinSet::new();
+    for path in files {
+        let path = path.clone();
+        let sem = semaphore.clone();
+        read_set.spawn(async move {
+            let _permit = sem.acquire().await.expect("semaphore closed");
+            let result = tokio::fs::read_to_string(&path).await;
+            (path, result)
+        });
+    }
 
-    let results: Vec<FileResult> = files
-        .par_iter()
-        .map(|path| process_one_file(path, config, config_dir, compiled_catalogs))
-        .collect();
+    let mut file_contents = Vec::with_capacity(files.len());
+    while let Some(result) = read_set.join_next().await {
+        match result {
+            Ok(item) => file_contents.push(item),
+            Err(e) => tracing::warn!("file read task panicked: {e}"),
+        }
+    }
 
+    // Process files: parse content and resolve schema URIs.
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
-    for result in results {
+    for (path, content_result) in file_contents {
+        let content = match content_result {
+            Ok(c) => c,
+            Err(e) => {
+                errors.push(LintError::File(FileDiagnostic {
+                    path: path.display().to_string(),
+                    message: format!("failed to read: {e}"),
+                }));
+                continue;
+            }
+        };
+        let result = process_one_file(&path, content, config, config_dir, compiled_catalogs);
         match result {
             FileResult::Parsed { schema_uri, parsed } => {
                 schema_groups.entry(schema_uri).or_default().push(parsed);
@@ -429,7 +452,7 @@ fn parse_and_group_files(
 ///
 /// For remote URIs, checks the prefetched map first; for local URIs, reads
 /// from disk (with in-memory caching to avoid redundant I/O for shared schemas).
-fn fetch_schema_from_prefetched(
+async fn fetch_schema_from_prefetched(
     schema_uri: &str,
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
     local_cache: &mut HashMap<String, Value>,
@@ -449,7 +472,8 @@ fn fetch_schema_from_prefetched(
     } else if let Some(cached) = local_cache.get(schema_uri) {
         Ok((cached.clone(), None))
     } else {
-        fs::read_to_string(schema_uri)
+        tokio::fs::read_to_string(schema_uri)
+            .await
             .map_err(|e| format!("failed to read local schema {schema_uri}: {e}"))
             .and_then(|content| {
                 serde_json::from_str::<Value>(&content)
@@ -694,7 +718,7 @@ pub async fn run_with<C: HttpClient>(
 
     // Validate lintel.toml against its own schema
     if let Some(config_path) = config_path {
-        validate_config(&config_path, &mut errors, &mut checked, &mut on_check)?;
+        validate_config(&config_path, &mut errors, &mut checked, &mut on_check).await?;
     }
 
     // Phase 1: Parse files and resolve schema URIs
@@ -704,7 +728,8 @@ pub async fn run_with<C: HttpClient>(
         &config_dir,
         &compiled_catalogs,
         &mut errors,
-    );
+    )
+    .await;
     tracing::info!(
         schema_count = schema_groups.len(),
         total_files = schema_groups.values().map(Vec::len).sum::<usize>(),
@@ -784,7 +809,9 @@ pub async fn run_with<C: HttpClient>(
             &mut errors,
             &mut checked,
             &mut on_check,
-        ) else {
+        )
+        .await
+        else {
             fetch_time += t.elapsed();
             continue;
         };
