@@ -888,15 +888,40 @@ impl<'a> AstBuilder<'a> {
                 }
                 core::cmp::Ordering::Equal => {
                     // Same line — collect trailing comment only when value is a
-                    // flow collection (e.g. `key: [    # comment`).  Prettier
-                    // renders this as `key: # comment\n  [...]`.
-                    let is_flow_value = self.peek().is_some_and(|(event, span)| {
-                        (matches!(event, Event::SequenceStart(..))
+                    // flow collection with NO items on the bracket line.
+                    // e.g. `key: [    # comment`  → capture as key trailing
+                    // but  `key: [ item, # comment` → leave for flow item
+                    let is_empty_flow_bracket = self.peek().is_some_and(|(event, span)| {
+                        let is_flow = (matches!(event, Event::SequenceStart(..))
                             && self.is_flow_sequence_at(span))
                             || (matches!(event, Event::MappingStart(..))
-                                && self.is_flow_mapping_at(span))
+                                && self.is_flow_mapping_at(span));
+                        if !is_flow {
+                            return false;
+                        }
+                        // Check source: is there non-whitespace between the
+                        // opening bracket and the `#` comment on this line?
+                        let line_idx = key_end_line.saturating_sub(1);
+                        if line_idx >= self.source_lines.len() {
+                            return false;
+                        }
+                        let line = self.source_lines[line_idx];
+                        let bracket_byte = self.to_byte(span.start.index());
+                        let line_start =
+                            self.source[..bracket_byte].rfind('\n').map_or(0, |p| p + 1);
+                        let bracket_col = bracket_byte - line_start;
+                        // Text after the bracket up to a `#` comment
+                        if bracket_col + 1 < line.len() {
+                            let after_bracket = &line[bracket_col + 1..];
+                            let before_comment = after_bracket
+                                .find('#')
+                                .map_or(after_bracket, |p| &after_bracket[..p]);
+                            before_comment.trim().is_empty()
+                        } else {
+                            true
+                        }
                     });
-                    if is_flow_value {
+                    if is_empty_flow_bracket {
                         self.find_trailing_comment(key_end_line).map(|c| c.text)
                     } else {
                         None
