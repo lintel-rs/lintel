@@ -1,0 +1,15 @@
+[package]
+name = "prettier-yaml"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+saphyr-parser = "0.0.6"
+anyhow = "1"
+
+[dev-dependencies]
+insta = "1"
+pretty_assertions = "1"
+
+[lints]
+workspace = true

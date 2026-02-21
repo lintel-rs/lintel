@@ -1,0 +1,18 @@
+[package]
+name = "lintel-format"
+version = "0.0.1"
+edition.workspace = true
+
+[dependencies]
+prettier-rs = { version = "0.1.0", path = "../prettier-rs" }
+lintel-cli-common = { version = "0.0.1", path = "../lintel-cli-common" }
+taplo = "0.14"
+bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+anyhow = "1"
+ignore = "0.4"
+glob = "0.3"
+glob-match = "0.2"
+tracing = "0.1"
+
+[lints]
+workspace = true

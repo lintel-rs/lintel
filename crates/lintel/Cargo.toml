@@ -17,6 +17,7 @@ workspace = true
 lintel-annotate = { version = "0.0.3", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.4", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.1", path = "../lintel-cli-common" }
+lintel-format = { version = "0.0.1", path = "../lintel-format" }
 lintel-identify = { version = "0.0.1", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.2", path = "../lintel-reporters" }
 schemastore = { version = "0.0.4", path = "../schemastore" }

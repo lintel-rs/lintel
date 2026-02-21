@@ -90,6 +90,13 @@ enum Commands {
         #[bpaf(external(identify_args))] lintel_identify::IdentifyArgs,
     ),
 
+    #[bpaf(command("format"), long("fmt"))]
+    /// Format JSON, JSONC, JSON5, YAML, and TOML files
+    Format(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(lintel_format::format_args))] lintel_format::FormatArgs,
+    ),
+
     #[bpaf(command("init"))]
     /// Create a lintel.toml configuration file
     Init(#[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions),
@@ -212,6 +219,13 @@ async fn main() -> ExitCode {
                 global.verbose,
             )
             .await
+        }
+        Commands::Format(global, args) => {
+            setup_tracing(&global);
+            match lintel_format::run(&args, &global) {
+                Ok(had_unformatted) => Ok(had_unformatted),
+                Err(e) => Err(e),
+            }
         }
         Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
