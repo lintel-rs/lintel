@@ -16,7 +16,10 @@ lintel-check = { version = "0.0.4", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.1", path = "../lintel-cli-common" }
 lintel-identify = { version = "0.0.1", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.2", path = "../lintel-reporters" }
+schemastore = { version = "0.0.4", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
+glob-match = "0.2"
+humantime = "2"
 miette = { version = "7", features = ["fancy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
