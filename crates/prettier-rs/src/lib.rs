@@ -28,12 +28,17 @@ pub enum Format {
 pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> Result<String> {
     match format {
         Format::Json => {
-            let value: serde_json::Value = serde_json::from_str(content)
-                .map_err(|e| anyhow::anyhow!("JSON parse error: {e}"))?;
-            let doc = json::json_to_doc(&value, options);
-            let mut result = printer::print(&doc, options);
-            result.push('\n');
-            Ok(result)
+            // Try strict JSON first; fall back to JSONC if the input has comments
+            // or other non-standard features (like prettier does).
+            match serde_json::from_str::<serde_json::Value>(content) {
+                Ok(value) => {
+                    let doc = json::json_to_doc(&value, options);
+                    let mut result = printer::print(&doc, options);
+                    result.push('\n');
+                    Ok(result)
+                }
+                Err(_) => jsonc::format_jsonc(content, options),
+            }
         }
         Format::Jsonc => jsonc::format_jsonc(content, options),
         Format::Json5 => json5::format_json5(content, options),
