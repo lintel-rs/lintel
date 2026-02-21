@@ -31,6 +31,28 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      - name: Create vX.Y.Z tag for lintel
+        if: steps.release-plz.outputs.releases != '[]'
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-v")) | .tag')
+          if [ -n "$TAG" ]; then
+            VERSION="${TAG#lintel-}"
+            # Look up the tag ref — release-plz creates annotated tags,
+            # so we need to dereference to get the underlying commit SHA.
+            REF=$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG")
+            OBJ_SHA=$(echo "$REF" | jq -r '.object.sha')
+            OBJ_TYPE=$(echo "$REF" | jq -r '.object.type')
+            if [ "$OBJ_TYPE" = "tag" ]; then
+              OBJ_SHA=$(gh api "repos/${{ github.repository }}/git/tags/$OBJ_SHA" --jq '.object.sha')
+            fi
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/$VERSION" \
+              -f sha="$OBJ_SHA"
+          fi
+
       - name: Trigger release workflow
         if: steps.release-plz.outputs.releases != '[]'
         env:
