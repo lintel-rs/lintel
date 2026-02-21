@@ -181,7 +181,7 @@ impl<C: HttpClient> SchemaCache<C> {
             .is_some_and(|age| age > ttl)
     }
 
-    fn hash_uri(uri: &str) -> String {
+    pub fn hash_uri(uri: &str) -> String {
         let mut hasher = DefaultHasher::new();
         uri.hash(&mut hasher);
         format!("{:016x}", hasher.finish())

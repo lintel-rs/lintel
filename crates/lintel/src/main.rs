@@ -106,6 +106,13 @@ enum Commands {
         #[bpaf(external(annotate_args))] lintel_annotate::AnnotateArgs,
     ),
 
+    #[bpaf(command("cache"), hide, fallback_to_usage)]
+    /// Cache debugging tools
+    Cache(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(commands::cache::cache_command))] commands::cache::CacheCommand,
+    ),
+
     #[bpaf(command("version"))]
     /// Print version information
     Version,
@@ -212,6 +219,15 @@ async fn main() -> ExitCode {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
+        Commands::Cache(global, cmd) => {
+            setup_tracing(&global);
+            commands::cache::run(
+                cmd,
+                &global,
+                lintel_check::retriever::ReqwestClient::default(),
+            )
+            .await
+        }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;

@@ -77,13 +77,33 @@ pub fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
     (line, col)
 }
 
+/// Find the byte offset of the first non-comment, non-blank line in the content.
+///
+/// Skips lines that start with `#` (YAML/TOML comments, modelines) or `//` (JSONC),
+/// as well as blank lines. Returns 0 if all lines are comments or the content is empty.
+fn first_content_offset(content: &str) -> usize {
+    let mut offset = 0;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with("//") {
+            let key_start = line.len() - trimmed.len();
+            return offset + key_start;
+        }
+        offset += line.len() + 1; // +1 for newline
+    }
+    0
+}
+
 /// Try to find the byte offset of a JSON pointer path segment in the source text.
 ///
 /// For an `instance_path` like `/properties/name`, searches for the last segment `name`
 /// as a JSON key (`"name"`) or YAML key (`name:`). Falls back to 0 if not found.
+///
+/// For root-level errors (empty or "/" path), skips past leading comment and blank lines
+/// so the error arrow points at actual content rather than modeline comments.
 pub fn find_instance_path_offset(content: &str, instance_path: &str) -> usize {
     if instance_path.is_empty() || instance_path == "/" {
-        return 0;
+        return first_content_offset(content);
     }
 
     // Get the last path segment (e.g., "/foo/bar/baz" -> "baz")
@@ -151,5 +171,40 @@ mod tests {
     #[test]
     fn empty_content() {
         assert_eq!(offset_to_line_col("", 0), (1, 1));
+    }
+
+    #[test]
+    fn root_path_skips_yaml_modeline() {
+        let content = "# yaml-language-server: $schema=https://example.com/s.json\nname: hello\n";
+        let offset = find_instance_path_offset(content, "");
+        assert_eq!(offset, 59); // "name: hello" starts at byte 59
+        assert_eq!(offset_to_line_col(content, offset), (2, 1));
+    }
+
+    #[test]
+    fn root_path_skips_multiple_comments() {
+        let content = "# modeline\n# another comment\n\nname: hello\n";
+        let offset = find_instance_path_offset(content, "");
+        assert_eq!(offset_to_line_col(content, offset), (4, 1));
+    }
+
+    #[test]
+    fn root_path_no_comments_returns_zero() {
+        let content = "{\"name\": \"hello\"}";
+        assert_eq!(find_instance_path_offset(content, ""), 0);
+    }
+
+    #[test]
+    fn root_path_skips_toml_modeline() {
+        let content = "# :schema https://example.com/s.json\nname = \"hello\"\n";
+        let offset = find_instance_path_offset(content, "");
+        assert_eq!(offset_to_line_col(content, offset), (2, 1));
+    }
+
+    #[test]
+    fn root_path_slash_skips_comments() {
+        let content = "# yaml-language-server: $schema=url\ndata: value\n";
+        let offset = find_instance_path_offset(content, "/");
+        assert_eq!(offset_to_line_col(content, offset), (2, 1));
     }
 }
