@@ -9,9 +9,10 @@ mod commands;
 mod download;
 
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, version, fallback_to_usage)]
+#[bpaf(options, version, fallback_to_usage, generate(cli))]
+#[allow(clippy::upper_case_acronyms)]
 /// Mirror the `SchemaStore` catalog into a self-hosted git repo
-struct Cli {
+struct CLI {
     #[bpaf(external(commands))]
     command: Commands,
 }

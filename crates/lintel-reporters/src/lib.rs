@@ -122,17 +122,6 @@ impl From<&ValidateArgs> for validate::ValidateArgs {
 }
 
 // -----------------------------------------------------------------------
-// CliOptions — shared verbose flag
-// -----------------------------------------------------------------------
-
-#[derive(Debug, Clone, Bpaf)]
-pub struct CliOptions {
-    /// Print additional diagnostics and show which files were checked
-    #[bpaf(short('v'), long("verbose"), switch, fallback(false))]
-    pub verbose: bool,
-}
-
-// -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
 
