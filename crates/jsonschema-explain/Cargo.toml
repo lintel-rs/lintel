@@ -10,10 +10,10 @@ homepage.workspace = true
 keywords = ["json-schema", "documentation", "terminal", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 serde_json = "1"
 markdown-to-ansi = { version = "0.1.0", path = "../markdown-to-ansi" }
 terminal_size = "0.4"
-
-[lints]
-workspace = true

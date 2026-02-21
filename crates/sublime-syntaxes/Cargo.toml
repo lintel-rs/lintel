@@ -10,6 +10,9 @@ homepage.workspace = true
 keywords = ["syntax-highlighting", "syntect", "sublime-syntax"]
 categories = ["text-processing"]
 
+[lints]
+workspace = true
+
 [dependencies]
 syntect = { version = "5", default-features = false, features = ["default-syntaxes"] }
 
@@ -17,6 +20,3 @@ syntect = { version = "5", default-features = false, features = ["default-syntax
 syntect = { version = "5", default-features = false, features = [
     "default-syntaxes", "regex-fancy", "yaml-load",
 ] }
-
-[lints]
-workspace = true

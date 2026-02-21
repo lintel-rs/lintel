@@ -10,6 +10,9 @@ homepage.workspace = true
 keywords = ["json-schema", "validation", "yaml", "linter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 lintel-annotate = { version = "0.0.3", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.4", path = "../lintel-check" }
@@ -29,9 +32,6 @@ toml = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = "0.4"
-
-[lints]
-workspace = true
 
 [dev-dependencies]
 insta = { version = "1", features = ["filters"] }

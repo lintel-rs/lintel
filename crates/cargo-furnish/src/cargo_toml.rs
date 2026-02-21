@@ -593,29 +593,64 @@ fn get_string_array(table: &Table, key: &str) -> Option<Vec<String>> {
     })
 }
 
+/// Reorder top-level sections by re-serializing the document.
+///
+/// `toml_edit`'s `sort_values_by` reorders the iteration map but not the
+/// serialized output. We work around this by serializing each section into
+/// a temporary document, then concatenating them in the canonical order.
 fn reorder_sections(doc: &mut DocumentMut) {
-    let all_keys: Vec<String> = doc.as_table().iter().map(|(k, _)| k.to_string()).collect();
-
-    let mut ordered_items: Vec<(String, Item)> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-
-    for &section in SECTION_ORDER {
-        if let Some(item) = doc.remove(section) {
-            ordered_items.push((section.to_string(), item));
-            seen.insert(section.to_string());
-        }
+    fn section_rank(key: &str) -> usize {
+        SECTION_ORDER
+            .iter()
+            .position(|&s| s == key)
+            .unwrap_or(SECTION_ORDER.len())
     }
 
-    for key in &all_keys {
-        if !seen.contains(key)
-            && let Some(item) = doc.remove(key)
+    let keys: Vec<String> = doc.as_table().iter().map(|(k, _)| k.to_string()).collect();
+    let mut sorted_keys = keys.clone();
+    sorted_keys.sort_by_key(|k| section_rank(k));
+
+    // Rebuild the TOML string with sections in the correct order.
+    // We serialize the whole document, then split and reorder sections
+    // at the string level to preserve formatting within each section.
+    let content = doc.to_string();
+    let mut sections: Vec<(String, String)> = Vec::new();
+    let mut current_key = String::new();
+    let mut current_lines: Vec<&str> = Vec::new();
+
+    for line in content.lines() {
+        if line.starts_with('[')
+            && !line.starts_with("[[")
+            && let Some(end) = line.find(']')
         {
-            ordered_items.push((key.clone(), item));
+            // Flush previous section
+            if !current_key.is_empty() {
+                let body = current_lines.join("\n");
+                sections.push((current_key.clone(), body.trim_end().to_string()));
+                current_lines.clear();
+            }
+            current_key = line[1..end].to_string();
         }
+        current_lines.push(line);
+    }
+    // Flush last section
+    if !current_key.is_empty() {
+        let body = current_lines.join("\n");
+        sections.push((current_key, body.trim_end().to_string()));
     }
 
-    for (key, item) in ordered_items {
-        doc.insert(&key, item);
+    // Sort sections by canonical order
+    sections.sort_by_key(|(k, _)| section_rank(k));
+
+    let mut out = sections
+        .iter()
+        .map(|(_, body)| body.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    out.push('\n');
+
+    if let Ok(new_doc) = out.parse::<DocumentMut>() {
+        *doc = new_doc;
     }
 }
 

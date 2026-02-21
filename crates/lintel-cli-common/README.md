@@ -7,6 +7,14 @@
 
 Shared CLI global options for Lintel command-line tools
 
+## Features
+
+Shared CLI option types for [Lintel](https://github.com/lintel-rs/lintel) binaries:
+
+- `--colors off|force` — control ANSI color output
+- `-v, --verbose` — enable verbose diagnostics
+- `--log-level none|debug|info|warn|error` — set log verbosity
+
 ## License
 
 Apache-2.0

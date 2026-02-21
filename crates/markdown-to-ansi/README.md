@@ -5,47 +5,29 @@
 [![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/markdown-to-ansi.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-Render Markdown as ANSI-formatted terminal text.
+Render Markdown as ANSI-formatted terminal text
 
-Uses [pulldown-cmark](https://crates.io/crates/pulldown-cmark) for CommonMark
-parsing and [syntect](https://crates.io/crates/syntect) for syntax highlighting
-of fenced code blocks.
+## Features
+
+- Converts `CommonMark` Markdown to ANSI-escaped terminal text via `pulldown-cmark`
+- Syntax-highlighted fenced code blocks using `syntect`
+- Bold, italic, underline, colored headings, blockquotes, and lists
+- Auto-wraps text to terminal width
 
 ## Usage
 
 ```rust
-let opts = markdown_to_ansi::Options {
+use markdown_to_ansi::{render, Options};
+
+let opts = Options {
     syntax_highlight: true,
     width: Some(80),
 };
+let output = render("# Hello
 
-let ansi = markdown_to_ansi::render("# Hello\n\nSome **bold** text.", &opts);
-println!("{ansi}");
+Some **bold** text.", &opts);
+println!("{output}");
 ```
-
-For inline-only rendering (no block-level elements):
-
-```rust
-let opts = markdown_to_ansi::Options {
-    syntax_highlight: true,
-    width: None,
-};
-
-let inline = markdown_to_ansi::render_inline("Use `foo` for **bar**", &opts);
-```
-
-## Rendering
-
-- **Paragraphs** — reflowed (single newlines become spaces), word-wrapped to
-  the configured `width`
-- **Headings** — rendered in bold
-- **Code blocks** — syntax-highlighted with background padding, or preserved
-  with fence markers when `syntax_highlight` is false
-- **Lists** — unordered (`-`) and ordered (`1.`), with continuation indent for
-  wrapped lines
-- **Inline markup** — `code` in blue, **bold**, _italic_, and
-  [links](https://example.com) as OSC 8 terminal hyperlinks
-- **Soft breaks** — converted to spaces (paragraph reflow)
 
 ## License
 

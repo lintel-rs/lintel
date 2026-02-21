@@ -10,12 +10,12 @@ homepage.workspace = true
 keywords = ["json-schema", "benchmark", "validation"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1"
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
 chrono = "0.4"
 dirs = "6"
 walkdir = "2"
-
-[lints]
-workspace = true

@@ -1,7 +1,4 @@
-//! Render JSON Schema as human-readable terminal documentation.
-//!
-//! Produces man-page-style output from a `serde_json::Value` containing a
-//! JSON Schema, with optional ANSI color formatting for terminal display.
+#![doc = include_str!("../README.md")]
 
 mod fmt;
 mod render;

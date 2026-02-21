@@ -7,6 +7,13 @@
 
 Annotation-based linting for JSON and YAML files using JSON Schema
 
+## Features
+
+- Runs [Lintel](https://github.com/lintel-rs/lintel) validation on the specified files
+- Collects errors with file path, line, and column information
+- Outputs annotations in a format suitable for CI systems
+- Supports glob patterns and exclude filters
+
 ## License
 
 Apache-2.0
