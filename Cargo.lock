@@ -1250,6 +1250,7 @@ dependencies = [
  "jsonschema-explain",
  "lintel-annotate",
  "lintel-check",
+ "lintel-cli-common",
  "lintel-reporters",
  "miette",
  "schemastore",
@@ -1317,6 +1318,13 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "lintel-cli-common"
+version = "0.0.1"
+dependencies = [
+ "bpaf",
 ]
 
 [[package]]

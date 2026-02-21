@@ -14,9 +14,10 @@ use lintel_reporters::{ValidateArgs, merge_config, validate_args};
 // -----------------------------------------------------------------------
 
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, version)]
+#[bpaf(options, version, generate(cli))]
+#[allow(clippy::upper_case_acronyms)]
 /// Create a GitHub Check Run with Lintel validation annotations
-struct Cli {
+struct CLI {
     #[bpaf(external(validate_args))]
     args: ValidateArgs,
 }
@@ -226,7 +227,7 @@ async fn patch_remaining_annotations(
     Ok(())
 }
 
-async fn run(cli: Cli) -> Result<bool> {
+async fn run(cli: CLI) -> Result<bool> {
     let mut args = cli.args;
     merge_config(&mut args);
 

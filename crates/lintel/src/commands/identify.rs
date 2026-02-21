@@ -2,6 +2,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
@@ -59,7 +60,11 @@ impl<'a> From<SchemaMatch<'a>> for CatalogMatchInfo<'a> {
 }
 
 #[allow(clippy::too_many_lines)]
-pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
+pub async fn run<C: HttpClient>(
+    args: IdentifyArgs,
+    global: &CLIGlobalOptions,
+    client: C,
+) -> Result<bool> {
     let file_path = Path::new(&args.file);
     if !file_path.exists() {
         anyhow::bail!("file not found: {}", args.file);
@@ -224,13 +229,17 @@ pub async fn run<C: HttpClient>(args: IdentifyArgs, client: C) -> Result<bool> {
         };
 
         let is_tty = std::io::stdout().is_terminal();
+        let use_color = match global.colors {
+            Some(lintel_cli_common::ColorsArg::Force) => true,
+            Some(lintel_cli_common::ColorsArg::Off) => false,
+            None => is_tty,
+        };
+        let syntax_hl = use_color && !args.no_syntax_highlighting;
+        let output = jsonschema_explain::explain(&schema_value, display_name, use_color, syntax_hl);
 
-        if is_tty {
-            let syntax_hl = !args.no_syntax_highlighting;
-            let output = jsonschema_explain::explain(&schema_value, display_name, true, syntax_hl);
+        if is_tty && !args.no_pager {
             pipe_to_pager(&format!("\n{output}"));
         } else {
-            let output = jsonschema_explain::explain(&schema_value, display_name, false, false);
             println!();
             print!("{output}");
         }
