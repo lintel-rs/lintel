@@ -41,6 +41,8 @@ pub enum LintError {
         src: NamedSource<String>,
         #[label("{label}")]
         span: SourceSpan,
+        #[label("from {schema_url}")]
+        schema_span: SourceSpan,
         path: String,
         instance_path: String,
         label: String,
@@ -345,6 +347,7 @@ mod tests {
                 LintError::Validation {
                     src: NamedSource::new("f", String::new()),
                     span: 0.into(),
+                    schema_span: 0.into(),
                     path: String::new(),
                     instance_path: String::new(),
                     label: String::new(),

@@ -544,9 +544,11 @@ fn push_validation_errors(
             ve.instance_path.clone()
         };
         let label = format_label(&instance_path, &ve.schema_path);
+        let source_span: miette::SourceSpan = span.into();
         errors.push(LintError::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
-            span: span.into(),
+            span: source_span,
+            schema_span: source_span,
             path: pf.path.clone(),
             instance_path,
             label,
