@@ -729,11 +729,12 @@ impl<'a> AstBuilder<'a> {
             None
         };
 
-        let flow = self.is_flow_mapping_at(&span) || self.in_flow_context > 0;
         // Explicit braces are detected by a non-zero-length MappingStart span.
         // Saphyr sets start!=end when it sees `{`, but start==end for implicit mappings.
+        // This reliably avoids false positives when a mapping key starts with `{`.
         let has_explicit_braces =
             span.start.index() != span.end.index() && self.is_flow_mapping_at(&span);
+        let flow = has_explicit_braces || self.in_flow_context > 0;
 
         let flow_source = if flow && has_explicit_braces {
             self.extract_flow_source(&span)
