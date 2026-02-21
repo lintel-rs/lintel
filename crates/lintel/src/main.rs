@@ -1,12 +1,11 @@
 use std::process::ExitCode;
 
 use bpaf::Bpaf;
+use lintel_cli_common::CLIGlobalOptions;
 use tracing_subscriber::prelude::*;
 
 use lintel_annotate::annotate_args;
-use lintel_reporters::{
-    CliOptions, ReporterKind, ValidateArgs, cli_options, make_reporter, validate_args,
-};
+use lintel_reporters::{ReporterKind, ValidateArgs, make_reporter, validate_args};
 
 mod commands;
 
@@ -43,9 +42,10 @@ pub struct ConvertArgs {
 }
 
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, version, fallback_to_usage)]
+#[bpaf(options, version, fallback_to_usage, generate(cli))]
+#[allow(clippy::upper_case_acronyms)]
 /// Validate JSON and YAML files against JSON Schema
-struct Cli {
+struct CLI {
     #[bpaf(external(commands))]
     command: Commands,
 }
@@ -55,7 +55,7 @@ enum Commands {
     #[bpaf(command("check"))]
     /// Validate files against their schemas
     Check(
-        #[bpaf(external(cli_options), hide_usage)] CliOptions,
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
         /// Output format
         #[bpaf(
             long("reporter"),
@@ -69,7 +69,7 @@ enum Commands {
     #[bpaf(command("ci"))]
     /// Validate files with CI-friendly output
     CI(
-        #[bpaf(external(cli_options), hide_usage)] CliOptions,
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
         /// Output format
         #[bpaf(
             long("reporter"),
@@ -82,16 +82,19 @@ enum Commands {
 
     #[bpaf(command("init"))]
     /// Create a lintel.toml configuration file
-    Init,
+    Init(#[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions),
 
     #[bpaf(command("convert"))]
     /// Convert between JSON, YAML, and TOML formats
-    Convert(#[bpaf(external(convert_args))] ConvertArgs),
+    Convert(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(convert_args))] ConvertArgs,
+    ),
 
     #[bpaf(command("annotate"))]
     /// Add schema annotations to files
     Annotate(
-        #[bpaf(external(cli_options), hide_usage)] CliOptions,
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
         #[bpaf(external(annotate_args))] lintel_annotate::AnnotateArgs,
     ),
 
@@ -100,42 +103,73 @@ enum Commands {
     Version,
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
-    // Set up tracing subscriber controlled by LINTEL_LOG env var.
-    // e.g. LINTEL_LOG=info or LINTEL_LOG=lintel=debug,lintel_check=trace
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
-        tracing_subscriber::registry()
-            .with(
-                tracing_tree::HierarchicalLayer::new(2)
-                    .with_targets(true)
-                    .with_bracketed_fields(true)
-                    .with_indent_lines(true)
-                    .with_verbose_exit(true)
-                    .with_verbose_entry(true)
-                    .with_timer(tracing_tree::time::Uptime::default())
-                    .with_writer(std::io::stderr),
-            )
-            .with(filter)
-            .init();
-    }
+/// Set up tracing from CLI `--log-level` flag, falling back to `LINTEL_LOG` env.
+fn setup_tracing(global: &CLIGlobalOptions) {
+    let filter = match global.log_level {
+        lintel_cli_common::LogLevel::None => {
+            // Fall back to LINTEL_LOG env var
+            match tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
+                Ok(f) => f,
+                Err(_) => return,
+            }
+        }
+        lintel_cli_common::LogLevel::Debug => tracing_subscriber::EnvFilter::new("debug"),
+        lintel_cli_common::LogLevel::Info => tracing_subscriber::EnvFilter::new("info"),
+        lintel_cli_common::LogLevel::Warn => tracing_subscriber::EnvFilter::new("warn"),
+        lintel_cli_common::LogLevel::Error => tracing_subscriber::EnvFilter::new("error"),
+    };
 
-    miette::set_hook(Box::new(|_| {
+    tracing_subscriber::registry()
+        .with(
+            tracing_tree::HierarchicalLayer::new(2)
+                .with_targets(true)
+                .with_bracketed_fields(true)
+                .with_indent_lines(true)
+                .with_verbose_exit(true)
+                .with_verbose_entry(true)
+                .with_timer(tracing_tree::time::Uptime::default())
+                .with_writer(std::io::stderr),
+        )
+        .with(filter)
+        .init();
+}
+
+/// Set up miette error handler with colors config.
+fn setup_miette(global: &CLIGlobalOptions) {
+    let color = match global.colors {
+        Some(lintel_cli_common::ColorsArg::Off) => miette::GraphicalTheme::none(),
+        Some(lintel_cli_common::ColorsArg::Force) => miette::GraphicalTheme::unicode(),
+        None => {
+            if std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+                miette::GraphicalTheme::unicode()
+            } else {
+                miette::GraphicalTheme::unicode_nocolor()
+            }
+        }
+    };
+
+    miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::new()
                 .terminal_links(true)
                 .context_lines(2)
+                .graphical_theme(color.clone())
                 .build(),
         )
     }))
     .ok();
+}
 
+#[tokio::main]
+async fn main() -> ExitCode {
     let cli = cli().run();
 
     let result = match cli.command {
-        Commands::Check(cli_options, reporter_kind, mut args)
-        | Commands::CI(cli_options, reporter_kind, mut args) => {
-            let mut reporter = make_reporter(reporter_kind, cli_options.verbose);
+        Commands::Check(global, reporter_kind, mut args)
+        | Commands::CI(global, reporter_kind, mut args) => {
+            setup_tracing(&global);
+            setup_miette(&global);
+            let mut reporter = make_reporter(reporter_kind, global.verbose);
             lintel_reporters::run(
                 &mut args,
                 lintel_check::retriever::ReqwestClient::default(),
@@ -143,19 +177,21 @@ async fn main() -> ExitCode {
             )
             .await
         }
-        Commands::Annotate(cli_options, args) => {
+        Commands::Annotate(global, args) => {
+            setup_tracing(&global);
+            setup_miette(&global);
             commands::annotate::run(
                 &args,
                 lintel_check::retriever::ReqwestClient::default(),
-                cli_options.verbose,
+                global.verbose,
             )
             .await
         }
-        Commands::Init => match commands::init::run() {
+        Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
-        Commands::Convert(args) => match commands::convert::run(&args) {
+        Commands::Convert(_global, args) => match commands::convert::run(&args) {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
@@ -291,8 +327,8 @@ mod tests {
             .run_inner(&["check", "-v", "*.json"])
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
-            Commands::Check(cli_options, _, args) => {
-                assert!(cli_options.verbose);
+            Commands::Check(global, _, args) => {
+                assert!(global.verbose);
                 assert_eq!(args.globs, vec!["*.json"]);
             }
             _ => panic!("expected Check"),
@@ -306,8 +342,8 @@ mod tests {
             .run_inner(&["check", "--verbose"])
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
-            Commands::Check(cli_options, _, _) => {
-                assert!(cli_options.verbose);
+            Commands::Check(global, _, _) => {
+                assert!(global.verbose);
             }
             _ => panic!("expected Check"),
         }
@@ -366,6 +402,34 @@ mod tests {
                 assert_eq!(reporter_kind, ReporterKind::Pretty);
             }
             _ => panic!("expected CI"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_check_with_log_level() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["check", "--log-level", "debug"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Check(global, _, _) => {
+                assert_eq!(global.log_level, lintel_cli_common::LogLevel::Debug);
+            }
+            _ => panic!("expected Check"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_check_with_colors_off() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["check", "--colors", "off"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Check(global, _, _) => {
+                assert_eq!(global.colors, Some(lintel_cli_common::ColorsArg::Off));
+            }
+            _ => panic!("expected Check"),
         }
         Ok(())
     }
