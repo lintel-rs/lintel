@@ -72,7 +72,13 @@ pub fn run_fix(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     let mut total_errors: usize = 0;
 
     for crate_dir in crate_dirs {
-        let meta = match cargo_toml::fix_cargo_toml(crate_dir, ws, None, None, None, true) {
+        let fix_update = cargo_toml::MetadataUpdate {
+            description: None,
+            keywords: None,
+            categories: None,
+            force: true,
+        };
+        let meta = match cargo_toml::fix_cargo_toml(crate_dir, ws, &fix_update) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("  error: {e:#}");

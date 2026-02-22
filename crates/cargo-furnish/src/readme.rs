@@ -267,14 +267,20 @@ fn last_line_span(content: &str) -> SourceSpan {
     (last_offset, last_len).into()
 }
 
+/// Parameters for README generation.
+pub struct ReadmeParams<'a> {
+    pub crate_name: &'a str,
+    pub description: Option<&'a str>,
+    pub body: Option<&'a str>,
+    pub repository: &'a str,
+    pub license_text: &'a str,
+}
+
 /// Generate README content from the template.
-pub fn generate_readme(
-    crate_name: &str,
-    description: Option<&str>,
-    body: Option<&str>,
-    repository: &str,
-    license_text: &str,
-) -> String {
+pub fn generate_readme(params: &ReadmeParams<'_>) -> String {
+    let crate_name = params.crate_name;
+    let repository = params.repository;
+    let license_text = params.license_text;
     let mut out = String::new();
 
     let _ = writeln!(out, "# {crate_name}");
@@ -296,13 +302,13 @@ pub fn generate_readme(
         "[![License](https://img.shields.io/crates/l/{crate_name}.svg)]({repository}/blob/master/LICENSE)"
     );
 
-    if let Some(desc) = description {
+    if let Some(desc) = params.description {
         out.push('\n');
         out.push_str(desc);
         out.push('\n');
     }
 
-    if let Some(body_text) = body {
+    if let Some(body_text) = params.body {
         out.push('\n');
         out.push_str(body_text);
         out.push('\n');
@@ -314,15 +320,7 @@ pub fn generate_readme(
 }
 
 /// Write the README, checking for existing file when `--force` is not set.
-pub fn fix_readme(
-    crate_dir: &Path,
-    crate_name: &str,
-    description: Option<&str>,
-    body: Option<&str>,
-    repository: &str,
-    license_text: &str,
-    force: bool,
-) -> miette::Result<()> {
+pub fn fix_readme(crate_dir: &Path, params: &ReadmeParams<'_>, force: bool) -> miette::Result<()> {
     let readme_path = crate_dir.join("README.md");
 
     if readme_path.exists() && !force {
@@ -332,13 +330,13 @@ pub fn fix_readme(
         return Err(ReadmeExistsError {
             src: NamedSource::new(readme_path.display().to_string(), existing_contents.clone()),
             span: (0, src_len.min(1)).into(),
-            crate_name: crate_name.to_string(),
+            crate_name: params.crate_name.to_string(),
             existing_contents,
         }
         .into());
     }
 
-    let content = generate_readme(crate_name, description, body, repository, license_text);
+    let content = generate_readme(params);
     std::fs::write(&readme_path, content)
         .map_err(|e| miette::miette!("failed to write {}: {e}", readme_path.display()))?;
     eprintln!("  fixed {}", readme_path.display());

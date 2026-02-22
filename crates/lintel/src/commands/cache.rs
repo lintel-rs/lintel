@@ -298,6 +298,7 @@ async fn trace_schema_cache(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn trace_validation_cache(
     retriever: &SchemaCache,
     schema_uri: &str,
@@ -326,11 +327,14 @@ async fn trace_validation_cache(
         let schema_hash = validation_cache::schema_hash(&schema_value);
         let vcache = validation_cache::ValidationCache::new(vcache_dir, false);
         let validate_formats = cfg.should_validate_formats(path_str, &[schema_uri]);
-        let cache_key =
-            validation_cache::ValidationCache::cache_key(content, &schema_hash, validate_formats);
+        let ck = validation_cache::CacheKey {
+            file_content: content,
+            schema_hash: &schema_hash,
+            validate_formats,
+        };
+        let cache_key = validation_cache::ValidationCache::cache_key(&ck);
         println!("  key: {cache_key}");
-        let (_cached_errors, vcache_status) =
-            vcache.lookup(content, &schema_hash, validate_formats).await;
+        let (_cached_errors, vcache_status) = vcache.lookup(&ck).await;
         let label = match vcache_status {
             validation_cache::ValidationCacheStatus::Hit => "hit",
             validation_cache::ValidationCacheStatus::Miss => "miss",

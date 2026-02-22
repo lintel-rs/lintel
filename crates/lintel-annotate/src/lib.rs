@@ -4,16 +4,14 @@ use core::time::Duration;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bpaf::{Bpaf, Parser};
-use glob::glob;
 
-use lintel_check::catalog::{self, CompiledCatalog};
+use lintel_check::catalog::CompiledCatalog;
 use lintel_check::config;
-use lintel_check::discover;
 use lintel_check::parsers;
-use lintel_check::registry;
 use lintel_check::retriever::SchemaCache;
+use lintel_check::validate;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -71,116 +69,6 @@ pub struct AnnotateResult {
     pub updated: Vec<AnnotatedFile>,
     pub skipped: usize,
     pub errors: Vec<(String, String)>,
-}
-
-// ---------------------------------------------------------------------------
-// Config loading (mirrors validate.rs)
-// ---------------------------------------------------------------------------
-
-fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf) {
-    let start_dir = match search_dir {
-        Some(d) => d.to_path_buf(),
-        None => match std::env::current_dir() {
-            Ok(d) => d,
-            Err(_) => return (config::Config::default(), PathBuf::from(".")),
-        },
-    };
-
-    let cfg = config::find_and_load(&start_dir)
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-    (cfg, start_dir)
-}
-
-// ---------------------------------------------------------------------------
-// File collection (mirrors validate.rs)
-// ---------------------------------------------------------------------------
-
-fn collect_files(globs_arg: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    if globs_arg.is_empty() {
-        return discover::discover_files(".", exclude);
-    }
-
-    let mut result = Vec::new();
-    for pattern in globs_arg {
-        let path = Path::new(pattern);
-        if path.is_dir() {
-            result.extend(discover::discover_files(pattern, exclude)?);
-        } else {
-            for entry in glob(pattern).with_context(|| format!("invalid glob: {pattern}"))? {
-                let path = entry?;
-                if path.is_file() && !is_excluded(&path, exclude) {
-                    result.push(path);
-                }
-            }
-        }
-    }
-    Ok(result)
-}
-
-fn is_excluded(path: &Path, excludes: &[String]) -> bool {
-    let path_str = match path.to_str() {
-        Some(s) => s.strip_prefix("./").unwrap_or(s),
-        None => return false,
-    };
-    excludes
-        .iter()
-        .any(|pattern| glob_match::glob_match(pattern, path_str))
-}
-
-// ---------------------------------------------------------------------------
-// Catalog fetching
-// ---------------------------------------------------------------------------
-
-async fn fetch_catalogs(retriever: &SchemaCache, registries: &[String]) -> Vec<CompiledCatalog> {
-    type CatalogResult = (
-        String,
-        Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
-    );
-    let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
-
-    // Lintel catalog
-    let r = retriever.clone();
-    let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
-    catalog_tasks.spawn(async move {
-        let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
-            .await
-            .map(|cat| CompiledCatalog::compile(&cat));
-        (label, result)
-    });
-
-    // SchemaStore catalog
-    let r = retriever.clone();
-    catalog_tasks.spawn(async move {
-        let result = catalog::fetch_catalog(&r)
-            .await
-            .map(|cat| CompiledCatalog::compile(&cat));
-        ("SchemaStore catalog".to_string(), result)
-    });
-
-    // Additional registries
-    for registry_url in registries {
-        let r = retriever.clone();
-        let url = registry_url.clone();
-        let label = format!("registry {url}");
-        catalog_tasks.spawn(async move {
-            let result = registry::fetch(&r, &url)
-                .await
-                .map(|cat| CompiledCatalog::compile(&cat));
-            (label, result)
-        });
-    }
-
-    let mut compiled = Vec::new();
-    while let Some(result) = catalog_tasks.join_next().await {
-        match result {
-            Ok((_, Ok(catalog))) => compiled.push(catalog),
-            Ok((label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
-            Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
-        }
-    }
-    compiled
 }
 
 // ---------------------------------------------------------------------------
@@ -300,17 +188,13 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     }
     let retriever = builder.build();
 
-    let (mut config, _config_dir) = load_config(config_dir.as_deref());
+    let (mut config, _, _) = validate::load_config(config_dir.as_deref());
     config.exclude.extend(args.exclude.clone());
 
-    let files = collect_files(&args.globs, &config.exclude)?;
+    let files = validate::collect_files(&args.globs, &config.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
-    let catalogs = if args.no_catalog {
-        Vec::new()
-    } else {
-        fetch_catalogs(&retriever, &config.registries).await
-    };
+    let catalogs = validate::fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
 
     let mut result = AnnotateResult {
         annotated: Vec::new(),

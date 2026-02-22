@@ -35,21 +35,8 @@ enum Commands {
     #[bpaf(command("update"))]
     /// Update crate metadata, README, and doc attributes
     Update {
-        /// Crate description (used in Cargo.toml and README)
-        #[bpaf(long("description"), argument("TEXT"))]
-        description: Option<String>,
-        /// README body markdown (inserted between description and License section)
-        #[bpaf(long("readme"), argument("TEXT"))]
-        readme: Option<String>,
-        /// Comma-separated keywords
-        #[bpaf(long("keywords"), argument("K1,K2,..."))]
-        keywords: Option<String>,
-        /// Comma-separated categories
-        #[bpaf(long("categories"), argument("C1,C2,..."))]
-        categories: Option<String>,
-        /// Overwrite existing README and doc comments
-        #[bpaf(long("force"), switch)]
-        force: bool,
+        #[bpaf(external(commands::update::update_args))]
+        args: commands::update::UpdateArgs,
         /// Crate directory or name
         #[bpaf(positional("CRATE"))]
         target: String,
@@ -76,24 +63,9 @@ fn main() -> miette::Result<()> {
                 commands::check::run(&crate_dirs, &ws);
             }
         }
-        Commands::Update {
-            description,
-            readme,
-            keywords,
-            categories,
-            force,
-            target,
-        } => {
+        Commands::Update { args, target } => {
             let crate_dirs = resolve_and_relativize(Some(&target), &workspace_root, &cwd)?;
-            commands::update::run(
-                &crate_dirs,
-                &ws,
-                description,
-                readme,
-                keywords,
-                categories,
-                force,
-            );
+            commands::update::run(&crate_dirs, &ws, args);
         }
     }
 

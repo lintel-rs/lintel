@@ -124,8 +124,12 @@ pub fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Optio
 // ---------------------------------------------------------------------------
 
 /// Collect input files from globs/directories, applying exclude filters.
+///
+/// # Errors
+///
+/// Returns an error if a glob pattern is invalid or a directory cannot be walked.
 #[tracing::instrument(skip_all, fields(glob_count = globs.len(), exclude_count = exclude.len()))]
-fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
+pub fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
     if globs.is_empty() {
         return discover::discover_files(".", exclude);
     }
@@ -238,6 +242,7 @@ enum FileResult {
 }
 
 /// Process a single file's already-read content: parse and resolve schema URI.
+#[allow(clippy::too_many_arguments)]
 fn process_one_file(
     path: &Path,
     content: String,
@@ -300,7 +305,7 @@ fn process_one_file(
     // Schema resolution priority:
     // 1. Inline $schema / YAML modeline (always wins)
     // 2. Custom schema mappings from lintel.toml [schemas]
-    // 3. Catalog matching (SchemaStore + additional registries)
+    // 3. Catalog matching (custom registries > Lintel catalog > SchemaStore)
     let schema_uri = parser
         .extract_schema_uri(&content, &instance)
         .or_else(|| {
@@ -350,6 +355,7 @@ fn process_one_file(
 /// Read each file concurrently with tokio, parse its content, extract its
 /// schema URI, apply rewrites, and group by resolved schema URI.
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
+#[allow(clippy::too_many_arguments)]
 async fn parse_and_group_files(
     files: &[PathBuf],
     config: &config::Config,
@@ -413,6 +419,7 @@ async fn parse_and_group_files(
 ///
 /// For remote URIs, checks the prefetched map first; for local URIs, reads
 /// from disk (with in-memory caching to avoid redundant I/O for shared schemas).
+#[allow(clippy::too_many_arguments)]
 async fn fetch_schema_from_prefetched(
     schema_uri: &str,
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
@@ -467,6 +474,7 @@ async fn fetch_schema_from_prefetched(
 }
 
 /// Report the same error for every file in a schema group.
+#[allow(clippy::too_many_arguments)]
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
     make_error: impl Fn(&str) -> LintError,
     schema_uri: &str,
@@ -491,6 +499,7 @@ fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
 }
 
 /// Mark every file in a group as checked (no errors).
+#[allow(clippy::too_many_arguments)]
 fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
@@ -587,7 +596,14 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
             .collect();
 
         vcache
-            .store(&pf.content, schema_hash, validate_formats, &file_errors)
+            .store(
+                &validation_cache::CacheKey {
+                    file_content: &pf.content,
+                    schema_hash,
+                    validate_formats,
+                },
+                &file_errors,
+            )
             .await;
         push_validation_errors(pf, schema_uri, &file_errors, errors);
 
@@ -619,36 +635,19 @@ pub async fn fetch_compiled_catalogs(
     if !no_catalog {
         let catalog_span = tracing::info_span!("fetch_catalogs").entered();
 
+        // Catalogs are fetched concurrently but sorted by priority so that
+        // the Lintel catalog wins over custom registries, which win over
+        // SchemaStore.  The `order` field encodes this precedence.
         #[allow(clippy::items_after_statements)]
         type CatalogResult = (
+            usize, // priority (lower = higher precedence)
             String,
             Result<CompiledCatalog, Box<dyn core::error::Error + Send + Sync>>,
         );
         let mut catalog_tasks: tokio::task::JoinSet<CatalogResult> = tokio::task::JoinSet::new();
 
-        // Lintel catalog
-        if !config.no_default_catalog {
-            let r = retriever.clone();
-            let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
-            catalog_tasks.spawn(async move {
-                let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
-                    .await
-                    .map(|cat| CompiledCatalog::compile(&cat));
-                (label, result)
-            });
-        }
-
-        // SchemaStore catalog
-        let r = retriever.clone();
-        catalog_tasks.spawn(async move {
-            let result = catalog::fetch_catalog(&r)
-                .await
-                .map(|cat| CompiledCatalog::compile(&cat));
-            ("SchemaStore catalog".to_string(), result)
-        });
-
-        // Additional registries from lintel.toml
-        for registry_url in &config.registries {
+        // Custom registries from lintel.toml (highest precedence among catalogs)
+        for (i, registry_url) in config.registries.iter().enumerate() {
             let r = retriever.clone();
             let url = registry_url.clone();
             let label = format!("registry {url}");
@@ -656,17 +655,43 @@ pub async fn fetch_compiled_catalogs(
                 let result = registry::fetch(&r, &url)
                     .await
                     .map(|cat| CompiledCatalog::compile(&cat));
-                (label, result)
+                (i, label, result)
             });
         }
 
+        // Lintel catalog
+        let lintel_order = config.registries.len();
+        if !config.no_default_catalog {
+            let r = retriever.clone();
+            let label = format!("default catalog {}", registry::DEFAULT_REGISTRY);
+            catalog_tasks.spawn(async move {
+                let result = registry::fetch(&r, registry::DEFAULT_REGISTRY)
+                    .await
+                    .map(|cat| CompiledCatalog::compile(&cat));
+                (lintel_order, label, result)
+            });
+        }
+
+        // SchemaStore catalog (lowest precedence)
+        let schemastore_order = config.registries.len() + 1;
+        let r = retriever.clone();
+        catalog_tasks.spawn(async move {
+            let result = catalog::fetch_catalog(&r)
+                .await
+                .map(|cat| CompiledCatalog::compile(&cat));
+            (schemastore_order, "SchemaStore catalog".to_string(), result)
+        });
+
+        let mut results: Vec<(usize, CompiledCatalog)> = Vec::new();
         while let Some(result) = catalog_tasks.join_next().await {
             match result {
-                Ok((_, Ok(compiled))) => compiled_catalogs.push(compiled),
-                Ok((label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
+                Ok((order, _, Ok(compiled))) => results.push((order, compiled)),
+                Ok((_, label, Err(e))) => eprintln!("warning: failed to fetch {label}: {e}"),
                 Err(e) => eprintln!("warning: catalog fetch task failed: {e}"),
             }
         }
+        results.sort_by_key(|(order, _)| *order);
+        compiled_catalogs.extend(results.into_iter().map(|(_, cat)| cat));
 
         drop(catalog_span);
     }
@@ -830,7 +855,11 @@ pub async fn run_with(
         let t = std::time::Instant::now();
         for pf in group {
             let (cached, vcache_status) = vcache
-                .lookup(&pf.content, &schema_hash, validate_formats)
+                .lookup(&validation_cache::CacheKey {
+                    file_content: &pf.content,
+                    schema_hash: &schema_hash,
+                    validate_formats,
+                })
                 .await;
 
             if let Some(cached_errors) = cached {

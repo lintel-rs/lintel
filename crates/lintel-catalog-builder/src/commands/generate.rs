@@ -11,8 +11,32 @@ use tracing::{debug, info, warn};
 use crate::catalog::build_output_catalog;
 use crate::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 use crate::download::{DownloadItem, download_batch, download_one};
-use crate::refs::resolve_and_rewrite;
+use crate::refs::{RefRewriteContext, resolve_and_rewrite};
 use crate::targets::{AnyTarget, OutputContext, Target};
+
+/// Cross-cutting state shared across the entire generation run.
+struct GenerateContext<'a> {
+    cache: &'a SchemaCache,
+    config: &'a CatalogConfig,
+    config_path: &'a Path,
+    config_dir: &'a Path,
+    concurrency: usize,
+}
+
+/// Per-target processing context passed to source-level functions.
+struct SourceContext<'a> {
+    cache: &'a SchemaCache,
+    base_url: &'a str,
+    schemas_dir: &'a Path,
+    concurrency: usize,
+}
+
+/// Aggregated download results for a source, used by [`resolve_source_refs`].
+struct SourceDownloadResult<'a> {
+    items: &'a [DownloadItem],
+    info: &'a [SourceSchemaInfo],
+    downloaded: &'a HashSet<String>,
+}
 
 /// Run the `generate` subcommand.
 pub async fn run(
@@ -54,6 +78,14 @@ pub async fn run(
     // Create schema cache
     let cache = SchemaCache::builder().force_fetch(no_cache).build();
 
+    let ctx = GenerateContext {
+        cache: &cache,
+        config: &config,
+        config_path: &config_path,
+        config_dir,
+        concurrency,
+    };
+
     // Process each target
     for (target_name, target_config) in &config.target {
         if let Some(filter) = target_filter
@@ -68,17 +100,9 @@ pub async fn run(
 
         tokio::fs::create_dir_all(&output_dir).await?;
 
-        generate_for_target(
-            &cache,
-            &config,
-            &target,
-            &output_dir,
-            &config_path,
-            config_dir,
-            concurrency,
-        )
-        .await
-        .with_context(|| format!("failed to build target '{target_name}'"))?;
+        generate_for_target(&ctx, &target, &output_dir)
+            .await
+            .with_context(|| format!("failed to build target '{target_name}'"))?;
 
         info!(target = %target_name, output = %output_dir.display(), "target complete");
     }
@@ -90,13 +114,9 @@ pub async fn run(
 /// Generate output for a single target.
 #[allow(clippy::too_many_lines)]
 async fn generate_for_target(
-    cache: &SchemaCache,
-    config: &CatalogConfig,
+    ctx: &GenerateContext<'_>,
     target: &AnyTarget,
     output_dir: &Path,
-    config_path: &Path,
-    config_dir: &Path,
-    concurrency: usize,
 ) -> Result<()> {
     let base_url = target.base_url();
     let schemas_dir = output_dir.join("schemas");
@@ -108,7 +128,7 @@ async fn generate_for_target(
     let mut groups_meta: BTreeMap<String, (String, String)> = BTreeMap::new();
 
     // 2. Process groups
-    for (group_key, group_config) in &config.groups {
+    for (group_key, group_config) in &ctx.config.groups {
         info!(group = %group_key, count = group_config.schemas.len(), "processing group");
         let group_dir = schemas_dir.join(group_key);
         tokio::fs::create_dir_all(&group_dir).await?;
@@ -139,23 +159,29 @@ async fn generate_for_target(
             if let Some(url) = &schema_def.url {
                 // Download external schema
                 info!(url = %url, dest = %dest_path.display(), "downloading group schema");
-                let text = download_one(cache, url, &dest_path)
+                let text = download_one(ctx.cache, url, &dest_path)
                     .await
                     .with_context(|| format!("failed to download schema for {group_key}/{key}"))?;
 
                 // Resolve $ref dependencies
                 resolve_and_rewrite(
-                    cache,
+                    &mut RefRewriteContext {
+                        cache: ctx.cache,
+                        shared_dir: &shared_dir,
+                        base_url_for_shared: &shared_base_url,
+                        already_downloaded: &mut already_downloaded,
+                    },
                     &text,
                     &dest_path,
-                    &shared_dir,
-                    &shared_base_url,
-                    &mut already_downloaded,
                 )
                 .await?;
             } else {
                 // Local schema — should exist at schemas/<group>/<key>.json relative to config dir
-                let source_path = config_dir.join("schemas").join(group_key).join(&filename);
+                let source_path = ctx
+                    .config_dir
+                    .join("schemas")
+                    .join(group_key)
+                    .join(&filename);
                 if !source_path.exists() {
                     bail!(
                         "local schema not found: {} (expected for group={group_key}, key={key})",
@@ -171,12 +197,14 @@ async fn generate_for_target(
 
                 // Resolve $ref deps and fix invalid URI references
                 resolve_and_rewrite(
-                    cache,
+                    &mut RefRewriteContext {
+                        cache: ctx.cache,
+                        shared_dir: &shared_dir,
+                        base_url_for_shared: &shared_base_url,
+                        already_downloaded: &mut already_downloaded,
+                    },
                     &text,
                     &dest_path,
-                    &shared_dir,
-                    &shared_base_url,
-                    &mut already_downloaded,
                 )
                 .await?;
             }
@@ -206,19 +234,18 @@ async fn generate_for_target(
     }
 
     // 3. Process sources
-    for (source_name, source_config) in &config.sources {
+    let source_ctx = SourceContext {
+        cache: ctx.cache,
+        base_url,
+        schemas_dir: &schemas_dir,
+        concurrency: ctx.concurrency,
+    };
+    for (source_name, source_config) in &ctx.config.sources {
         info!(source = %source_name, url = %source_config.url, "processing source");
-        let (source_entries, source_groups) = process_source(
-            cache,
-            base_url,
-            source_name,
-            source_config,
-            &schemas_dir,
-            concurrency,
-            &mut output_paths,
-        )
-        .await
-        .with_context(|| format!("failed to process source: {source_name}"))?;
+        let (source_entries, source_groups) =
+            process_source(&source_ctx, source_name, source_config, &mut output_paths)
+                .await
+                .with_context(|| format!("failed to process source: {source_name}"))?;
 
         // Merge organize schemas into existing groups (or auto-generate)
         for (group_key, org_schemas) in source_groups {
@@ -252,17 +279,21 @@ async fn generate_for_target(
     let catalog_groups_vec: Vec<schema_catalog::CatalogGroup> =
         catalog_groups.into_values().collect();
     let groups_meta_vec: Vec<(String, String)> = groups_meta.into_values().collect();
-    let catalog = build_output_catalog(config.catalog.title.clone(), entries, catalog_groups_vec);
+    let catalog = build_output_catalog(
+        ctx.config.catalog.title.clone(),
+        entries,
+        catalog_groups_vec,
+    );
 
-    let ctx = OutputContext {
+    let output_ctx = OutputContext {
         output_dir,
-        config_path,
+        config_path: ctx.config_path,
         catalog: &catalog,
         groups_meta: &groups_meta_vec,
-        source_count: config.sources.len(),
+        source_count: ctx.config.sources.len(),
     };
 
-    target.finalize(&ctx).await?;
+    target.finalize(&output_ctx).await?;
 
     Ok(())
 }
@@ -280,17 +311,15 @@ async fn load_catalog_config(config_path: &Path) -> Result<CatalogConfig> {
 /// Returns `(entries, groups)` where groups are `(group_key, schema_names)`.
 #[allow(clippy::too_many_lines)]
 async fn process_source(
-    cache: &SchemaCache,
-    base_url: &str,
+    ctx: &SourceContext<'_>,
     source_name: &str,
     source_config: &SourceConfig,
-    schemas_dir: &Path,
-    concurrency: usize,
     output_paths: &mut HashSet<PathBuf>,
 ) -> Result<(Vec<SchemaEntry>, Vec<(String, Vec<String>)>)> {
     // Fetch and parse the external catalog
     info!(url = %source_config.url, "fetching source catalog");
-    let (catalog_value, _status) = cache
+    let (catalog_value, _status) = ctx
+        .cache
         .fetch(&source_config.url)
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -303,13 +332,13 @@ async fn process_source(
         "source catalog parsed"
     );
 
-    let base_url = base_url.trim_end_matches('/');
-    let source_dir = schemas_dir.join(source_name);
+    let base_url = ctx.base_url.trim_end_matches('/');
+    let source_dir = ctx.schemas_dir.join(source_name);
     tokio::fs::create_dir_all(&source_dir).await?;
 
     // Create organize directories
     for dir_name in source_config.organize.keys() {
-        tokio::fs::create_dir_all(schemas_dir.join(dir_name)).await?;
+        tokio::fs::create_dir_all(ctx.schemas_dir.join(dir_name)).await?;
     }
 
     // Classify each schema into an organize directory or the source default.
@@ -339,7 +368,7 @@ async fn process_source(
             format!("{}-{}.json", slugify(&schema.name), count)
         };
 
-        let dest_path = schemas_dir.join(&target_dir).join(&filename);
+        let dest_path = ctx.schemas_dir.join(&target_dir).join(&filename);
 
         // Final collision detection against all output paths (including groups)
         let canonical_dest = dest_path
@@ -379,9 +408,10 @@ async fn process_source(
     // Download all schemas concurrently
     info!(
         count = download_items.len(),
-        concurrency, "downloading source schemas"
+        concurrency = ctx.concurrency,
+        "downloading source schemas"
     );
-    let downloaded = download_batch(cache, &download_items, concurrency).await?;
+    let downloaded = download_batch(ctx.cache, &download_items, ctx.concurrency).await?;
 
     info!(
         downloaded = downloaded.len(),
@@ -390,16 +420,12 @@ async fn process_source(
     );
 
     // Resolve $ref deps for downloaded schemas
-    resolve_source_refs(
-        cache,
-        &download_items,
-        &entry_info,
-        &downloaded,
-        schemas_dir,
-        base_url,
-        source_name,
-    )
-    .await?;
+    let result = SourceDownloadResult {
+        items: &download_items,
+        info: &entry_info,
+        downloaded: &downloaded,
+    };
+    resolve_source_refs(ctx, &result, source_name).await?;
 
     // Build catalog entries
     let entries = entry_info
@@ -436,20 +462,17 @@ async fn process_source(
 
 /// Resolve `$ref` dependencies for all downloaded source schemas.
 async fn resolve_source_refs(
-    cache: &SchemaCache,
-    download_items: &[DownloadItem],
-    entry_info: &[SourceSchemaInfo],
-    downloaded: &HashSet<String>,
-    schemas_dir: &Path,
-    base_url: &str,
+    ctx: &SourceContext<'_>,
+    result: &SourceDownloadResult<'_>,
     source_name: &str,
 ) -> Result<()> {
-    let shared_dir = schemas_dir.join(source_name).join("_shared");
+    let base_url = ctx.base_url.trim_end_matches('/');
+    let shared_dir = ctx.schemas_dir.join(source_name).join("_shared");
     let shared_base_url = format!("{base_url}/schemas/{source_name}/_shared");
     let mut already_downloaded: HashMap<String, String> = HashMap::new();
 
-    for (item, info) in download_items.iter().zip(entry_info.iter()) {
-        if !downloaded.contains(&item.url) {
+    for (item, info) in result.items.iter().zip(result.info.iter()) {
+        if !result.downloaded.contains(&item.url) {
             continue;
         }
         let text = tokio::fs::read_to_string(&item.dest).await?;
@@ -457,12 +480,14 @@ async fn resolve_source_refs(
         // resolution and fixing invalid URI references (spaces, brackets, etc.)
         debug!(schema = %info.name, "processing schema refs");
         resolve_and_rewrite(
-            cache,
+            &mut RefRewriteContext {
+                cache: ctx.cache,
+                shared_dir: &shared_dir,
+                base_url_for_shared: &shared_base_url,
+                already_downloaded: &mut already_downloaded,
+            },
             &text,
             &item.dest,
-            &shared_dir,
-            &shared_base_url,
-            &mut already_downloaded,
         )
         .await
         .with_context(|| format!("failed to process refs for {}", info.name))?;

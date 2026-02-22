@@ -15,6 +15,7 @@ pub(crate) const MAX_DEPTH: usize = 3;
 ///
 /// If the resolved variant has properties or a description, expand
 /// them inline. Otherwise, render a single summary line.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_variant_block(
     out: &mut String,
     resolved: &Value,
@@ -63,6 +64,7 @@ pub(crate) fn render_variant_block(
 }
 
 /// Render properties at a given indentation depth.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_properties(
     out: &mut String,
     props: &serde_json::Map<String, Value>,
@@ -102,6 +104,7 @@ pub(crate) fn render_properties(
 
 /// Render details for a single property: description, default, enum, const,
 /// variant lists, nested properties, and array item types.
+#[allow(clippy::too_many_arguments)]
 fn render_property_details(
     out: &mut String,
     prop_schema: &Value,
@@ -188,6 +191,7 @@ fn render_property_details(
 }
 
 /// Render a sub-schema summary at a given depth.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_subschema(
     out: &mut String,
     schema: &Value,
