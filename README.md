@@ -34,10 +34,12 @@
 cargo install lintel
 ```
 
-Or with npm:
+Or with [npm](https://www.npmjs.com/package/@lintel/lintel):
 
 ```shell
 npx @lintel/lintel check
+bunx @lintel/lintel check
+pnpx @lintel/lintel check
 ```
 
 Or with Nix:
