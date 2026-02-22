@@ -1,10 +1,9 @@
 use core::time::Duration;
 
-use lintel_check::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
-use lintel_check::validate::{CheckedFile, LintError, ValidateResult};
-
-use crate::format_checked_verbose;
-use crate::reporter::Reporter;
+use lintel_validate::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
+use lintel_validate::format_checked_verbose;
+use lintel_validate::reporter::Reporter;
+use lintel_validate::validate::{CheckedFile, LintError, ValidateResult};
 
 /// GitHub Actions reporter: emits `::error` workflow commands to stdout.
 pub struct GithubReporter {

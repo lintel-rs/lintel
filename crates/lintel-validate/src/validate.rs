@@ -47,8 +47,8 @@ pub struct ValidateArgs {
     pub schema_cache_ttl: Option<core::time::Duration>,
 }
 
-/// Re-exported from [`crate::diagnostics::LintError`] for backwards
-/// compatibility with existing `use lintel_check::validate::LintError` paths.
+/// Re-exported from [`crate::diagnostics::LintError`] so callers can use
+/// `lintel_validate::validate::LintError` without importing diagnostics.
 pub use crate::diagnostics::LintError;
 
 /// A file that was checked and the schema it resolved to.

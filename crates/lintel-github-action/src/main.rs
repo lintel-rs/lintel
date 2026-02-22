@@ -7,9 +7,9 @@ use anyhow::{Context, Result, bail};
 use bpaf::Bpaf;
 use serde::Serialize;
 
-use lintel_check::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
-use lintel_check::validate::{self, LintError};
-use lintel_reporters::{ValidateArgs, merge_config, validate_args};
+use lintel_validate::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
+use lintel_validate::validate::{self, LintError};
+use lintel_validate::{ValidateArgs, merge_config, validate_args};
 
 // -----------------------------------------------------------------------
 // CLI

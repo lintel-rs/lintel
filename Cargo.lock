@@ -1293,6 +1293,7 @@ dependencies = [
  "lintel-explain",
  "lintel-identify",
  "lintel-reporters",
+ "lintel-validate",
  "miette",
  "schemastore",
  "serde_json",
@@ -1310,8 +1311,8 @@ version = "0.0.7"
 dependencies = [
  "anyhow",
  "bpaf",
- "lintel-check",
  "lintel-cli-common",
+ "lintel-validate",
  "tokio",
  "tracing",
 ]
@@ -1355,25 +1356,8 @@ name = "lintel-check"
 version = "0.0.8"
 dependencies = [
  "anyhow",
- "glob",
- "glob-match",
- "ignore",
- "insta",
- "json5",
- "jsonc-parser",
- "jsonschema",
- "lintel-config",
- "lintel-schema-cache",
- "lintel-validation-cache",
- "miette",
- "schemastore",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
+ "bpaf",
+ "lintel-validate",
 ]
 
 [[package]]
@@ -1404,9 +1388,9 @@ dependencies = [
  "anyhow",
  "bpaf",
  "jsonschema-explain",
- "lintel-check",
  "lintel-cli-common",
  "lintel-identify",
+ "lintel-validate",
  "serde_json",
  "terminal_size",
  "tracing",
@@ -1418,8 +1402,7 @@ version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
- "lintel-check",
- "lintel-reporters",
+ "lintel-validate",
  "reqwest",
  "serde",
  "serde_json",
@@ -1434,8 +1417,8 @@ dependencies = [
  "bpaf",
  "glob-match",
  "jsonschema-explain",
- "lintel-check",
  "lintel-cli-common",
+ "lintel-validate",
  "schemastore",
  "serde_json",
  "terminal_size",
@@ -1447,10 +1430,7 @@ name = "lintel-reporters"
 version = "0.0.6"
 dependencies = [
  "ansi-term-codes",
- "anyhow",
- "bpaf",
- "lintel-check",
- "lintel-cli-common",
+ "lintel-validate",
  "miette",
 ]
 
@@ -1486,6 +1466,34 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-tree",
+]
+
+[[package]]
+name = "lintel-validate"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "glob",
+ "glob-match",
+ "ignore",
+ "insta",
+ "json5",
+ "jsonc-parser",
+ "jsonschema",
+ "lintel-cli-common",
+ "lintel-config",
+ "lintel-schema-cache",
+ "lintel-validation-cache",
+ "miette",
+ "schemastore",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

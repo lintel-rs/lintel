@@ -5,11 +5,11 @@ use anyhow::{Context, Result, bail};
 use bpaf::Bpaf;
 use lintel_cli_common::CLIGlobalOptions;
 
-use lintel_check::config;
-use lintel_check::parsers;
-use lintel_check::retriever::{CacheStatus, SchemaCache};
-use lintel_check::validate;
-use lintel_check::validation_cache;
+use lintel_validate::config;
+use lintel_validate::parsers;
+use lintel_validate::retriever::{CacheStatus, SchemaCache};
+use lintel_validate::validate;
+use lintel_validate::validation_cache;
 
 #[derive(Debug, Clone, Bpaf)]
 pub enum CacheCommand {
@@ -66,7 +66,7 @@ fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
     let hash = SchemaCache::hash_uri(&args.url);
     let cache_dir = args
         .cache_dir
-        .map_or_else(lintel_check::retriever::ensure_cache_dir, PathBuf::from);
+        .map_or_else(lintel_validate::retriever::ensure_cache_dir, PathBuf::from);
     let cache_path = cache_dir.join(format!("{hash}.json"));
 
     println!("URL:        {}", args.url);
@@ -183,7 +183,7 @@ async fn trace_catalog(
     if no_catalog {
         println!("  status: disabled (--no-catalog)");
     } else {
-        let catalog_url = lintel_check::catalog::CATALOG_URL;
+        let catalog_url = lintel_validate::catalog::CATALOG_URL;
         let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");

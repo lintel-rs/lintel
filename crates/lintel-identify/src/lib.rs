@@ -8,10 +8,10 @@ use anyhow::{Context, Result};
 use bpaf::Bpaf;
 use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 
-use lintel_check::config;
-use lintel_check::parsers;
-use lintel_check::retriever::SchemaCache;
-use lintel_check::validate;
+use lintel_validate::config;
+use lintel_validate::parsers;
+use lintel_validate::retriever::SchemaCache;
+use lintel_validate::validate;
 use schemastore::SchemaMatch;
 
 // ---------------------------------------------------------------------------
@@ -273,7 +273,7 @@ fn resolve_schema<'a>(
     path_str: &str,
     file_name: &'a str,
     cfg: &'a config::Config,
-    catalogs: &'a [lintel_check::catalog::CompiledCatalog],
+    catalogs: &'a [lintel_validate::catalog::CompiledCatalog],
 ) -> Option<ResolvedSchema<'a>> {
     if let Some(uri) = parser.extract_schema_uri(content, instance) {
         return Some(ResolvedSchema {

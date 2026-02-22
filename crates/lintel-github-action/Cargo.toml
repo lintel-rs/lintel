@@ -14,8 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.8", path = "../lintel-check" }
-lintel-reporters = { version = "0.0.6", path = "../lintel-reporters" }
+lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
 bpaf = { version = "0.9", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"

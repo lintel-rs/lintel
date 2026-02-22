@@ -7,9 +7,11 @@ use lintel_cli_common::CLIGlobalOptions;
 use tracing_subscriber::prelude::*;
 
 use lintel_annotate::annotate_args;
+use lintel_check::{CheckArgs, check_args};
 use lintel_explain::explain_args;
 use lintel_identify::identify_args;
-use lintel_reporters::{ReporterKind, ValidateArgs, make_reporter, validate_args};
+use lintel_reporters::{ReporterKind, make_reporter};
+use lintel_validate::{ValidateArgs, validate_args};
 
 mod commands;
 
@@ -67,7 +69,7 @@ enum Commands {
             fallback(ReporterKind::Pretty)
         )]
         ReporterKind,
-        #[bpaf(external(validate_args))] ValidateArgs,
+        #[bpaf(external(check_args))] CheckArgs,
     ),
 
     #[bpaf(command("ci"))]
@@ -79,6 +81,20 @@ enum Commands {
             long("reporter"),
             argument("pretty|text|github"),
             fallback(ReporterKind::Text)
+        )]
+        ReporterKind,
+        #[bpaf(external(validate_args))] ValidateArgs,
+    ),
+
+    #[bpaf(command("validate"))]
+    /// Validate files against their schemas
+    Validate(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        /// Output format
+        #[bpaf(
+            long("reporter"),
+            argument("pretty|text|github"),
+            fallback(ReporterKind::Pretty)
         )]
         ReporterKind,
         #[bpaf(external(validate_args))] ValidateArgs,
@@ -190,12 +206,18 @@ async fn main() -> ExitCode {
     let cli = cli().run();
 
     let result = match cli.command {
-        Commands::Check(global, reporter_kind, mut args)
-        | Commands::CI(global, reporter_kind, mut args) => {
+        Commands::Check(global, reporter_kind, mut args) => {
             setup_tracing(&global);
             setup_miette(&global);
             let mut reporter = make_reporter(reporter_kind, global.verbose);
-            lintel_reporters::run(&mut args, reporter.as_mut()).await
+            lintel_check::run(&mut args, reporter.as_mut()).await
+        }
+        Commands::CI(global, reporter_kind, mut args)
+        | Commands::Validate(global, reporter_kind, mut args) => {
+            setup_tracing(&global);
+            setup_miette(&global);
+            let mut reporter = make_reporter(reporter_kind, global.verbose);
+            lintel_validate::run(&mut args, reporter.as_mut()).await
         }
         Commands::Identify(global, args) => {
             setup_tracing(&global);
@@ -255,13 +277,13 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert_eq!(args.globs, vec!["*.json"]);
-                assert!(args.exclude.is_empty());
-                assert!(args.cache.cache_dir.is_none());
-                assert!(!args.cache.force_schema_fetch);
-                assert!(!args.cache.force_validation);
-                assert!(!args.cache.force);
-                assert!(!args.cache.no_catalog);
+                assert_eq!(args.validate.globs, vec!["*.json"]);
+                assert!(args.validate.exclude.is_empty());
+                assert!(args.validate.cache.cache_dir.is_none());
+                assert!(!args.validate.cache.force_schema_fetch);
+                assert!(!args.validate.cache.force_validation);
+                assert!(!args.validate.cache.force);
+                assert!(!args.validate.cache.no_catalog);
             }
             _ => panic!("expected Check"),
         }
@@ -288,13 +310,13 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert_eq!(args.globs, vec!["*.json", "**/*.json"]);
-                assert_eq!(args.exclude, vec!["node_modules/**", "vendor/**"]);
-                assert_eq!(args.cache.cache_dir.as_deref(), Some("/tmp/cache"));
-                assert!(args.cache.force_schema_fetch);
-                assert!(args.cache.force_validation);
-                assert!(!args.cache.force);
-                assert!(args.cache.no_catalog);
+                assert_eq!(args.validate.globs, vec!["*.json", "**/*.json"]);
+                assert_eq!(args.validate.exclude, vec!["node_modules/**", "vendor/**"]);
+                assert_eq!(args.validate.cache.cache_dir.as_deref(), Some("/tmp/cache"));
+                assert!(args.validate.cache.force_schema_fetch);
+                assert!(args.validate.cache.force_validation);
+                assert!(!args.validate.cache.force);
+                assert!(args.validate.cache.no_catalog);
             }
             _ => panic!("expected Check"),
         }
@@ -308,10 +330,10 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert!(args.cache.force);
+                assert!(args.validate.cache.force);
                 // The individual flags should be false in the CLI struct --
                 // the combination happens in the From impl.
-                let lib_args = lintel_check::validate::ValidateArgs::from(&args);
+                let lib_args = lintel_validate::validate::ValidateArgs::from(&args.validate);
                 assert!(lib_args.force_schema_fetch);
                 assert!(lib_args.force_validation);
             }
@@ -327,7 +349,7 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert!(args.globs.is_empty());
+                assert!(args.validate.globs.is_empty());
             }
             _ => panic!("expected Check"),
         }
