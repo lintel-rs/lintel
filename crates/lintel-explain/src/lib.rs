@@ -74,9 +74,23 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
     let schema_value = fetch_schema(&schema_uri, is_remote, &args.cache).await?;
 
     // Resolve path to a schema pointer
-    let pointer = match &args.path {
-        Some(p) => Some(path::to_schema_pointer(p).map_err(|e| anyhow::anyhow!("{e}"))?),
-        None => None,
+    let pointer = args
+        .path
+        .as_deref()
+        .map(path::to_schema_pointer)
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // Run validation when explaining a data file, and collect relevant errors.
+    let validation_errors = if args.file.is_some() {
+        let file_path = args.file.as_deref().expect("checked above");
+        let instance_prefix = pointer
+            .as_deref()
+            .map(schema_pointer_to_instance_prefix)
+            .unwrap_or_default();
+        collect_validation_errors(file_path, &args.cache, &instance_prefix).await
+    } else {
+        vec![]
     };
 
     let is_tty = std::io::stdout().is_terminal();
@@ -85,23 +99,20 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
         Some(lintel_cli_common::ColorsArg::Off) => false,
         None => is_tty,
     };
-    let syntax_hl = use_color && !args.no_syntax_highlighting;
+    let opts = jsonschema_explain::ExplainOptions {
+        color: use_color,
+        syntax_highlight: use_color && !args.no_syntax_highlighting,
+        width: terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
+            .unwrap_or(80),
+        validation_errors,
+    };
 
-    let output = if let Some(ref ptr) = pointer {
-        if ptr.is_empty() {
-            jsonschema_explain::explain(&schema_value, &display_name, use_color, syntax_hl)
-        } else {
-            jsonschema_explain::explain_at_path(
-                &schema_value,
-                ptr,
-                &display_name,
-                use_color,
-                syntax_hl,
-            )
-            .map_err(|e| anyhow::anyhow!("{e}"))?
-        }
-    } else {
-        jsonschema_explain::explain(&schema_value, &display_name, use_color, syntax_hl)
+    let output = match pointer.as_deref() {
+        Some(ptr) => jsonschema_explain::explain_at_path(&schema_value, ptr, &display_name, &opts)
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => jsonschema_explain::explain(&schema_value, &display_name, &opts),
     };
 
     if is_tty && !args.no_pager {
@@ -151,6 +162,86 @@ async fn fetch_schema(
         serde_json::from_str(&content)
             .with_context(|| format!("failed to parse schema: {schema_uri}"))
     }
+}
+
+/// Convert a schema pointer (e.g. `/properties/badges`) to an instance path
+/// prefix (e.g. `/badges`) by stripping `/properties/` segments.
+fn schema_pointer_to_instance_prefix(schema_pointer: &str) -> String {
+    let mut result = String::new();
+    let mut segments = schema_pointer.split('/').peekable();
+    // Skip the leading empty segment from the leading `/`.
+    segments.next();
+    while let Some(seg) = segments.next() {
+        if seg == "properties" {
+            // The next segment is the actual property name.
+            if let Some(prop) = segments.next() {
+                result.push('/');
+                result.push_str(prop);
+            }
+        } else if seg == "items" {
+            // Array items — keep descending but don't add to the prefix.
+        } else {
+            result.push('/');
+            result.push_str(seg);
+        }
+    }
+    result
+}
+
+/// Run validation on a data file and return errors filtered to a given
+/// instance path prefix.
+async fn collect_validation_errors(
+    file_path: &str,
+    cache: &CliCacheOptions,
+    instance_prefix: &str,
+) -> Vec<jsonschema_explain::ExplainError> {
+    let validate_args = lintel_check::validate::ValidateArgs {
+        globs: vec![file_path.to_string()],
+        exclude: vec![],
+        cache_dir: cache.cache_dir.clone(),
+        force_schema_fetch: cache.force_schema_fetch || cache.force,
+        force_validation: false,
+        no_catalog: cache.no_catalog,
+        config_dir: None,
+        schema_cache_ttl: cache.schema_cache_ttl,
+    };
+
+    let result = match lintel_check::validate::run(&validate_args).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!("validation failed: {e}");
+            return vec![];
+        }
+    };
+
+    result
+        .errors
+        .into_iter()
+        .filter_map(|err| {
+            if let lintel_check::validate::LintError::Validation {
+                instance_path,
+                message,
+                ..
+            } = err
+            {
+                // When explaining the root, show all errors.
+                // Otherwise only show errors under the given property.
+                if instance_prefix.is_empty()
+                    || instance_path == instance_prefix
+                    || instance_path.starts_with(&format!("{instance_prefix}/"))
+                {
+                    Some(jsonschema_explain::ExplainError {
+                        instance_path,
+                        message,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

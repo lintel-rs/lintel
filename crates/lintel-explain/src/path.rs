@@ -1,10 +1,13 @@
-/// Convert a `JSONPath` expression or JSON Pointer into a schema-level JSON Pointer.
+/// Convert a `JSONPath` expression, JSON Pointer, or bare property name into a
+/// schema-level JSON Pointer.
 ///
 /// Supported inputs:
 /// - JSON Pointer: `/properties/name` → returned as-is
 /// - `JSONPath` property access: `$.name.age` → `/properties/name/properties/age`
 /// - `JSONPath` bracket notation: `$["name"]` → `/properties/name`
 /// - `JSONPath` array index: `$.items[0]` → `/properties/items/items`
+/// - Bare property name: `badges` → `/properties/badges`
+/// - Dotted property path: `name.age` → `/properties/name/properties/age`
 ///
 /// For array indices, we navigate to the schema's `items` sub-schema rather than
 /// a specific index, since JSON Schema describes the shape of all array items.
@@ -14,10 +17,16 @@ pub fn to_schema_pointer(path: &str) -> Result<String, String> {
         return Ok(path.to_string());
     }
 
-    // Must start with $ for JSONPath
-    let rest = path.strip_prefix('$').ok_or_else(|| {
-        format!("expected a JSON Pointer (/...) or JSONPath ($...), got '{path}'")
-    })?;
+    // If not a JSON Pointer or JSONPath, treat as a bare property path: prepend "$."
+    let owned;
+    let path = if path.starts_with('$') {
+        path
+    } else {
+        owned = format!("$.{path}");
+        &owned
+    };
+
+    let rest = path.strip_prefix('$').expect("just checked or prepended $");
 
     if rest.is_empty() {
         return Ok(String::new());
@@ -143,8 +152,24 @@ mod tests {
     }
 
     #[test]
-    fn invalid_prefix() {
-        assert!(to_schema_pointer("foo.bar").is_err());
+    fn bare_property_name() {
+        assert_eq!(to_schema_pointer("badges").unwrap(), "/properties/badges");
+    }
+
+    #[test]
+    fn bare_dotted_path() {
+        assert_eq!(
+            to_schema_pointer("foo.bar").unwrap(),
+            "/properties/foo/properties/bar"
+        );
+    }
+
+    #[test]
+    fn bare_with_array_index() {
+        assert_eq!(
+            to_schema_pointer("items[0].name").unwrap(),
+            "/properties/items/items/properties/name"
+        );
     }
 
     #[test]

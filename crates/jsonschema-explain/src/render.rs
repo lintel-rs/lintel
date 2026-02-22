@@ -3,10 +3,11 @@ use core::fmt::Write;
 use serde_json::Value;
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type, format_type_suffix, format_value};
+use crate::man::write_description;
+use crate::man::write_label;
 use crate::schema::{
     get_description, ref_name, required_set, resolve_ref, schema_type_str, variant_summary,
 };
-use crate::write_description;
 
 /// Maximum nesting depth for recursive property rendering.
 pub(crate) const MAX_DEPTH: usize = 3;
@@ -118,14 +119,11 @@ fn render_property_details(
     }
 
     if let Some(default) = prop_schema.get("default") {
-        let _ = writeln!(
+        write_label(
             out,
-            "{desc_indent}{}Default:{} {}{}{}",
-            f.dim,
-            f.reset,
-            f.magenta,
-            format_value(default),
-            f.reset
+            desc_indent,
+            "Default",
+            &format!("{}{}{}", f.magenta, format_value(default), f.reset),
         );
     }
 
@@ -138,14 +136,15 @@ fn render_property_details(
             })
             .collect::<Vec<_>>()
             .join(", ");
-        let _ = writeln!(out, "{desc_indent}{}Values:{} {joined}", f.dim, f.reset);
+        write_label(out, desc_indent, "Values", &joined);
     }
 
     if let Some(c) = prop_schema.get("const") {
-        let _ = writeln!(
+        write_label(
             out,
-            "{desc_indent}{}Constant:{} {}{c}{}",
-            f.dim, f.reset, f.magenta, f.reset
+            desc_indent,
+            "Constant",
+            &format!("{}{c}{}", f.magenta, f.reset),
         );
     }
 
@@ -179,13 +178,7 @@ fn render_property_details(
         let items = resolve_ref(items, root);
         let item_ty = schema_type_str(items).unwrap_or_default();
         if !item_ty.is_empty() {
-            let _ = writeln!(
-                out,
-                "{desc_indent}{}Items:{} {}",
-                f.dim,
-                f.reset,
-                format_type(&item_ty, f)
-            );
+            write_label(out, desc_indent, "Items", &format_type(&item_ty, f));
         }
     }
 }
@@ -204,13 +197,7 @@ pub(crate) fn render_subschema(
     let ty = schema_type_str(schema).unwrap_or_default();
 
     if !ty.is_empty() {
-        let _ = writeln!(
-            out,
-            "{indent}{}Type:{} {}",
-            f.dim,
-            f.reset,
-            format_type(&ty, f)
-        );
+        write_label(out, &indent, "Type", &format_type(&ty, f));
     }
 
     if let Some(desc) = get_description(schema) {

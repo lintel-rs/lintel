@@ -13,16 +13,17 @@ Render JSON Schema as human-readable terminal documentation
 - ANSI colors with bold headers, dimmed metadata, and highlighted types
 - Syntax-highlighted code blocks in schema descriptions (via `markdown-to-ansi`)
 - Renders properties, required fields, enums, defaults, `oneOf`/`anyOf`/`allOf` variants
-- Auto-sizes to terminal width
+- Caller-provided width for terminal-aware layout
 
 ## Usage
 
 ```rust
-use jsonschema_explain::explain;
+use jsonschema_explain::{explain, ExplainOptions};
 use serde_json::Value;
 
 let schema: Value = serde_json::from_str(r#"{"type": "object"}"#).unwrap();
-let output = explain(&schema, "my-config", true, true);
+let opts = ExplainOptions { color: true, syntax_highlight: true, width: 120, validation_errors: vec![] };
+let output = explain(&schema, "my-config", &opts);
 println!("{output}");
 ```
 

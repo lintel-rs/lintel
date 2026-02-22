@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
@@ -155,54 +156,19 @@ pub async fn resolve_schema_for_file(
     let detected_format = parsers::detect_format(file_path);
     let (parser, instance) = parse_file(detected_format, &content, &path_str);
 
-    let resolved = if let Some(uri) = parser.extract_schema_uri(&content, &instance) {
-        ResolvedSchema {
-            uri,
-            source: SchemaSource::Inline,
-            catalog_match: None,
-            config_pattern: None,
-        }
-    } else if let Some((_pattern, url)) = cfg
-        .schemas
-        .iter()
-        .find(|(pattern, _)| {
-            let p = path_str.strip_prefix("./").unwrap_or(&path_str);
-            glob_match::glob_match(pattern, p) || glob_match::glob_match(pattern, file_name)
-        })
-        .map(|(pattern, url)| (pattern.as_str(), url.as_str()))
-    {
-        ResolvedSchema {
-            uri: url.to_string(),
-            source: SchemaSource::Config,
-            catalog_match: None,
-            config_pattern: None,
-        }
-    } else if let Some(schema_match) = compiled_catalogs
-        .iter()
-        .find_map(|cat| cat.find_schema_detailed(&path_str, file_name))
-    {
-        ResolvedSchema {
-            uri: schema_match.url.to_string(),
-            source: SchemaSource::Catalog,
-            catalog_match: Some(schema_match.into()),
-            config_pattern: None,
-        }
-    } else {
+    let Some(resolved) = resolve_schema(
+        parser.as_ref(),
+        &content,
+        &instance,
+        &path_str,
+        file_name,
+        &cfg,
+        &compiled_catalogs,
+    ) else {
         return Ok(None);
     };
 
-    let schema_uri = config::apply_rewrites(&resolved.uri, &cfg.rewrite);
-    let schema_uri = config::resolve_double_slash(&schema_uri, &config_dir);
-
-    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
-    let schema_uri = if is_remote {
-        schema_uri
-    } else {
-        file_path
-            .parent()
-            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
-            .unwrap_or(schema_uri)
-    };
+    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
 
     let display_name = resolved
         .catalog_match
@@ -227,11 +193,7 @@ pub async fn resolve_schema_for_file(
 // Entry point
 // ---------------------------------------------------------------------------
 
-#[allow(
-    clippy::too_many_lines,
-    clippy::missing_panics_doc,
-    clippy::missing_errors_doc
-)]
+#[allow(clippy::missing_panics_doc, clippy::missing_errors_doc)]
 pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> {
     let file_path = Path::new(&args.file);
     if !file_path.exists() {
@@ -249,76 +211,31 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
 
     let retriever = build_retriever(&args.cache);
 
-    // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
     let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
 
-    // Fetch catalogs
     let compiled_catalogs =
         validate::fetch_compiled_catalogs(&retriever, &cfg, args.cache.no_catalog).await;
 
-    // Detect format and parse
     let detected_format = parsers::detect_format(file_path);
     let (parser, instance) = parse_file(detected_format, &content, &path_str);
 
-    // Schema resolution priority (same as validate):
-    // 1. Inline $schema / YAML modeline
-    // 2. Custom schema mappings from lintel.toml [schemas]
-    // 3. Catalog matching (detailed)
-    let resolved = if let Some(uri) = parser.extract_schema_uri(&content, &instance) {
-        ResolvedSchema {
-            uri,
-            source: SchemaSource::Inline,
-            catalog_match: None,
-            config_pattern: None,
-        }
-    } else if let Some((pattern, url)) = cfg
-        .schemas
-        .iter()
-        .find(|(pattern, _)| {
-            let p = path_str.strip_prefix("./").unwrap_or(&path_str);
-            glob_match::glob_match(pattern, p) || glob_match::glob_match(pattern, file_name)
-        })
-        .map(|(pattern, url)| (pattern.as_str(), url.as_str()))
-    {
-        ResolvedSchema {
-            uri: url.to_string(),
-            source: SchemaSource::Config,
-            catalog_match: None,
-            config_pattern: Some(pattern),
-        }
-    } else if let Some(schema_match) = compiled_catalogs
-        .iter()
-        .find_map(|cat| cat.find_schema_detailed(&path_str, file_name))
-    {
-        ResolvedSchema {
-            uri: schema_match.url.to_string(),
-            source: SchemaSource::Catalog,
-            catalog_match: Some(schema_match.into()),
-            config_pattern: None,
-        }
-    } else {
+    let Some(resolved) = resolve_schema(
+        parser.as_ref(),
+        &content,
+        &instance,
+        &path_str,
+        file_name,
+        &cfg,
+        &compiled_catalogs,
+    ) else {
         eprintln!("{path_str}");
         eprintln!("  no schema found");
         return Ok(false);
     };
 
-    // Apply rewrites
-    let schema_uri = config::apply_rewrites(&resolved.uri, &cfg.rewrite);
-    let schema_uri = config::resolve_double_slash(&schema_uri, &config_dir);
+    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
 
-    // Resolve relative local paths against the file's parent directory
-    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
-    let schema_uri = if is_remote {
-        schema_uri
-    } else {
-        file_path
-            .parent()
-            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
-            .unwrap_or(schema_uri)
-    };
-
-    // Determine display name
     let display_name = resolved
         .catalog_match
         .as_ref()
@@ -330,7 +247,101 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
         })
         .unwrap_or(&schema_uri);
 
-    // Basic output
+    print_identification(&path_str, &schema_uri, display_name, &resolved);
+
+    if args.explain {
+        run_explain(
+            &args,
+            global,
+            &schema_uri,
+            display_name,
+            is_remote,
+            &retriever,
+        )
+        .await?;
+    }
+
+    Ok(false)
+}
+
+/// Try each resolution source in priority order, returning `None` if no schema is found.
+#[allow(clippy::too_many_arguments)]
+fn resolve_schema<'a>(
+    parser: &dyn parsers::Parser,
+    content: &str,
+    instance: &serde_json::Value,
+    path_str: &str,
+    file_name: &'a str,
+    cfg: &'a config::Config,
+    catalogs: &'a [lintel_check::catalog::CompiledCatalog],
+) -> Option<ResolvedSchema<'a>> {
+    if let Some(uri) = parser.extract_schema_uri(content, instance) {
+        return Some(ResolvedSchema {
+            uri,
+            source: SchemaSource::Inline,
+            catalog_match: None,
+            config_pattern: None,
+        });
+    }
+
+    if let Some((pattern, url)) = cfg
+        .schemas
+        .iter()
+        .find(|(pattern, _)| {
+            let p = path_str.strip_prefix("./").unwrap_or(path_str);
+            glob_match::glob_match(pattern, p) || glob_match::glob_match(pattern, file_name)
+        })
+        .map(|(pattern, url)| (pattern.as_str(), url.as_str()))
+    {
+        return Some(ResolvedSchema {
+            uri: url.to_string(),
+            source: SchemaSource::Config,
+            catalog_match: None,
+            config_pattern: Some(pattern),
+        });
+    }
+
+    catalogs
+        .iter()
+        .find_map(|cat| cat.find_schema_detailed(path_str, file_name))
+        .map(|schema_match| ResolvedSchema {
+            uri: schema_match.url.to_string(),
+            source: SchemaSource::Catalog,
+            catalog_match: Some(schema_match.into()),
+            config_pattern: None,
+        })
+}
+
+/// Apply rewrites, resolve relative paths, and determine whether the URI is remote.
+fn finalize_uri(
+    raw_uri: &str,
+    rewrites: &HashMap<String, String>,
+    config_dir: &Path,
+    file_path: &Path,
+) -> (String, bool) {
+    let schema_uri = config::apply_rewrites(raw_uri, rewrites);
+    let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
+
+    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+    let schema_uri = if is_remote {
+        schema_uri
+    } else {
+        file_path
+            .parent()
+            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
+            .unwrap_or(schema_uri)
+    };
+
+    (schema_uri, is_remote)
+}
+
+/// Print the identification summary to stdout.
+fn print_identification(
+    path_str: &str,
+    schema_uri: &str,
+    display_name: &str,
+    resolved: &ResolvedSchema<'_>,
+) {
     println!("{path_str}");
     if display_name == schema_uri {
         println!("  schema: {schema_uri}");
@@ -339,7 +350,6 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
     }
     println!("  source: {}", resolved.source);
 
-    // Show match details
     match &resolved.source {
         SchemaSource::Inline => {}
         SchemaSource::Config => {
@@ -365,43 +375,57 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
             }
         }
     }
+}
 
-    // Explain mode
-    if args.explain {
-        // Fetch the schema
-        let schema_value = if is_remote {
-            match retriever.fetch(&schema_uri).await {
-                Ok((val, _)) => val,
-                Err(e) => {
-                    eprintln!("  error fetching schema: {e}");
-                    return Ok(false);
-                }
+/// Fetch the schema and render its documentation.
+#[allow(clippy::too_many_arguments)]
+async fn run_explain(
+    args: &IdentifyArgs,
+    global: &CLIGlobalOptions,
+    schema_uri: &str,
+    display_name: &str,
+    is_remote: bool,
+    retriever: &SchemaCache,
+) -> Result<()> {
+    let schema_value = if is_remote {
+        match retriever.fetch(schema_uri).await {
+            Ok((val, _)) => val,
+            Err(e) => {
+                eprintln!("  error fetching schema: {e}");
+                return Ok(());
             }
-        } else {
-            let schema_content = std::fs::read_to_string(&schema_uri)
-                .with_context(|| format!("failed to read schema: {schema_uri}"))?;
-            serde_json::from_str(&schema_content)
-                .with_context(|| format!("failed to parse schema: {schema_uri}"))?
-        };
-
-        let is_tty = std::io::stdout().is_terminal();
-        let use_color = match global.colors {
-            Some(lintel_cli_common::ColorsArg::Force) => true,
-            Some(lintel_cli_common::ColorsArg::Off) => false,
-            None => is_tty,
-        };
-        let syntax_hl = use_color && !args.no_syntax_highlighting;
-        let output = jsonschema_explain::explain(&schema_value, display_name, use_color, syntax_hl);
-
-        if is_tty && !args.no_pager {
-            lintel_cli_common::pipe_to_pager(&format!("\n{output}"));
-        } else {
-            println!();
-            print!("{output}");
         }
-    }
+    } else {
+        let schema_content = std::fs::read_to_string(schema_uri)
+            .with_context(|| format!("failed to read schema: {schema_uri}"))?;
+        serde_json::from_str(&schema_content)
+            .with_context(|| format!("failed to parse schema: {schema_uri}"))?
+    };
 
-    Ok(false)
+    let is_tty = std::io::stdout().is_terminal();
+    let use_color = match global.colors {
+        Some(lintel_cli_common::ColorsArg::Force) => true,
+        Some(lintel_cli_common::ColorsArg::Off) => false,
+        None => is_tty,
+    };
+    let opts = jsonschema_explain::ExplainOptions {
+        color: use_color,
+        syntax_highlight: use_color && !args.no_syntax_highlighting,
+        width: terminal_size::terminal_size()
+            .map(|(w, _)| w.0 as usize)
+            .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
+            .unwrap_or(80),
+        validation_errors: vec![],
+    };
+    let output = jsonschema_explain::explain(&schema_value, display_name, &opts);
+
+    if is_tty && !args.no_pager {
+        lintel_cli_common::pipe_to_pager(&format!("\n{output}"));
+    } else {
+        println!();
+        print!("{output}");
+    }
+    Ok(())
 }
 
 /// Parse the file content, trying the detected format first, then all parsers as fallback.

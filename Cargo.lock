@@ -1220,7 +1220,6 @@ dependencies = [
  "ansi-term-codes",
  "markdown-to-ansi",
  "serde_json",
- "terminal_size",
 ]
 
 [[package]]
@@ -1389,6 +1388,7 @@ dependencies = [
  "lintel-cli-common",
  "lintel-identify",
  "serde_json",
+ "terminal_size",
  "tracing",
 ]
 
@@ -1418,6 +1418,7 @@ dependencies = [
  "lintel-cli-common",
  "schemastore",
  "serde_json",
+ "terminal_size",
  "tracing",
 ]
 
