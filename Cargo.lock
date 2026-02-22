@@ -1983,7 +1983,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "prettier-rs"
+name = "prettier-jsonc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1991,8 +1991,20 @@ dependencies = [
  "insta",
  "json5 0.4.1",
  "jsonc-parser 0.24.0",
- "prettier-yaml",
  "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "prettier-rs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "glob-match",
+ "json5 0.4.1",
+ "prettier-jsonc",
+ "prettier-yaml",
  "serde",
  "serde_json",
  "serde_yaml",

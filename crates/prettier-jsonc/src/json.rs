@@ -69,13 +69,7 @@ fn object_to_doc(obj: &serde_json::Map<String, Value>, options: &PrettierOptions
         ]));
     }
 
-    let inner = if options.bracket_spacing {
-        // In flat mode: { key: value }
-        // In broken mode: {\n  key: value\n}
-        Doc::concat(core::iter::once(open).chain(items).collect())
-    } else {
-        Doc::concat(core::iter::once(open).chain(items).collect())
-    };
+    let inner = Doc::concat(core::iter::once(open).chain(items).collect());
 
     Doc::group(Doc::concat(vec![
         Doc::text("{"),

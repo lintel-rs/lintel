@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::options::{OverrideFiles, PrettierOptions, RawPrettierConfig};
+use prettier_jsonc::options::{OverrideFiles, PrettierOptions, RawPrettierConfig};
 
 /// Config file names to check, in precedence order.
 const CONFIG_FILES: &[&str] = &[
@@ -135,7 +135,7 @@ fn try_parse_config(path: &Path, name: &str) -> Result<Option<RawPrettierConfig>
 fn apply_overrides(
     file_path: &Path,
     config_dir: &Path,
-    overrides: &[crate::options::RawOverride],
+    overrides: &[prettier_jsonc::options::RawOverride],
     opts: &mut PrettierOptions,
 ) {
     let relative = file_path.strip_prefix(config_dir).unwrap_or(file_path);
@@ -186,9 +186,9 @@ mod tests {
     #[test]
     fn parse_trailing_comma_variants() {
         for (input, expected) in [
-            ("all", crate::options::TrailingComma::All),
-            ("es5", crate::options::TrailingComma::Es5),
-            ("none", crate::options::TrailingComma::None),
+            ("all", prettier_jsonc::options::TrailingComma::All),
+            ("es5", prettier_jsonc::options::TrailingComma::Es5),
+            ("none", prettier_jsonc::options::TrailingComma::None),
         ] {
             let content = format!(r#"{{"trailingComma": "{input}"}}"#);
             let raw: RawPrettierConfig = serde_json::from_str(&content).expect("parse");

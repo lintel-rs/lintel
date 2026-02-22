@@ -1,3 +1,4 @@
 # Test fixtures from prettier's own test suite -- must not be reformatted
+crates/prettier-jsonc/tests/fixtures/
 crates/prettier-rs/tests/fixtures/
 crates/prettier-yaml/tests/fixtures/

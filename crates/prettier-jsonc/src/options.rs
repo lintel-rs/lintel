@@ -79,7 +79,7 @@ pub enum QuoteProps {
 /// Uses camelCase to match prettier's config format.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RawPrettierConfig {
+pub struct RawPrettierConfig {
     #[serde(default)]
     pub print_width: Option<usize>,
     #[serde(default)]
@@ -103,7 +103,7 @@ pub(crate) struct RawPrettierConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-pub(crate) struct RawOverride {
+pub struct RawOverride {
     #[serde(default)]
     pub files: OverrideFiles,
     #[serde(default)]
@@ -112,7 +112,7 @@ pub(crate) struct RawOverride {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum OverrideFiles {
+pub enum OverrideFiles {
     Single(String),
     Multiple(Vec<String>),
     #[default]
@@ -121,7 +121,7 @@ pub(crate) enum OverrideFiles {
 
 impl RawPrettierConfig {
     /// Apply this raw config on top of existing options.
-    pub(crate) fn apply_to(&self, opts: &mut PrettierOptions) {
+    pub fn apply_to(&self, opts: &mut PrettierOptions) {
         if let Some(v) = self.print_width {
             opts.print_width = v;
         }

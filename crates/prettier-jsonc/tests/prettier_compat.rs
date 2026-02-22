@@ -1,6 +1,6 @@
 mod snapshot_parser;
 
-use prettier_rs::{Format, format_str};
+use prettier_jsonc::{JsonFormat, format_str};
 use std::path::Path;
 
 fn run_fixture_dir(dir: &str) {
@@ -22,10 +22,9 @@ fn run_fixture_dir(dir: &str) {
 
     for case in &cases {
         let format = match case.parser.as_str() {
-            "json" => Format::Json,
-            "json5" => Format::Json5,
-            "jsonc" => Format::Jsonc,
-            "yaml" => Format::Yaml,
+            "json" => JsonFormat::Json,
+            "json5" => JsonFormat::Json5,
+            "jsonc" => JsonFormat::Jsonc,
             _ => {
                 skipped += 1;
                 continue;
@@ -126,72 +125,79 @@ fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
     output
 }
 
-// YAML fixtures
+// JSON fixtures
 #[test]
-fn yaml_alias() {
-    run_fixture_dir("yaml/alias");
+fn json_json() {
+    run_fixture_dir("json/json");
 }
 #[test]
-fn yaml_ansible() {
-    run_fixture_dir("yaml/ansible");
+fn json_json5_trailing_commas() {
+    run_fixture_dir("json/json5-trailing-commas");
 }
 #[test]
-fn yaml_block_folded() {
-    run_fixture_dir("yaml/block-folded");
+fn json_jsonc_quote_props() {
+    run_fixture_dir("json/jsonc/quote-props");
 }
 #[test]
-fn yaml_block_literal() {
-    run_fixture_dir("yaml/block-literal");
+fn json_jsonc_single_quote() {
+    run_fixture_dir("json/jsonc/single-quote");
 }
 #[test]
-fn yaml_comment() {
-    run_fixture_dir("yaml/comment");
+fn json_jsonc_trailing_comma() {
+    run_fixture_dir("json/jsonc/trailing-comma");
 }
 #[test]
-fn yaml_directive() {
-    run_fixture_dir("yaml/directive");
+fn json_jsonc_empty() {
+    run_fixture_dir("json/jsonc/empty");
 }
 #[test]
-fn yaml_document() {
-    run_fixture_dir("yaml/document");
+fn json_with_comment() {
+    run_fixture_dir("json/with-comment");
 }
+
 #[test]
-fn yaml_flow_mapping() {
-    run_fixture_dir("yaml/flow-mapping");
-}
-#[test]
-fn yaml_flow_sequence() {
-    run_fixture_dir("yaml/flow-sequence");
-}
-#[test]
-fn yaml_home_assistant() {
-    run_fixture_dir("yaml/home-assistant");
-}
-#[test]
-fn yaml_mapping() {
-    run_fixture_dir("yaml/mapping");
-}
-#[test]
-fn yaml_plain() {
-    run_fixture_dir("yaml/plain");
-}
-#[test]
-fn yaml_prettier_ignore() {
-    run_fixture_dir("yaml/prettier-ignore");
-}
-#[test]
-fn yaml_quote() {
-    run_fixture_dir("yaml/quote");
-}
-#[test]
-fn yaml_root() {
-    run_fixture_dir("yaml/root");
-}
-#[test]
-fn yaml_sequence() {
-    run_fixture_dir("yaml/sequence");
-}
-#[test]
-fn yaml_spec() {
-    run_fixture_dir("yaml/spec");
+fn debug_pass1_format1() {
+    use prettier_jsonc::JsonFormat;
+    let fixtures_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let snap_path = fixtures_dir.join("json/json/format.test.js.snap");
+    let content = std::fs::read_to_string(&snap_path).expect("read snapshot");
+    let cases = snapshot_parser::parse_snapshot(&content);
+    for case in &cases {
+        let is_pass1 = case.name.starts_with("pass1.json") && case.name.contains("all");
+        if !is_pass1 {
+            continue;
+        }
+        let format = match case.parser.as_str() {
+            "json" => JsonFormat::Json,
+            "json5" => JsonFormat::Json5,
+            "jsonc" => JsonFormat::Jsonc,
+            _ => continue,
+        };
+        let result =
+            prettier_jsonc::format_str(&case.input, format, &case.options).expect("format pass1");
+        if result != case.expected {
+            let exp_chars: Vec<char> = case.expected.chars().collect();
+            let act_chars: Vec<char> = result.chars().collect();
+            for (i, (e, a)) in exp_chars.iter().zip(act_chars.iter()).enumerate() {
+                if e != a {
+                    let ctx_s = i.saturating_sub(40);
+                    let ctx_e = (i + 120).min(exp_chars.len()).min(act_chars.len());
+                    eprintln!("[{}] First diff at char {i}:", case.name);
+                    eprintln!(
+                        "  Expected: {:?}",
+                        &case.expected[ctx_s..ctx_e.min(case.expected.len())]
+                    );
+                    eprintln!("  Actual:   {:?}", &result[ctx_s..ctx_e.min(result.len())]);
+                    break;
+                }
+            }
+            if exp_chars.len() != act_chars.len() {
+                eprintln!(
+                    "Length diff: expected {} chars, got {} chars",
+                    exp_chars.len(),
+                    act_chars.len()
+                );
+            }
+        }
+    }
 }

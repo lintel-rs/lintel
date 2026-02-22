@@ -1,15 +1,13 @@
 pub mod config;
-pub mod json;
-pub mod json5;
-pub mod jsonc;
-pub mod options;
-pub mod printer;
 
 use std::path::Path;
 
 use anyhow::Result;
 
-pub use options::PrettierOptions;
+// Re-export from prettier-jsonc for backwards compatibility
+pub use prettier_jsonc::options;
+pub use prettier_jsonc::options::PrettierOptions;
+pub use prettier_jsonc::printer;
 
 /// Supported format types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,20 +26,14 @@ pub enum Format {
 pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> Result<String> {
     match format {
         Format::Json => {
-            // Try strict JSON first; fall back to JSONC if the input has comments
-            // or other non-standard features (like prettier does).
-            match serde_json::from_str::<serde_json::Value>(content) {
-                Ok(value) => {
-                    let doc = json::json_to_doc(&value, options);
-                    let mut result = printer::print(&doc, options);
-                    result.push('\n');
-                    Ok(result)
-                }
-                Err(_) => jsonc::format_jsonc(content, options),
-            }
+            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
         }
-        Format::Jsonc => jsonc::format_jsonc(content, options),
-        Format::Json5 => json5::format_json5(content, options),
+        Format::Jsonc => {
+            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Jsonc, options)
+        }
+        Format::Json5 => {
+            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json5, options)
+        }
         Format::Yaml => {
             let yaml_opts = prettier_yaml::YamlFormatOptions {
                 print_width: options.print_width,
