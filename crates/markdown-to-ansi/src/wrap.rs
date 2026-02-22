@@ -165,8 +165,7 @@ fn consume_ansi_escape(chars: &[char], mut i: usize, word: &mut String) -> usize
 mod tests {
     use super::*;
 
-    const BOLD: &str = "\x1b[1m";
-    const RESET: &str = "\x1b[0m";
+    use ansi_term_codes::{BOLD, RESET};
 
     #[test]
     fn basic() {

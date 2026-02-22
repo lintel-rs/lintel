@@ -56,6 +56,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansi-term-codes"
+version = "0.1.0"
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -235,6 +239,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "cargo-furnish"
 version = "0.0.3"
 dependencies = [
+ "ansi-term-codes",
  "anyhow",
  "bpaf",
  "glob",
@@ -1212,6 +1217,7 @@ dependencies = [
 name = "jsonschema-explain"
 version = "0.1.0"
 dependencies = [
+ "ansi-term-codes",
  "markdown-to-ansi",
  "serde_json",
  "terminal_size",
@@ -1256,6 +1262,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 name = "lintel"
 version = "0.0.6"
 dependencies = [
+ "ansi-term-codes",
  "anyhow",
  "bpaf",
  "glob-match",
@@ -1405,6 +1412,7 @@ dependencies = [
 name = "lintel-reporters"
 version = "0.0.5"
 dependencies = [
+ "ansi-term-codes",
  "anyhow",
  "bpaf",
  "humantime",
@@ -1496,6 +1504,7 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 name = "markdown-to-ansi"
 version = "0.1.0"
 dependencies = [
+ "ansi-term-codes",
  "pulldown-cmark",
  "sublime-syntaxes",
  "syntect",

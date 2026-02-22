@@ -8,11 +8,7 @@ use pulldown_cmark::{Options as CmarkOptions, Parser};
 
 pub use highlight::has_syntax;
 
-pub(crate) const BOLD: &str = "\x1b[1m";
-pub(crate) const ITALIC: &str = "\x1b[3m";
-pub(crate) const UNDERLINE: &str = "\x1b[4m";
-pub(crate) const RESET: &str = "\x1b[0m";
-pub(crate) const BLUE: &str = "\x1b[34m";
+pub(crate) use ansi_term_codes::{BLUE, BOLD, ITALIC, RESET, UNDERLINE};
 
 /// Options controlling rendering behavior.
 pub struct Options {
