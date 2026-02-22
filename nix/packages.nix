@@ -79,6 +79,8 @@ let
     '';
     nativeBuildInputs = [ pkgs.installShellFiles ];
   };
+
+  npm-release-binaries = mkPackage ../crates/npm-release-binaries { };
 in
 {
   inherit
@@ -87,5 +89,6 @@ in
     lintel-github-action
     cargo-furnish
     lintel-catalog-builder
+    npm-release-binaries
     ;
 }

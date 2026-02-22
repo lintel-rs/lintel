@@ -11,3 +11,6 @@ devenv.local.yaml
 
 # Rust
 /target
+
+# npm-release-binaries output
+/npm-publish/

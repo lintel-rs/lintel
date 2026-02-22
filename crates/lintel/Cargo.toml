@@ -1,6 +1,6 @@
 [package]
 name = "lintel"
-version = "0.0.6"
+version = "0.0.7"
 edition.workspace = true
 authors.workspace = true
 description = "Validate JSON and YAML files against JSON Schema"
@@ -15,13 +15,13 @@ workspace = true
 
 [dependencies]
 ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
-lintel-annotate = { version = "0.0.6", path = "../lintel-annotate" }
-lintel-check = { version = "0.0.7", path = "../lintel-check" }
-lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
+lintel-annotate = { version = "0.0.7", path = "../lintel-annotate" }
+lintel-check = { version = "0.0.8", path = "../lintel-check" }
+lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
 lintel-explain = { version = "0.0.1", path = "../lintel-explain" }
-lintel-identify = { version = "0.0.3", path = "../lintel-identify" }
-lintel-reporters = { version = "0.0.5", path = "../lintel-reporters" }
-schemastore = { version = "0.0.5", path = "../schemastore" }
+lintel-identify = { version = "0.0.4", path = "../lintel-identify" }
+lintel-reporters = { version = "0.0.6", path = "../lintel-reporters" }
+schemastore = { version = "0.0.6", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 glob-match = "0.2"
 humantime = "2"

@@ -1,6 +1,6 @@
 [package]
 name = "lintel-reporters"
-version = "0.0.5"
+version = "0.0.6"
 edition.workspace = true
 authors.workspace = true
 description = "Reporter implementations for Lintel — pretty, text, and GitHub Actions output"
@@ -15,8 +15,8 @@ workspace = true
 
 [dependencies]
 ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
-lintel-check = { version = "0.0.7", path = "../lintel-check" }
-lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
+lintel-check = { version = "0.0.8", path = "../lintel-check" }
+lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
 bpaf = { version = "0.9", features = ["derive"] }
 miette = { version = "7", features = ["fancy"] }
 anyhow = "1"
