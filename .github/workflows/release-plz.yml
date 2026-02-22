@@ -46,7 +46,8 @@ jobs:
 
           ACTION_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-github-action-v")) | .tag')
           if [ -n "$ACTION_TAG" ]; then
-            gh workflow run release-github-action.yml --ref "$ACTION_TAG"
+            ACTION_VERSION="${ACTION_TAG#lintel-github-action-v}"
+            gh workflow run release-lintel-github-action.yml --ref "$ACTION_TAG" -f version="$ACTION_VERSION"
           fi
 
   release-plz-pr:
