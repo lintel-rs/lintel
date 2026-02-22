@@ -41,11 +41,27 @@ enum Commands {
         #[bpaf(positional("CRATE"))]
         target: String,
     },
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 fn main() -> miette::Result<()> {
     setup_miette();
-    let cli = cli().run();
+    let opts = cli().run();
+
+    if matches!(opts.command, Commands::Man) {
+        let roff = cli().render_manpage(
+            "cargo-furnish",
+            bpaf::doc::Section::General,
+            None,
+            None,
+            Some("Cargo Furnish Manual"),
+        );
+        print!("{roff}");
+        return Ok(());
+    }
 
     let cwd = std::env::current_dir()
         .map_err(|e| miette::miette!("failed to get current directory: {e}"))?;
@@ -54,7 +70,7 @@ fn main() -> miette::Result<()> {
 
     let ws = workspace::parse_workspace(&workspace_root).map_err(|e| miette::miette!("{e:#}"))?;
 
-    match cli.command {
+    match opts.command {
         Commands::Check { fix, target } => {
             let crate_dirs = resolve_and_relativize(target.as_ref(), &workspace_root, &cwd)?;
             if fix {
@@ -67,6 +83,7 @@ fn main() -> miette::Result<()> {
             let crate_dirs = resolve_and_relativize(Some(&target), &workspace_root, &cwd)?;
             commands::update::run(&crate_dirs, &ws, args);
         }
+        Commands::Man => unreachable!(),
     }
 
     Ok(())
