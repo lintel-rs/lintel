@@ -8,7 +8,7 @@ pub(crate) fn ref_name(ref_str: &str) -> &str {
 }
 
 /// Resolve a `$ref` within the same schema document.
-pub(crate) fn resolve_ref<'a>(schema: &'a Value, root: &'a Value) -> &'a Value {
+pub fn resolve_ref<'a>(schema: &'a Value, root: &'a Value) -> &'a Value {
     if let Some(ref_str) = schema.get("$ref").and_then(Value::as_str)
         && let Some(path) = ref_str.strip_prefix("#/")
     {
@@ -29,6 +29,55 @@ pub(crate) fn resolve_ref<'a>(schema: &'a Value, root: &'a Value) -> &'a Value {
         return current;
     }
     schema
+}
+
+/// Walk a JSON Pointer path through a schema, resolving `$ref` at each step.
+///
+/// Segments are decoded per RFC 6901 (`~1` → `/`, `~0` → `~`).
+/// Returns the sub-schema at the given pointer, or an error describing
+/// which segment could not be resolved.
+///
+/// # Errors
+///
+/// Returns an error if a segment in the pointer cannot be resolved within the
+/// schema (i.e. the key does not exist or the array index is out of bounds).
+pub fn navigate_pointer<'a>(
+    schema: &'a Value,
+    root: &'a Value,
+    pointer: &str,
+) -> Result<&'a Value, String> {
+    let path = pointer.strip_prefix('/').unwrap_or(pointer);
+    if path.is_empty() {
+        return Ok(schema);
+    }
+
+    let mut current = resolve_ref(schema, root);
+
+    for segment in path.split('/') {
+        let decoded = segment.replace("~1", "/").replace("~0", "~");
+        current = resolve_ref(current, root);
+
+        // Try direct object key lookup first
+        if let Some(next) = current.get(&decoded) {
+            current = next;
+            continue;
+        }
+
+        // Try as an array index
+        if let Value::Array(arr) = current
+            && let Ok(idx) = decoded.parse::<usize>()
+            && let Some(next) = arr.get(idx)
+        {
+            current = next;
+            continue;
+        }
+
+        return Err(format!(
+            "cannot resolve segment '{decoded}' in pointer '{pointer}'"
+        ));
+    }
+
+    Ok(resolve_ref(current, root))
 }
 
 /// Extract the `required` array from a schema as a list of strings.
@@ -146,4 +195,172 @@ pub(crate) fn variant_summary(variant: &Value, root: &Value, f: &Fmt<'_>) -> Str
     }
 
     format!("{}(schema){}", f.dim, f.reset)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // --- navigate_pointer ---
+
+    #[test]
+    fn navigate_empty_pointer_returns_schema() {
+        let schema = json!({"type": "object"});
+        let result = navigate_pointer(&schema, &schema, "").unwrap();
+        assert_eq!(result, &schema);
+    }
+
+    #[test]
+    fn navigate_root_slash_returns_schema() {
+        let schema = json!({"type": "object"});
+        let result = navigate_pointer(&schema, &schema, "/").unwrap();
+        assert_eq!(result, &schema);
+    }
+
+    #[test]
+    fn navigate_single_segment() {
+        let schema = json!({
+            "properties": {
+                "name": { "type": "string" }
+            }
+        });
+        let result = navigate_pointer(&schema, &schema, "/properties").unwrap();
+        assert_eq!(result, &json!({"name": {"type": "string"}}));
+    }
+
+    #[test]
+    fn navigate_nested_segments() {
+        let schema = json!({
+            "properties": {
+                "name": { "type": "string", "description": "The name" }
+            }
+        });
+        let result = navigate_pointer(&schema, &schema, "/properties/name").unwrap();
+        assert_eq!(
+            result,
+            &json!({"type": "string", "description": "The name"})
+        );
+    }
+
+    #[test]
+    fn navigate_resolves_ref_at_each_step() {
+        let schema = json!({
+            "properties": {
+                "item": { "$ref": "#/$defs/Item" }
+            },
+            "$defs": {
+                "Item": {
+                    "type": "object",
+                    "description": "An item"
+                }
+            }
+        });
+        let result = navigate_pointer(&schema, &schema, "/properties/item").unwrap();
+        assert_eq!(result, &json!({"type": "object", "description": "An item"}));
+    }
+
+    #[test]
+    fn navigate_through_ref_then_deeper() {
+        let schema = json!({
+            "properties": {
+                "config": { "$ref": "#/$defs/Config" }
+            },
+            "$defs": {
+                "Config": {
+                    "type": "object",
+                    "properties": {
+                        "debug": { "type": "boolean" }
+                    }
+                }
+            }
+        });
+        let result =
+            navigate_pointer(&schema, &schema, "/properties/config/properties/debug").unwrap();
+        assert_eq!(result, &json!({"type": "boolean"}));
+    }
+
+    #[test]
+    fn navigate_array_index() {
+        let schema = json!({
+            "oneOf": [
+                { "type": "string" },
+                { "type": "integer" }
+            ]
+        });
+        let result = navigate_pointer(&schema, &schema, "/oneOf/1").unwrap();
+        assert_eq!(result, &json!({"type": "integer"}));
+    }
+
+    #[test]
+    fn navigate_missing_segment_errors() {
+        let schema = json!({"type": "object"});
+        let err = navigate_pointer(&schema, &schema, "/nonexistent").unwrap_err();
+        assert!(err.contains("nonexistent"), "error was: {err}");
+    }
+
+    #[test]
+    fn navigate_tilde_decoding() {
+        // RFC 6901: ~0 -> ~, ~1 -> /
+        let schema = json!({
+            "properties": {
+                "a/b": { "type": "string" },
+                "c~d": { "type": "integer" }
+            }
+        });
+        let result = navigate_pointer(&schema, &schema, "/properties/a~1b").unwrap();
+        assert_eq!(result, &json!({"type": "string"}));
+
+        let result = navigate_pointer(&schema, &schema, "/properties/c~0d").unwrap();
+        assert_eq!(result, &json!({"type": "integer"}));
+    }
+
+    #[test]
+    fn navigate_defs_directly() {
+        let schema = json!({
+            "$defs": {
+                "Foo": { "type": "string" }
+            }
+        });
+        let result = navigate_pointer(&schema, &schema, "/$defs/Foo").unwrap();
+        assert_eq!(result, &json!({"type": "string"}));
+    }
+
+    // --- resolve_ref ---
+
+    #[test]
+    fn resolve_ref_no_ref_returns_self() {
+        let schema = json!({"type": "string"});
+        let root = json!({"type": "string"});
+        assert_eq!(resolve_ref(&schema, &root), &schema);
+    }
+
+    #[test]
+    fn resolve_ref_follows_local_ref() {
+        let root = json!({
+            "$defs": {
+                "Name": { "type": "string" }
+            }
+        });
+        let schema = json!({"$ref": "#/$defs/Name"});
+        let resolved = resolve_ref(&schema, &root);
+        assert_eq!(resolved, &json!({"type": "string"}));
+    }
+
+    #[test]
+    fn resolve_ref_missing_target_returns_self() {
+        let root = json!({"$defs": {}});
+        let schema = json!({"$ref": "#/$defs/Missing"});
+        let resolved = resolve_ref(&schema, &root);
+        assert_eq!(resolved, &schema);
+    }
+
+    #[test]
+    fn resolve_ref_external_ref_returns_self() {
+        let root = json!({});
+        let schema = json!({"$ref": "https://example.com/schema.json"});
+        // External refs (no #/ prefix) are not resolved locally
+        assert_eq!(resolve_ref(&schema, &root), &schema);
+    }
 }

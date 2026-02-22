@@ -3,25 +3,15 @@
 pub mod reporter;
 pub mod reporters;
 
-use core::time::Duration;
 use std::time::Instant;
 
 use anyhow::Result;
-use bpaf::{Bpaf, Parser};
+use bpaf::Bpaf;
 
 use lintel_check::retriever::CacheStatus;
 use lintel_check::validate::{self, CheckedFile};
 use lintel_check::validation_cache::ValidationCacheStatus;
-
-fn schema_cache_ttl() -> impl bpaf::Parser<Option<Duration>> {
-    bpaf::long("schema-cache-ttl")
-        .help("Schema cache TTL (e.g. \"12h\", \"30m\", \"1d\"); default 12h")
-        .argument::<String>("DURATION")
-        .parse(|s: String| {
-            humantime::parse_duration(&s).map_err(|e| format!("invalid duration '{s}': {e}"))
-        })
-        .optional()
-}
+use lintel_cli_common::CliCacheOptions;
 
 pub use reporter::Reporter;
 pub use reporters::github::GithubReporter;
@@ -68,31 +58,12 @@ impl core::fmt::Display for ReporterKind {
 // -----------------------------------------------------------------------
 
 #[derive(Debug, Clone, Bpaf)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct ValidateArgs {
     #[bpaf(long("exclude"), argument("PATTERN"))]
     pub exclude: Vec<String>,
 
-    #[bpaf(long("cache-dir"), argument("DIR"))]
-    pub cache_dir: Option<String>,
-
-    /// Bypass schema cache reads (still writes fetched schemas to cache)
-    #[bpaf(long("force-schema-fetch"), switch)]
-    pub force_schema_fetch: bool,
-
-    /// Bypass validation cache reads (still writes results to cache)
-    #[bpaf(long("force-validation"), switch)]
-    pub force_validation: bool,
-
-    /// Bypass all cache reads (combines --force-schema-fetch and --force-validation)
-    #[bpaf(long("force"), switch)]
-    pub force: bool,
-
-    #[bpaf(long("no-catalog"), switch)]
-    pub no_catalog: bool,
-
-    #[bpaf(external(schema_cache_ttl))]
-    pub schema_cache_ttl: Option<Duration>,
+    #[bpaf(external(lintel_cli_common::cli_cache_options))]
+    pub cache: CliCacheOptions,
 
     #[bpaf(positional("PATH"))]
     pub globs: Vec<String>,
@@ -111,12 +82,12 @@ impl From<&ValidateArgs> for validate::ValidateArgs {
         validate::ValidateArgs {
             globs: args.globs.clone(),
             exclude: args.exclude.clone(),
-            cache_dir: args.cache_dir.clone(),
-            force_schema_fetch: args.force_schema_fetch || args.force,
-            force_validation: args.force_validation || args.force,
-            no_catalog: args.no_catalog,
+            cache_dir: args.cache.cache_dir.clone(),
+            force_schema_fetch: args.cache.force_schema_fetch || args.cache.force,
+            force_validation: args.cache.force_validation || args.cache.force,
+            no_catalog: args.cache.no_catalog,
             config_dir,
-            schema_cache_ttl: args.schema_cache_ttl,
+            schema_cache_ttl: args.cache.schema_cache_ttl,
         }
     }
 }

@@ -58,17 +58,20 @@ fn visible_width(s: &str) -> usize {
     width
 }
 
-/// Syntax-highlight a code block using syntect, with background padding to terminal width.
+/// Syntax-highlight a code block using syntect, with background padding.
 ///
 /// When color or syntax highlighting is disabled, returns the code unchanged.
 /// Falls back to plain text if the language is unknown.
+///
+/// The background extends from the first content column to `width` columns.
+/// The caller is responsible for prepending any indent before each output line.
 pub(crate) fn highlight_code_block(code: &str, lang: &str, width: Option<usize>) -> String {
     let (syntax_set, syntax) = find_syntax(lang);
     let theme = &THEME_SET.themes["base16-ocean.dark"];
     let mut h = syntect::easy::HighlightLines::new(syntax, theme);
     let mut out = String::new();
 
-    let term_width = width.unwrap_or(80);
+    let full_width = width.unwrap_or(80);
 
     let bg = theme
         .settings
@@ -82,7 +85,8 @@ pub(crate) fn highlight_code_block(code: &str, lang: &str, width: Option<usize>)
                 let highlighted = highlighted.trim_end_matches('\n');
 
                 if let Some(ref bg_code) = bg {
-                    let padding = term_width.saturating_sub(visible_width(highlighted));
+                    let content_width = visible_width(highlighted);
+                    let padding = full_width.saturating_sub(content_width);
                     out.push_str(bg_code);
                     out.push_str(highlighted);
                     out.extend(core::iter::repeat_n(' ', padding));
