@@ -17,7 +17,7 @@
 
 </div>
 
-**Lintel** validates JSON, YAML, TOML, JSON5, and JSONC files against [JSON Schema](https://json-schema.org/) in a single command. It auto-discovers schemas via [SchemaStore](https://www.schemastore.org/), the [Lintel catalog](https://github.com/lintel-rs/catalog), inline `$schema` properties, and YAML modelines — zero config required.
+**Lintel** validates JSON, YAML, TOML, JSON5, and JSONC files against [JSON Schema](https://json-schema.org/) in a single command. It auto-discovers schemas via [SchemaStore](https://www.schemastore.org/), the [Lintel catalog](https://catalog.lintel.tools/), inline `$schema` properties, and YAML modelines — zero config required.
 
 **Fast.** Written in Rust with no async runtime, deterministic schema caching, and pre-compiled SchemaStore catalog matching. Warm runs are pure computation.
 
@@ -73,7 +73,7 @@ Files without a matching schema are silently skipped. Lintel respects `.gitignor
 
 ## The Lintel Catalog
 
-The [Lintel catalog](https://github.com/lintel-rs/catalog) provides schemas for tools that don't have SchemaStore entries. It's fetched automatically alongside SchemaStore — no configuration needed.
+The [Lintel catalog](https://catalog.lintel.tools/) provides schemas for tools that don't have SchemaStore entries. It's fetched automatically alongside SchemaStore — no configuration needed.
 
 Currently includes schemas for:
 

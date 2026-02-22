@@ -2,7 +2,7 @@ use crate::retriever::SchemaCache;
 use schemastore::Catalog;
 
 /// The default Lintel catalog registry (always fetched unless `--no-catalog`).
-pub const DEFAULT_REGISTRY: &str = "github:lintel-rs/catalog/master";
+pub const DEFAULT_REGISTRY: &str = "https://catalog.lintel.tools/catalog.json";
 
 /// Resolve a registry URL, expanding shorthand notations.
 ///
@@ -67,20 +67,6 @@ mod tests {
 
     #[test]
     fn github_shorthand_tries_main_then_master() {
-        let urls = resolve_urls("github:lintel-rs/catalog");
-        assert_eq!(urls.len(), 2);
-        assert_eq!(
-            urls[0],
-            "https://raw.githubusercontent.com/lintel-rs/catalog/main/catalog.json"
-        );
-        assert_eq!(
-            urls[1],
-            "https://raw.githubusercontent.com/lintel-rs/catalog/master/catalog.json"
-        );
-    }
-
-    #[test]
-    fn github_shorthand_with_org() {
         let urls = resolve_urls("github:my-org/my-schemas");
         assert_eq!(urls.len(), 2);
         assert_eq!(
@@ -110,9 +96,9 @@ mod tests {
     }
 
     #[test]
-    fn default_registry_uses_explicit_branch() {
+    fn default_registry_is_plain_url() {
         let urls = resolve_urls(DEFAULT_REGISTRY);
         assert_eq!(urls.len(), 1);
-        assert!(urls[0].contains("/master/"));
+        assert_eq!(urls[0], "https://catalog.lintel.tools/catalog.json");
     }
 }
