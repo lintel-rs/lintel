@@ -1,9 +1,20 @@
-name: Release
+# Release workflow for the lintel CLI binary.
+# Triggered by vX.Y.Z tags (created by release-plz) or manual dispatch.
+#
+# Builds native binaries (nix + cargo), creates a GitHub release,
+# publishes to NPM, and pushes multi-arch Docker images to GHCR.
+
+name: Release Lintel
 
 on:
   push:
-    tags: ["lintel-v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.0.7)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -106,6 +117,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
           files: lintel-*
           generate_release_notes: true
 
@@ -123,7 +135,8 @@ jobs:
 
       - name: Set version from tag
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION:-${GITHUB_REF_NAME#v}}"
           cd npm
           npm version "$VERSION" --no-git-tag-version
 
@@ -165,7 +178,8 @@ jobs:
 
       - name: Tag and push
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION:-${GITHUB_REF_NAME#v}}"
           ARCH_TAG=${VERSION}-${{ matrix.arch }}
 
           docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
@@ -184,11 +198,17 @@ jobs:
 
       - name: Create and push manifests
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION:-${GITHUB_REF_NAME#v}}"
           MAJOR_MINOR=${VERSION%.*}
           IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-          for TAG in "${VERSION}" "${MAJOR_MINOR}" "latest"; do
+          TAGS=("${VERSION}" "latest")
+          if [[ "${MAJOR_MINOR}" != "${VERSION}" ]]; then
+            TAGS+=("${MAJOR_MINOR}")
+          fi
+
+          for TAG in "${TAGS[@]}"; do
             docker manifest create ${IMAGE}:${TAG} \
               ${IMAGE}:${VERSION}-amd64 \
               ${IMAGE}:${VERSION}-arm64
