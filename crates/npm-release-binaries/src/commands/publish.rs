@@ -3,9 +3,17 @@ use std::process::Command;
 
 use crate::config::{PackageConfig, TargetEntry};
 
-pub fn run(pkg_config: &PackageConfig, output_dir: &Path, dry_run: bool) -> miette::Result<()> {
-    let access = pkg_config.access.as_deref().unwrap_or("public");
+pub struct Options<'a> {
+    pub access: &'a str,
+    pub dry_run: bool,
+    pub provenance: bool,
+}
 
+pub fn run(
+    pkg_config: &PackageConfig,
+    output_dir: &Path,
+    opts: &Options<'_>,
+) -> miette::Result<()> {
     // Publish target packages first
     for (target_key, entry) in &pkg_config.targets {
         if matches!(entry, TargetEntry::Enabled(false)) {
@@ -15,12 +23,12 @@ pub fn run(pkg_config: &PackageConfig, output_dir: &Path, dry_run: bool) -> miet
             .target_package_name
             .replace("{{target}}", target_key);
         let pkg_path = package_dir(output_dir, &package_name);
-        npm_publish(&pkg_path, &package_name, dry_run, access)?;
+        npm_publish(&pkg_path, &package_name, opts)?;
     }
 
     // Publish main package last
     let main_pkg_path = package_dir(output_dir, &pkg_config.name);
-    npm_publish(&main_pkg_path, &pkg_config.name, dry_run, access)?;
+    npm_publish(&main_pkg_path, &pkg_config.name, opts)?;
 
     Ok(())
 }
@@ -34,23 +42,21 @@ fn package_dir(output_dir: &Path, package_name: &str) -> PathBuf {
     }
 }
 
-fn npm_publish(
-    pkg_dir: &Path,
-    package_name: &str,
-    dry_run: bool,
-    access: &str,
-) -> miette::Result<()> {
+fn npm_publish(pkg_dir: &Path, package_name: &str, opts: &Options<'_>) -> miette::Result<()> {
     let mut cmd = Command::new("npm");
     cmd.arg("publish");
-    cmd.arg("--access").arg(access);
-    if dry_run {
+    cmd.arg("--access").arg(opts.access);
+    if opts.provenance {
+        cmd.arg("--provenance");
+    }
+    if opts.dry_run {
         cmd.arg("--dry-run");
     }
     cmd.current_dir(pkg_dir);
 
     eprintln!(
         "{} {package_name} from {}",
-        if dry_run {
+        if opts.dry_run {
             "Dry-run publishing"
         } else {
             "Publishing"

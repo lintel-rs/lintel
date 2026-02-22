@@ -47,6 +47,9 @@ enum Command {
     Release {
         #[bpaf(external(generate_args))]
         args: GenerateArgs,
+        /// Include --provenance flag when publishing
+        #[bpaf(long("provenance"), switch)]
+        provenance: bool,
     },
 
     #[bpaf(command("generate"))]
@@ -65,6 +68,9 @@ enum Command {
         /// Perform a dry run (don't actually publish)
         #[bpaf(long("dry-run"), switch)]
         dry_run: bool,
+        /// Include --provenance flag when publishing
+        #[bpaf(long("provenance"), switch)]
+        provenance: bool,
     },
 }
 
@@ -76,17 +82,33 @@ fn main() -> miette::Result<()> {
     let output_dir = resolve_output_dir(&config);
 
     match cli.command {
-        Command::Release { args } => {
+        Command::Release { args, provenance } => {
             let opts = resolve_generate_opts(&args, &config, &output_dir)?;
-            commands::release::run(&opts)?;
+            let access = opts.pkg_config.access.as_deref().unwrap_or("public");
+            let publish_opts = commands::publish::Options {
+                access,
+                dry_run: false,
+                provenance,
+            };
+            commands::release::run(&opts, &publish_opts)?;
         }
         Command::Generate { args } => {
             let opts = resolve_generate_opts(&args, &config, &output_dir)?;
             commands::generate::run(&opts)?;
         }
-        Command::Publish { package, dry_run } => {
+        Command::Publish {
+            package,
+            dry_run,
+            provenance,
+        } => {
             let pkg_config = resolve_package(&config, &package)?;
-            commands::publish::run(pkg_config, &output_dir, dry_run)?;
+            let access = pkg_config.access.as_deref().unwrap_or("public");
+            let publish_opts = commands::publish::Options {
+                access,
+                dry_run,
+                provenance,
+            };
+            commands::publish::run(pkg_config, &output_dir, &publish_opts)?;
         }
     }
 
