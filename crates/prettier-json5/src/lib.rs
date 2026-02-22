@@ -63,7 +63,7 @@ fn force_group_break(doc: Doc) -> Doc {
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn node_to_doc(node: &Node, options: &PrettierConfig) -> Doc {
     match node {
         Node::Null => Doc::text("null"),

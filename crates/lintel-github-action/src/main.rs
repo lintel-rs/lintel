@@ -185,6 +185,7 @@ async fn post_check_run(
     Ok(response)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn patch_remaining_annotations(
     client: &reqwest::Client,
     url: &str,
@@ -253,8 +254,7 @@ async fn run(cli: CLI) -> Result<bool> {
     // Run validation
     let lib_args = validate::ValidateArgs::from(&args);
     let start = Instant::now();
-    let result =
-        validate::run(&lib_args, lintel_check::retriever::ReqwestClient::default()).await?;
+    let result = validate::run(&lib_args).await?;
     let elapsed = start.elapsed();
 
     let had_errors = result.has_errors();

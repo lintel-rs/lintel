@@ -1,6 +1,6 @@
 [package]
 name = "lintel-benchmark"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
 description = "Benchmarking harness for Lintel — runs validation against real-world repos and records timing results"

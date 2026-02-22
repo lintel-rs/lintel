@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-annotate-v0.0.5...lintel-annotate-v0.0.6) - 2026-02-21
+
+### Other
+
+- updated the following local packages: lintel-check
+
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-annotate-v0.0.4...lintel-annotate-v0.0.5) - 2026-02-21
+
+### Other
+
+- add SchemaCacheBuilder and centralize TTL defaulting
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+- rename lintel-http-cache back to lintel-schema-cache and HttpCache to SchemaCache
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+- rename lintel-schema-cache to lintel-http-cache and simplify API
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-annotate-v0.0.3...lintel-annotate-v0.0.4) - 2026-02-21
 
 ### Other

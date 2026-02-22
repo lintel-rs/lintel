@@ -23,7 +23,11 @@ fn is_multiline_key(node: &Node) -> bool {
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::too_many_arguments
+)]
 pub(crate) fn format_block_mapping(
     mapping: &MappingNode,
     output: &mut String,
@@ -493,7 +497,7 @@ fn format_key_comments_and_value(
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub(crate) fn format_explicit_key_entry(
     entry: &MappingEntry,
     output: &mut String,

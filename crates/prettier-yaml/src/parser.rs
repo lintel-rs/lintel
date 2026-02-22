@@ -430,7 +430,7 @@ impl<'a> AstBuilder<'a> {
         }))
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn build_sequence(&mut self) -> Result<Node> {
         let (event, span) = self.advance();
         let span = *span;
@@ -707,7 +707,7 @@ impl<'a> AstBuilder<'a> {
         }))
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn build_mapping(&mut self) -> Result<Node> {
         let (event, span) = self.advance();
         let span = *span;

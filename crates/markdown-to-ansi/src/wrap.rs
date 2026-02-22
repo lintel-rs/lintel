@@ -1,3 +1,36 @@
+/// Mutable state carried through the word-wrapping loop.
+struct WrapState {
+    col: usize,
+    word: String,
+    word_width: usize,
+    pending_space: bool,
+}
+
+impl WrapState {
+    /// Flush the current word to `out`, emitting a space or line break before it
+    /// when `pending_space` is set. Updates `self.col` in place.
+    fn flush_word(&mut self, out: &mut String, width: usize, cont_prefix: &str) {
+        if self.word.is_empty() {
+            return;
+        }
+        if self.pending_space {
+            if self.col + 1 + self.word_width > width {
+                out.push('\n');
+                out.push_str(cont_prefix);
+                self.col = cont_prefix.len();
+            } else {
+                out.push(' ');
+                self.col += 1;
+            }
+            self.pending_space = false;
+        }
+        out.push_str(&self.word);
+        self.col += self.word_width;
+        self.word.clear();
+        self.word_width = 0;
+    }
+}
+
 /// Word-wrap text to fit within `width` visible columns, respecting ANSI escape sequences.
 ///
 /// - `first_line_offset`: columns already occupied on the first line (e.g. 2 for `- ` prefix).
@@ -17,10 +50,12 @@ pub(crate) fn wrap_text(
 
     let cont_prefix: String = " ".repeat(cont_indent);
     let mut out = String::new();
-    let mut col = first_line_offset;
-    let mut word = String::new();
-    let mut word_width = 0;
-    let mut pending_space = false;
+    let mut state = WrapState {
+        col: first_line_offset,
+        word: String::new(),
+        word_width: 0,
+        pending_space: false,
+    };
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
     let mut i = 0;
@@ -29,96 +64,39 @@ pub(crate) fn wrap_text(
         let ch = chars[i];
 
         if ch == '\x1b' && i + 1 < len {
-            i = consume_ansi_escape(&chars, i, &mut word);
+            i = consume_ansi_escape(&chars, i, &mut state.word);
             continue;
         }
 
         if ch == '\n' {
-            flush_word(
-                &mut out,
-                col,
-                &mut word,
-                &mut word_width,
-                &mut pending_space,
-                width,
-                &cont_prefix,
-            );
+            state.flush_word(&mut out, width, &cont_prefix);
             out.push('\n');
             if cont_indent > 0 {
                 out.push_str(&cont_prefix);
             }
-            col = cont_indent;
-            pending_space = false;
+            state.col = cont_indent;
+            state.pending_space = false;
             i += 1;
             continue;
         }
 
         if ch == ' ' {
-            col = flush_word(
-                &mut out,
-                col,
-                &mut word,
-                &mut word_width,
-                &mut pending_space,
-                width,
-                &cont_prefix,
-            );
-            if col > 0 {
-                pending_space = true;
+            state.flush_word(&mut out, width, &cont_prefix);
+            if state.col > 0 {
+                state.pending_space = true;
             }
             i += 1;
             continue;
         }
 
-        word.push(ch);
-        word_width += 1;
+        state.word.push(ch);
+        state.word_width += 1;
         i += 1;
     }
 
-    flush_word(
-        &mut out,
-        col,
-        &mut word,
-        &mut word_width,
-        &mut pending_space,
-        width,
-        &cont_prefix,
-    );
+    state.flush_word(&mut out, width, &cont_prefix);
 
     out
-}
-
-/// Flush the current word to `out`, emitting a space or line break before it
-/// when `pending_space` is set. Returns the updated column position.
-fn flush_word(
-    out: &mut String,
-    col: usize,
-    word: &mut String,
-    word_width: &mut usize,
-    pending_space: &mut bool,
-    width: usize,
-    cont_prefix: &str,
-) -> usize {
-    if word.is_empty() {
-        return col;
-    }
-    let mut c = col;
-    if *pending_space {
-        if c + 1 + *word_width > width {
-            out.push('\n');
-            out.push_str(cont_prefix);
-            c = cont_prefix.len();
-        } else {
-            out.push(' ');
-            c += 1;
-        }
-        *pending_space = false;
-    }
-    out.push_str(word);
-    c += *word_width;
-    word.clear();
-    *word_width = 0;
-    c
 }
 
 /// Consume an ANSI escape sequence starting at `chars[i]` (the `\x1b`),
@@ -165,8 +143,7 @@ fn consume_ansi_escape(chars: &[char], mut i: usize, word: &mut String) -> usize
 mod tests {
     use super::*;
 
-    const BOLD: &str = "\x1b[1m";
-    const RESET: &str = "\x1b[0m";
+    use ansi_term_codes::{BOLD, RESET};
 
     #[test]
     fn basic() {

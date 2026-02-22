@@ -1,6 +1,6 @@
 [package]
 name = "lintel-identify"
-version = "0.0.1"
+version = "0.0.3"
 edition.workspace = true
 authors.workspace = true
 description = "Schema identification for JSON and YAML files using JSON Schema"
@@ -14,7 +14,7 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.5", path = "../lintel-check" }
+lintel-check = { version = "0.0.7", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
 schemastore = { version = "0.0.5", path = "../schemastore" }
 jsonschema-explain = { version = "0.1.0", path = "../jsonschema-explain" }

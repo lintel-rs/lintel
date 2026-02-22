@@ -169,6 +169,7 @@ fn try_parse_config(path: &Path, name: &str) -> Result<Option<serde_json::Value>
 ///
 /// Override merging works by serializing the base config to a JSON Value,
 /// deep-merging the override options on top, then deserializing back.
+#[allow(clippy::too_many_arguments)]
 fn apply_overrides(
     file_path: &Path,
     config_dir: &Path,

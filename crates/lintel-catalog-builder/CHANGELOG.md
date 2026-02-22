@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.2...lintel-catalog-builder-v0.0.3) - 2026-02-21
+
+### Added
+
+- update all dependencies to latest versions
+
+## [0.0.2](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.1...lintel-catalog-builder-v0.0.2) - 2026-02-21
+
+### Other
+
+- add SchemaCacheBuilder and centralize TTL defaulting
+- Merge remote-tracking branch 'origin/master' into fix-more-stuff
+
 ## [0.0.1](https://github.com/lintel-rs/lintel/releases/tag/lintel-catalog-builder-v0.0.1) - 2026-02-21
 
 ### Added

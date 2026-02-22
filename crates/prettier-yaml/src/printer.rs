@@ -117,6 +117,7 @@ pub(crate) fn format_stream(stream: &YamlStream, options: &PrettierConfig) -> St
     output
 }
 
+#[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 pub(crate) fn format_node(
     node: &Node,
     output: &mut String,
@@ -148,6 +149,7 @@ pub(crate) fn format_node(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn format_scalar(
     s: &ScalarNode,
     output: &mut String,
@@ -242,6 +244,7 @@ pub(crate) fn format_scalar(
 }
 
 /// Format a plain scalar value with proseWrap awareness.
+#[allow(clippy::too_many_arguments)]
 fn format_plain_scalar(
     s: &ScalarNode,
     output: &mut String,
@@ -277,6 +280,7 @@ fn format_plain_scalar(
 
 /// `ProseWrap::Always` — Re-wrap at `print_width`.
 /// Paragraph breaks (\n in value) are preserved as blank lines.
+#[allow(clippy::too_many_arguments)]
 fn format_plain_wrap(
     value: &str,
     output: &mut String,
@@ -398,6 +402,7 @@ fn format_plain_preserve(source_lines: &[String], output: &mut String, indent: &
 }
 
 /// Format a quoted scalar, choosing between single and double quotes based on prettier rules.
+#[allow(clippy::too_many_arguments)]
 fn format_quoted_scalar(
     value: &str,
     raw_source: Option<&str>,
@@ -657,6 +662,7 @@ fn format_multiline_quoted_wrap(
     output.push('"');
 }
 
+#[allow(clippy::too_many_arguments)]
 fn output_quoted_wrap_segment(
     segment: &[&str],
     output: &mut String,
@@ -889,7 +895,11 @@ fn escape_double_quoted(s: &str) -> String {
 
 // ─── Block sequence formatting ─────────────────────────────────────────────────
 
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::too_many_arguments
+)]
 pub(crate) fn format_block_sequence(
     seq: &SequenceNode,
     output: &mut String,
@@ -1074,7 +1084,11 @@ pub(crate) fn format_block_sequence(
 
 /// Format a mapping that's the value of a sequence item (inline first entry after dash).
 /// `seq_indent` is the column position of the sequence's `- ` prefix.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::too_many_arguments
+)]
 fn format_sequence_mapping_item(
     m: &crate::ast::MappingNode,
     item: &crate::ast::SequenceItem,

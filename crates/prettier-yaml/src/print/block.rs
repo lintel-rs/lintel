@@ -217,6 +217,7 @@ fn split_with_single_space(s: &str) -> Vec<&str> {
 }
 
 /// Re-wrap folded block scalar content for Always/Never prose wrap modes.
+#[allow(clippy::too_many_arguments)]
 fn format_block_folded_rewrap(
     body_lines: &[&str],
     output: &mut String,

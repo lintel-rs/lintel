@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use lintel_schema_cache::{HttpClient, SchemaCache};
+use lintel_schema_cache::SchemaCache;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, warn};
 
@@ -10,6 +10,15 @@ use tracing::{debug, warn};
 struct DownloadedDep {
     text: String,
     filename: String,
+}
+
+/// Shared context for [`resolve_and_rewrite`], grouping cross-cutting state
+/// that would otherwise require many individual arguments.
+pub struct RefRewriteContext<'a> {
+    pub cache: &'a SchemaCache,
+    pub shared_dir: &'a Path,
+    pub base_url_for_shared: &'a str,
+    pub already_downloaded: &'a mut HashMap<String, String>,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -190,21 +199,17 @@ fn encode_ref_fragment(ref_str: &str) -> Option<String> {
 /// Download all `$ref` dependencies for a schema, rewrite URLs to local paths,
 /// and write the updated schema. Handles transitive dependencies recursively.
 ///
+/// - `ctx`: shared context containing the schema cache, shared directory,
+///   base URL for the shared directory, and already-downloaded map
 /// - `schema_text`: the JSON text of the schema
 /// - `schema_dest`: where to write the rewritten schema
-/// - `shared_dir`: directory for dependency files (e.g. `schemas/<group>/_shared/`)
-/// - `base_url_for_shared`: the URL prefix for the shared directory
-/// - `already_downloaded`: map of URL → local filename for already-downloaded deps
 ///
 /// Filenames in `_shared/` are disambiguated with numeric suffixes when
 /// different URLs produce the same last path segment.
-pub async fn resolve_and_rewrite<C: HttpClient>(
-    cache: &SchemaCache<C>,
+pub async fn resolve_and_rewrite(
+    ctx: &mut RefRewriteContext<'_>,
     schema_text: &str,
     schema_dest: &Path,
-    shared_dir: &Path,
-    base_url_for_shared: &str,
-    already_downloaded: &mut HashMap<String, String>,
 ) -> Result<()> {
     let mut value: serde_json::Value =
         serde_json::from_str(schema_text).context("failed to parse schema JSON")?;
@@ -228,11 +233,11 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
     let mut to_process: Vec<DownloadedDep> = Vec::new();
 
     for ref_url in &external_refs {
-        if let Some(existing_filename) = already_downloaded.get(ref_url) {
+        if let Some(existing_filename) = ctx.already_downloaded.get(ref_url) {
             // Already downloaded, just build the mapping using the stored filename
             let local_url = format!(
                 "{}/{}",
-                base_url_for_shared.trim_end_matches('/'),
+                ctx.base_url_for_shared.trim_end_matches('/'),
                 existing_filename,
             );
             url_map.insert(ref_url.clone(), local_url);
@@ -240,15 +245,19 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
         }
 
         let base_filename = filename_from_url(ref_url)?;
-        tokio::fs::create_dir_all(shared_dir).await?;
+        tokio::fs::create_dir_all(ctx.shared_dir).await?;
         // Disambiguate filename if another URL already produced the same name
-        let filename = unique_filename_in(shared_dir, &base_filename);
-        let dest_path = shared_dir.join(&filename);
+        let filename = unique_filename_in(ctx.shared_dir, &base_filename);
+        let dest_path = ctx.shared_dir.join(&filename);
 
-        match crate::download::download_one(cache, ref_url, &dest_path).await {
+        match crate::download::download_one(ctx.cache, ref_url, &dest_path).await {
             Ok(dep_text) => {
-                already_downloaded.insert(ref_url.clone(), filename.clone());
-                let local_url = format!("{}/{filename}", base_url_for_shared.trim_end_matches('/'));
+                ctx.already_downloaded
+                    .insert(ref_url.clone(), filename.clone());
+                let local_url = format!(
+                    "{}/{filename}",
+                    ctx.base_url_for_shared.trim_end_matches('/')
+                );
                 url_map.insert(ref_url.clone(), local_url);
                 to_process.push(DownloadedDep {
                     text: dep_text,
@@ -269,16 +278,8 @@ pub async fn resolve_and_rewrite<C: HttpClient>(
 
     // Recursively process transitive deps
     for dep in to_process {
-        let dep_dest = shared_dir.join(&dep.filename);
-        Box::pin(resolve_and_rewrite(
-            cache,
-            &dep.text,
-            &dep_dest,
-            shared_dir,
-            base_url_for_shared,
-            already_downloaded,
-        ))
-        .await?;
+        let dep_dest = ctx.shared_dir.join(&dep.filename);
+        Box::pin(resolve_and_rewrite(ctx, &dep.text, &dep_dest)).await?;
     }
 
     Ok(())

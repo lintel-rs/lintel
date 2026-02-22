@@ -1,18 +1,13 @@
 use std::io::IsTerminal;
 use std::time::Instant;
 
+use ansi_term_codes::{BOLD, DIM, RESET};
 use anyhow::Result;
 
-use lintel_check::retriever::HttpClient;
-
 /// Run the `annotate` command: add schema annotations to files.
-pub async fn run<C: HttpClient>(
-    args: &lintel_annotate::AnnotateArgs,
-    client: C,
-    verbose: bool,
-) -> Result<bool> {
+pub async fn run(args: &lintel_annotate::AnnotateArgs, verbose: bool) -> Result<bool> {
     let start = Instant::now();
-    let result = lintel_annotate::run(args, client).await?;
+    let result = lintel_annotate::run(args).await?;
     let had_errors = !result.errors.is_empty();
 
     if verbose {
@@ -36,11 +31,11 @@ pub async fn run<C: HttpClient>(
     if std::io::stderr().is_terminal() {
         if updated > 0 {
             eprintln!(
-                "\x1b[1mAnnotated {annotated}, updated {updated} files\x1b[0m \x1b[2m(skipped {skipped}) in {ms}ms.\x1b[0m"
+                "{BOLD}Annotated {annotated}, updated {updated} files{RESET} {DIM}(skipped {skipped}) in {ms}ms.{RESET}"
             );
         } else {
             eprintln!(
-                "\x1b[1mAnnotated {annotated} files\x1b[0m \x1b[2m(skipped {skipped}) in {ms}ms.\x1b[0m"
+                "{BOLD}Annotated {annotated} files{RESET} {DIM}(skipped {skipped}) in {ms}ms.{RESET}"
             );
         }
     } else if updated > 0 {

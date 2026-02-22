@@ -4,10 +4,7 @@ use std::time::Instant;
 
 use crate::{cargo_toml, doc_injection, readme, workspace};
 
-const GREEN: &str = "\x1b[1;32m";
-const RED: &str = "\x1b[1;31m";
-const BOLD: &str = "\x1b[1m";
-const RESET: &str = "\x1b[0m";
+use ansi_term_codes::{BOLD, BOLD_GREEN as GREEN, BOLD_RED as RED, RESET};
 
 pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     let start = Instant::now();
@@ -75,7 +72,13 @@ pub fn run_fix(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     let mut total_errors: usize = 0;
 
     for crate_dir in crate_dirs {
-        let meta = match cargo_toml::fix_cargo_toml(crate_dir, ws, None, None, None, true) {
+        let fix_update = cargo_toml::MetadataUpdate {
+            description: None,
+            keywords: None,
+            categories: None,
+            force: true,
+        };
+        let meta = match cargo_toml::fix_cargo_toml(crate_dir, ws, &fix_update) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("  error: {e:#}");

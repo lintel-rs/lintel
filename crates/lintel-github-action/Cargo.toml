@@ -1,6 +1,6 @@
 [package]
 name = "lintel-github-action"
-version = "0.0.3"
+version = "0.0.5"
 edition.workspace = true
 authors.workspace = true
 description = "GitHub Action binary for Lintel — creates Check Runs with inline annotations"
@@ -14,11 +14,11 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.5", path = "../lintel-check" }
-lintel-reporters = { version = "0.0.3", path = "../lintel-reporters" }
+lintel-check = { version = "0.0.7", path = "../lintel-check" }
+lintel-reporters = { version = "0.0.5", path = "../lintel-reporters" }
 bpaf = { version = "0.9", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

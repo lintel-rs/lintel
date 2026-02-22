@@ -7,9 +7,7 @@ use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_check::config;
 use lintel_check::parsers;
-use lintel_check::retriever::{
-    CacheStatus, HttpClient, ReqwestClient, SchemaCache, ensure_cache_dir,
-};
+use lintel_check::retriever::{CacheStatus, SchemaCache};
 use lintel_check::validate;
 use lintel_check::validation_cache;
 
@@ -51,29 +49,24 @@ pub struct TraceArgs {
     pub file: String,
 }
 
-pub async fn run<C: HttpClient>(
-    cmd: CacheCommand,
-    _global: &CLIGlobalOptions,
-    client: C,
-) -> Result<bool> {
+pub async fn run(cmd: CacheCommand, _global: &CLIGlobalOptions) -> Result<bool> {
     match cmd {
         CacheCommand::InspectSchema(args) => {
             inspect_schema(args)?;
             Ok(false)
         }
         CacheCommand::Trace(args) => {
-            trace(args, client).await?;
+            trace(args).await?;
             Ok(false)
         }
     }
 }
 
 fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
-    let hash = SchemaCache::<ReqwestClient>::hash_uri(&args.url);
-    let cache_dir = match args.cache_dir {
-        Some(dir) => PathBuf::from(dir),
-        None => ensure_cache_dir(),
-    };
+    let hash = SchemaCache::hash_uri(&args.url);
+    let cache_dir = args
+        .cache_dir
+        .map_or_else(lintel_check::retriever::ensure_cache_dir, PathBuf::from);
     let cache_path = cache_dir.join(format!("{hash}.json"));
 
     println!("URL:        {}", args.url);
@@ -109,7 +102,7 @@ fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
     Ok(())
 }
 
-async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
+async fn trace(args: TraceArgs) -> Result<()> {
     let file_path = Path::new(&args.file);
     if !file_path.exists() {
         bail!("file not found: {}", args.file);
@@ -127,25 +120,24 @@ async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
     println!("file: {path_str}");
 
     // Set up schema cache
-    let ttl = Some(args.schema_cache_ttl.as_deref().map_or(
-        lintel_check::retriever::DEFAULT_SCHEMA_CACHE_TTL,
-        |s| {
-            humantime::parse_duration(s)
-                .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"))
-        },
-    ));
-    let schema_cache_dir = args
-        .cache_dir
-        .as_ref()
-        .map_or_else(ensure_cache_dir, PathBuf::from);
-    let retriever = SchemaCache::new(Some(schema_cache_dir.clone()), client, false, ttl);
+    let mut builder = SchemaCache::builder();
+    if let Some(dir) = &args.cache_dir {
+        builder = builder.cache_dir(PathBuf::from(dir));
+    }
+    if let Some(ref s) = args.schema_cache_ttl {
+        let ttl = humantime::parse_duration(s)
+            .unwrap_or_else(|e| panic!("invalid --schema-cache-ttl value '{s}': {e}"));
+        builder = builder.ttl(ttl);
+    }
+    let schema_cache_dir = builder.cache_dir_or_default();
+    let retriever = builder.build();
 
     // Load config
     let config_search_dir = file_path.parent().map(Path::to_path_buf);
     let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
 
     let compiled_catalogs =
-        trace_catalog::<C>(&retriever, &cfg, args.no_catalog, &schema_cache_dir).await;
+        trace_catalog(&retriever, &cfg, args.no_catalog, &schema_cache_dir).await;
 
     // Parse file and resolve schema
     let detected_format = parsers::detect_format(file_path);
@@ -179,8 +171,8 @@ async fn trace<C: HttpClient>(args: TraceArgs, client: C) -> Result<()> {
     Ok(())
 }
 
-async fn trace_catalog<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+async fn trace_catalog(
+    retriever: &SchemaCache,
     cfg: &config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
@@ -192,7 +184,7 @@ async fn trace_catalog<C: HttpClient>(
         println!("  status: disabled (--no-catalog)");
     } else {
         let catalog_url = lintel_check::catalog::CATALOG_URL;
-        let catalog_hash = SchemaCache::<C>::hash_uri(catalog_url);
+        let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
         println!("  hash: {catalog_hash}");
@@ -264,8 +256,8 @@ fn trace_schema_resolution(
     Some((schema_uri, is_remote))
 }
 
-async fn trace_schema_cache<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+async fn trace_schema_cache(
+    retriever: &SchemaCache,
     schema_uri: &str,
     is_remote: bool,
     schema_cache_dir: &Path,
@@ -273,7 +265,7 @@ async fn trace_schema_cache<C: HttpClient>(
     println!();
     println!("schema cache:");
     if is_remote {
-        let schema_hash = SchemaCache::<C>::hash_uri(schema_uri);
+        let schema_hash = SchemaCache::hash_uri(schema_uri);
         let schema_cache_path = schema_cache_dir.join(format!("{schema_hash}.json"));
         println!("  hash: {schema_hash}");
         println!("  path: {}", schema_cache_path.display());
@@ -306,8 +298,9 @@ async fn trace_schema_cache<C: HttpClient>(
     }
 }
 
-async fn trace_validation_cache<C: HttpClient>(
-    retriever: &SchemaCache<C>,
+#[allow(clippy::too_many_arguments)]
+async fn trace_validation_cache(
+    retriever: &SchemaCache,
     schema_uri: &str,
     is_remote: bool,
     cfg: &config::Config,
@@ -334,11 +327,14 @@ async fn trace_validation_cache<C: HttpClient>(
         let schema_hash = validation_cache::schema_hash(&schema_value);
         let vcache = validation_cache::ValidationCache::new(vcache_dir, false);
         let validate_formats = cfg.should_validate_formats(path_str, &[schema_uri]);
-        let cache_key =
-            validation_cache::ValidationCache::cache_key(content, &schema_hash, validate_formats);
+        let ck = validation_cache::CacheKey {
+            file_content: content,
+            schema_hash: &schema_hash,
+            validate_formats,
+        };
+        let cache_key = validation_cache::ValidationCache::cache_key(&ck);
         println!("  key: {cache_key}");
-        let (_cached_errors, vcache_status) =
-            vcache.lookup(content, &schema_hash, validate_formats).await;
+        let (_cached_errors, vcache_status) = vcache.lookup(&ck).await;
         let label = match vcache_status {
             validation_cache::ValidationCacheStatus::Hit => "hit",
             validation_cache::ValidationCacheStatus::Miss => "miss",

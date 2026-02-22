@@ -392,7 +392,7 @@ fn format_flow_sequence_flat(
     format!("[{}]", parts.join(", "))
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn format_flow_sequence_broken(
     seq: &SequenceNode,
     output: &mut String,
