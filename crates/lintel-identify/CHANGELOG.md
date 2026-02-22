@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.3...lintel-identify-v0.0.4) - 2026-02-22
+
+### Added
+
+- extract man.rs, fix NAME/DESCRIPTION, fix terminal width, add validation errors
+- add `lintel explain` command and consolidate cache CLI options
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.2...lintel-identify-v0.0.3) - 2026-02-21
 
 ### Other

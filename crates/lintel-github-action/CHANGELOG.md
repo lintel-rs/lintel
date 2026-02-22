@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.5...lintel-github-action-v0.0.6) - 2026-02-22
+
+### Other
+
+- reduce too-many-arguments violations across workspace
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.4...lintel-github-action-v0.0.5) - 2026-02-21
 
 ### Added

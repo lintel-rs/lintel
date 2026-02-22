@@ -1,6 +1,6 @@
 [package]
 name = "schemastore"
-version = "0.0.5"
+version = "0.0.6"
 edition.workspace = true
 authors.workspace = true
 description = "Fetch and match files against the SchemaStore catalog"
@@ -14,7 +14,7 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-schema-catalog = { version = "0.0.1", path = "../schema-catalog" }
+schema-catalog = { version = "0.0.2", path = "../schema-catalog" }
 globset = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
