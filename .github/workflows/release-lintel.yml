@@ -17,6 +17,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 env:
   REGISTRY: ghcr.io
@@ -154,7 +155,8 @@ jobs:
         run: |
           cargo run --release --package npm-release-binaries -- release \
             --package lintel \
-            --release-version ${{ inputs.version }}
+            --release-version ${{ inputs.version }} \
+            --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
