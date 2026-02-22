@@ -1,17 +1,17 @@
 #![doc = include_str!("../README.md")]
 
-use core::time::Duration;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use bpaf::{Bpaf, Parser};
+use bpaf::Bpaf;
 
 use lintel_check::catalog::CompiledCatalog;
 use lintel_check::config;
 use lintel_check::parsers;
 use lintel_check::retriever::SchemaCache;
 use lintel_check::validate;
+use lintel_cli_common::CliCacheOptions;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -23,14 +23,8 @@ pub struct AnnotateArgs {
     #[bpaf(long("exclude"), argument("PATTERN"))]
     pub exclude: Vec<String>,
 
-    #[bpaf(long("cache-dir"), argument("DIR"))]
-    pub cache_dir: Option<String>,
-
-    #[bpaf(long("no-catalog"), switch)]
-    pub no_catalog: bool,
-
-    #[bpaf(external(schema_cache_ttl))]
-    pub schema_cache_ttl: Option<Duration>,
+    #[bpaf(external(lintel_cli_common::cli_cache_options))]
+    pub cache: CliCacheOptions,
 
     /// Update existing annotations with latest catalog resolutions
     #[bpaf(long("update"), switch)]
@@ -38,16 +32,6 @@ pub struct AnnotateArgs {
 
     #[bpaf(positional("PATH"))]
     pub globs: Vec<String>,
-}
-
-fn schema_cache_ttl() -> impl bpaf::Parser<Option<Duration>> {
-    bpaf::long("schema-cache-ttl")
-        .help("Schema cache TTL (e.g. \"12h\", \"30m\", \"1d\"); default 12h")
-        .argument::<String>("DURATION")
-        .parse(|s: String| {
-            humantime::parse_duration(&s).map_err(|e| format!("invalid duration '{s}': {e}"))
-        })
-        .optional()
 }
 
 /// Construct the bpaf parser for `AnnotateArgs`.
@@ -180,10 +164,10 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
         .map(PathBuf::from);
 
     let mut builder = SchemaCache::builder();
-    if let Some(dir) = &args.cache_dir {
+    if let Some(dir) = &args.cache.cache_dir {
         builder = builder.cache_dir(PathBuf::from(dir));
     }
-    if let Some(ttl) = args.schema_cache_ttl {
+    if let Some(ttl) = args.cache.schema_cache_ttl {
         builder = builder.ttl(ttl);
     }
     let retriever = builder.build();
@@ -194,7 +178,8 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     let files = validate::collect_files(&args.globs, &config.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
-    let catalogs = validate::fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
+    let catalogs =
+        validate::fetch_compiled_catalogs(&retriever, &config, args.cache.no_catalog).await;
 
     let mut result = AnnotateResult {
         annotated: Vec::new(),

@@ -34,7 +34,7 @@ pub enum LintError {
     #[diagnostic(
         code(lintel::validation),
         url("{schema_url}"),
-        help("run `lintel identify {path} --explain` to see the full schema definition")
+        help("run `lintel explain --file {path}` to see the full schema definition")
     )]
     Validation {
         #[source_code]

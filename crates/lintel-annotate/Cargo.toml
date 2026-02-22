@@ -15,8 +15,8 @@ workspace = true
 
 [dependencies]
 lintel-check = { version = "0.0.7", path = "../lintel-check" }
+lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
 bpaf = { version = "0.9", features = ["derive"] }
-humantime = "2"
 anyhow = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"

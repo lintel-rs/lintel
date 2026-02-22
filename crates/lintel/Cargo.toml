@@ -18,6 +18,7 @@ ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
 lintel-annotate = { version = "0.0.6", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.7", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
+lintel-explain = { version = "0.0.1", path = "../lintel-explain" }
 lintel-identify = { version = "0.0.3", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.5", path = "../lintel-reporters" }
 schemastore = { version = "0.0.5", path = "../schemastore" }

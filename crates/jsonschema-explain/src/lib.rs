@@ -12,6 +12,8 @@ use fmt::{COMPOSITION_KEYWORDS, Fmt, format_header, format_type, format_type_suf
 use render::{render_properties, render_subschema, render_variant_block};
 use schema::{get_description, required_set, resolve_ref, schema_type_str};
 
+pub use schema::{navigate_pointer, resolve_ref as resolve_schema_ref};
+
 /// Write a multi-line description to the output buffer.
 ///
 /// When color is enabled, markdown is rendered to ANSI with syntax-highlighted
@@ -100,6 +102,26 @@ pub fn explain(schema: &Value, name: &str, color: bool, syntax_highlight: bool) 
     out
 }
 
+/// Render a sub-schema at a given JSON Pointer path.
+///
+/// Navigates `pointer` within `schema`, then renders the sub-schema the same
+/// way [`explain`] renders the root. `name` is used in the header.
+///
+/// # Errors
+///
+/// Returns an error if the pointer cannot be resolved within the schema.
+#[allow(clippy::too_many_arguments)]
+pub fn explain_at_path(
+    schema: &Value,
+    pointer: &str,
+    name: &str,
+    color: bool,
+    syntax_highlight: bool,
+) -> Result<String, String> {
+    let sub = navigate_pointer(schema, schema, pointer)?;
+    Ok(explain(sub, name, color, syntax_highlight))
+}
+
 /// Render `oneOf`/`anyOf`/`allOf` variant sections.
 fn render_variants_section(out: &mut String, schema: &Value, f: &Fmt<'_>) {
     for keyword in COMPOSITION_KEYWORDS {
@@ -145,6 +167,7 @@ fn render_definitions_section(out: &mut String, schema: &Value, f: &Fmt<'_>) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::fmt::{BLUE, BOLD, CYAN, GREEN, RESET};
@@ -471,5 +494,110 @@ mod tests {
             .find(|l| l.contains("This is a very long"))
             .expect("description line should be present");
         assert!(desc_line.contains("terminal width instead"));
+    }
+
+    // --- explain_at_path ---
+
+    #[test]
+    fn explain_at_path_shows_sub_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name field"
+                },
+                "config": {
+                    "type": "object",
+                    "title": "Config",
+                    "description": "Configuration settings",
+                    "properties": {
+                        "debug": { "type": "boolean" }
+                    }
+                }
+            }
+        });
+
+        let output = explain_at_path(&schema, "/properties/config", "test", false, false).unwrap();
+        assert!(output.contains("Config"));
+        assert!(output.contains("Configuration settings"));
+        assert!(output.contains("debug (boolean)"));
+        // Should NOT contain the sibling "name" property
+        assert!(!output.contains("The name field"));
+    }
+
+    #[test]
+    fn explain_at_path_root_pointer_shows_full_schema() {
+        let schema = json!({
+            "type": "object",
+            "title": "Root",
+            "properties": {
+                "a": { "type": "string" }
+            }
+        });
+
+        let output = explain_at_path(&schema, "", "test", false, false).unwrap();
+        assert!(output.contains("Root"));
+        assert!(output.contains("a (string)"));
+    }
+
+    #[test]
+    fn explain_at_path_resolves_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "item": { "$ref": "#/$defs/Item" }
+            },
+            "$defs": {
+                "Item": {
+                    "type": "object",
+                    "title": "Item",
+                    "description": "An item",
+                    "properties": {
+                        "id": { "type": "integer" }
+                    }
+                }
+            }
+        });
+
+        let output = explain_at_path(&schema, "/properties/item", "test", false, false).unwrap();
+        assert!(output.contains("Item"));
+        assert!(output.contains("An item"));
+        assert!(output.contains("id (integer)"));
+    }
+
+    #[test]
+    fn explain_at_path_bad_pointer_errors() {
+        let schema = json!({"type": "object"});
+        let err = explain_at_path(&schema, "/nonexistent/path", "test", false, false);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("nonexistent"));
+    }
+
+    #[test]
+    fn explain_at_path_deep_nesting() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "a": {
+                    "type": "object",
+                    "properties": {
+                        "b": {
+                            "type": "object",
+                            "title": "Deep",
+                            "properties": {
+                                "c": { "type": "string", "description": "Deeply nested" }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let output =
+            explain_at_path(&schema, "/properties/a/properties/b", "test", false, false).unwrap();
+        assert!(output.contains("Deep"));
+        assert!(output.contains("c (string)"));
+        assert!(output.contains("Deeply nested"));
     }
 }

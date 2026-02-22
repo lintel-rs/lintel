@@ -1271,6 +1271,7 @@ dependencies = [
  "lintel-annotate",
  "lintel-check",
  "lintel-cli-common",
+ "lintel-explain",
  "lintel-identify",
  "lintel-reporters",
  "miette",
@@ -1290,8 +1291,8 @@ version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
- "humantime",
  "lintel-check",
+ "lintel-cli-common",
  "tokio",
  "tracing",
 ]
@@ -1361,6 +1362,7 @@ name = "lintel-cli-common"
 version = "0.0.2"
 dependencies = [
  "bpaf",
+ "humantime",
 ]
 
 [[package]]
@@ -1374,6 +1376,20 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "lintel-explain"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "jsonschema-explain",
+ "lintel-check",
+ "lintel-cli-common",
+ "lintel-identify",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1397,7 +1413,6 @@ dependencies = [
  "anyhow",
  "bpaf",
  "glob-match",
- "humantime",
  "jsonschema-explain",
  "lintel-check",
  "lintel-cli-common",
@@ -1413,8 +1428,8 @@ dependencies = [
  "ansi-term-codes",
  "anyhow",
  "bpaf",
- "humantime",
  "lintel-check",
+ "lintel-cli-common",
  "miette",
 ]
 
