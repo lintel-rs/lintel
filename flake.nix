@@ -41,6 +41,7 @@
           lintel-catalog-builder
           lintel-github-action
           cargo-furnish
+          npm-release-binaries
           ;
       in
       {
@@ -55,6 +56,7 @@
             lintel-catalog-builder
             lintel-github-action
             cargo-furnish
+            npm-release-binaries
             ;
           default = lintel;
           all = pkgs.symlinkJoin {
@@ -65,6 +67,7 @@
               lintel-catalog-builder
               lintel-github-action
               cargo-furnish
+              npm-release-binaries
             ];
           };
         }
@@ -78,7 +81,6 @@
 
         devShells.default = craneLib.devShell {
           checks = self.checks.${system};
-          packages = [ ];
         };
       }
     );

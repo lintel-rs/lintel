@@ -1,0 +1,17 @@
+output-dir = "./npm-publish"
+artifacts-dir = "./artifacts"
+
+[packages.lintel]
+name = "@lintel-rs/lintel"
+description = "Schema validation for your entire repo"
+archive-base-url = "https://github.com/lintel-rs/lintel/releases/download/lintel-v{{version}}"
+target-package-name = "@lintel-rs/cli-{{target}}"
+readme = "./README.md"
+access = "public"
+
+[packages.lintel.targets]
+darwin-arm64 = true
+darwin-x64 = true
+linux-arm64 = true
+linux-x64 = true
+win32-x64 = true

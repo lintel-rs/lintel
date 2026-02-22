@@ -47,6 +47,8 @@ let
   cargo-furnish = mkPackage ../crates/cargo-furnish { };
 
   lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder { };
+
+  npm-release-binaries = mkPackage ../crates/npm-release-binaries { };
 in
 {
   inherit
@@ -55,5 +57,6 @@ in
     lintel-github-action
     cargo-furnish
     lintel-catalog-builder
+    npm-release-binaries
     ;
 }
