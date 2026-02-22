@@ -238,6 +238,7 @@ enum FileResult {
 }
 
 /// Process a single file's already-read content: parse and resolve schema URI.
+#[allow(clippy::too_many_arguments)]
 fn process_one_file(
     path: &Path,
     content: String,
@@ -350,6 +351,7 @@ fn process_one_file(
 /// Read each file concurrently with tokio, parse its content, extract its
 /// schema URI, apply rewrites, and group by resolved schema URI.
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
+#[allow(clippy::too_many_arguments)]
 async fn parse_and_group_files(
     files: &[PathBuf],
     config: &config::Config,
@@ -413,6 +415,7 @@ async fn parse_and_group_files(
 ///
 /// For remote URIs, checks the prefetched map first; for local URIs, reads
 /// from disk (with in-memory caching to avoid redundant I/O for shared schemas).
+#[allow(clippy::too_many_arguments)]
 async fn fetch_schema_from_prefetched(
     schema_uri: &str,
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
@@ -467,6 +470,7 @@ async fn fetch_schema_from_prefetched(
 }
 
 /// Report the same error for every file in a schema group.
+#[allow(clippy::too_many_arguments)]
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
     make_error: impl Fn(&str) -> LintError,
     schema_uri: &str,
@@ -491,6 +495,7 @@ fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
 }
 
 /// Mark every file in a group as checked (no errors).
+#[allow(clippy::too_many_arguments)]
 fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
@@ -587,7 +592,14 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
             .collect();
 
         vcache
-            .store(&pf.content, schema_hash, validate_formats, &file_errors)
+            .store(
+                &validation_cache::CacheKey {
+                    file_content: &pf.content,
+                    schema_hash,
+                    validate_formats,
+                },
+                &file_errors,
+            )
             .await;
         push_validation_errors(pf, schema_uri, &file_errors, errors);
 
@@ -830,7 +842,11 @@ pub async fn run_with(
         let t = std::time::Instant::now();
         for pf in group {
             let (cached, vcache_status) = vcache
-                .lookup(&pf.content, &schema_hash, validate_formats)
+                .lookup(&validation_cache::CacheKey {
+                    file_content: &pf.content,
+                    schema_hash: &schema_hash,
+                    validate_formats,
+                })
                 .await;
 
             if let Some(cached_errors) = cached {

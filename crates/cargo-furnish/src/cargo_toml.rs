@@ -227,81 +227,81 @@ pub fn check_cargo_toml(
     let mut diagnostics: Vec<Box<dyn Diagnostic + Send + Sync>> = Vec::new();
     let src = |content: &str| NamedSource::new(file_name.clone(), content.to_string());
 
-    let (pkg_offset, pkg_len) = find_line_span(&content, "[package]");
+    let pkg_span = find_line_span(&content, "[package]");
 
-    check_package_fields(
-        &content,
-        package,
-        &name,
-        description.as_ref(),
-        ws,
-        &src,
-        &mut diagnostics,
-    );
-
-    check_field_and_section_order(
-        &content,
-        &doc,
+    let ctx = CargoTomlCheck {
+        content: &content,
+        doc: &doc,
         package,
         ws,
-        &src,
-        (pkg_offset, pkg_len),
-        &mut diagnostics,
-    );
+        src: &src,
+        pkg_span,
+    };
+
+    check_package_fields(&ctx, &name, description.as_ref(), &mut diagnostics);
+
+    check_field_and_section_order(&ctx, &mut diagnostics);
 
     Ok((CrateMetadata { name, description }, diagnostics))
 }
 
+/// Context for Cargo.toml checking operations.
+struct CargoTomlCheck<'a> {
+    content: &'a str,
+    doc: &'a DocumentMut,
+    package: &'a Table,
+    ws: &'a WorkspaceInfo,
+    src: &'a dyn Fn(&str) -> NamedSource<String>,
+    pkg_span: (usize, usize),
+}
+
 fn check_package_fields(
-    content: &str,
-    package: &Table,
+    ctx: &CargoTomlCheck<'_>,
     name: &str,
     description: Option<&String>,
-    ws: &WorkspaceInfo,
-    src: &dyn Fn(&str) -> NamedSource<String>,
     diagnostics: &mut Vec<Box<dyn Diagnostic + Send + Sync>>,
 ) {
-    if package.get("readme").is_some() {
-        let (offset, len) = find_line_span(content, "readme");
+    if ctx.package.get("readme").is_some() {
+        let (offset, len) = find_line_span(ctx.content, "readme");
         diagnostics.push(Box::new(UnnecessaryReadme {
-            src: src(content),
+            src: (ctx.src)(ctx.content),
             span: (offset, len).into(),
         }));
     }
 
     if description.is_none() {
-        let (offset, len) = find_insertion_span(content, package, "description");
+        let (offset, len) = find_insertion_span(ctx.content, ctx.package, "description");
         diagnostics.push(Box::new(MissingDescription {
-            src: src(content),
+            src: (ctx.src)(ctx.content),
             span: (offset, len).into(),
             crate_name: name.to_string(),
         }));
     }
-    if get_string_array(package, "keywords").is_none() {
-        let (offset, len) = find_insertion_span(content, package, "keywords");
+    if get_string_array(ctx.package, "keywords").is_none() {
+        let (offset, len) = find_insertion_span(ctx.content, ctx.package, "keywords");
         diagnostics.push(Box::new(MissingKeywords {
-            src: src(content),
+            src: (ctx.src)(ctx.content),
             span: (offset, len).into(),
             crate_name: name.to_string(),
         }));
     }
-    if get_string_array(package, "categories").is_none() {
-        let (offset, len) = find_insertion_span(content, package, "categories");
+    if get_string_array(ctx.package, "categories").is_none() {
+        let (offset, len) = find_insertion_span(ctx.content, ctx.package, "categories");
         diagnostics.push(Box::new(MissingCategories {
-            src: src(content),
+            src: (ctx.src)(ctx.content),
             span: (offset, len).into(),
             crate_name: name.to_string(),
         }));
     }
 
     for &field in WORKSPACE_INHERITABLE {
-        if ws.package_fields.contains(field)
-            && let Some(item) = package.get(field)
+        if ctx.ws.package_fields.contains(field)
+            && let Some(item) = ctx.package.get(field)
             && !is_workspace_true(item)
         {
-            let (offset, len) = find_line_span(content, &format!("{field} ="));
+            let (offset, len) = find_line_span(ctx.content, &format!("{field} ="));
             diagnostics.push(Box::new(NotWorkspaceInherited {
-                src: src(content),
+                src: (ctx.src)(ctx.content),
                 span: (offset, len).into(),
                 field: field.to_string(),
             }));
@@ -310,16 +310,12 @@ fn check_package_fields(
 }
 
 fn check_field_and_section_order(
-    content: &str,
-    doc: &DocumentMut,
-    package: &Table,
-    ws: &WorkspaceInfo,
-    src: &dyn Fn(&str) -> NamedSource<String>,
-    (pkg_offset, pkg_len): (usize, usize),
+    ctx: &CargoTomlCheck<'_>,
     diagnostics: &mut Vec<Box<dyn Diagnostic + Send + Sync>>,
 ) {
     let known_fields: HashSet<&str> = PACKAGE_FIELD_ORDER.iter().copied().collect();
-    let current_fields: Vec<&str> = package
+    let current_fields: Vec<&str> = ctx
+        .package
         .iter()
         .map(|(k, _)| k)
         .filter(|k| known_fields.contains(k))
@@ -327,24 +323,25 @@ fn check_field_and_section_order(
     let expected_fields: Vec<&str> = PACKAGE_FIELD_ORDER
         .iter()
         .copied()
-        .filter(|f| package.get(f).is_some())
+        .filter(|f| ctx.package.get(f).is_some())
         .collect();
     if current_fields != expected_fields {
         diagnostics.push(Box::new(WrongFieldOrder {
-            src: src(content),
-            span: (pkg_offset, pkg_len).into(),
+            src: (ctx.src)(ctx.content),
+            span: ctx.pkg_span.into(),
             expected: expected_fields.join(", "),
         }));
     }
 
-    if ws.has_workspace_lints && doc.get("lints").is_none() {
+    if ctx.ws.has_workspace_lints && ctx.doc.get("lints").is_none() {
         diagnostics.push(Box::new(MissingLints {
-            src: src(content),
-            span: (pkg_offset, pkg_len).into(),
+            src: (ctx.src)(ctx.content),
+            span: ctx.pkg_span.into(),
         }));
     }
 
-    let current_sections: Vec<&str> = doc
+    let current_sections: Vec<&str> = ctx
+        .doc
         .as_table()
         .iter()
         .map(|(k, _)| k)
@@ -353,15 +350,30 @@ fn check_field_and_section_order(
     let expected_sections: Vec<&str> = SECTION_ORDER
         .iter()
         .copied()
-        .filter(|s| doc.get(s).is_some() || (*s == "lints" && ws.has_workspace_lints))
+        .filter(|s| ctx.doc.get(s).is_some() || (*s == "lints" && ctx.ws.has_workspace_lints))
         .collect();
     if current_sections != expected_sections {
         diagnostics.push(Box::new(WrongSectionOrder {
-            src: src(content),
-            span: (pkg_offset, pkg_len).into(),
+            src: (ctx.src)(ctx.content),
+            span: ctx.pkg_span.into(),
             expected: expected_sections.join(", "),
         }));
     }
+}
+
+/// User-supplied metadata updates (from CLI arguments).
+pub struct MetadataUpdate<'a> {
+    pub description: Option<&'a str>,
+    pub keywords: Option<&'a [String]>,
+    pub categories: Option<&'a [String]>,
+    pub force: bool,
+}
+
+/// Metadata already present in Cargo.toml.
+struct ExistingMetadata {
+    description: Option<String>,
+    keywords: Option<Vec<String>>,
+    categories: Option<Vec<String>>,
 }
 
 /// Resolve final metadata values, preferring existing or forced values.
@@ -371,35 +383,32 @@ struct ResolvedMetadata {
     categories: Option<Vec<String>>,
 }
 
-fn resolve_metadata(
-    existing_description: Option<String>,
-    existing_keywords: Option<Vec<String>>,
-    existing_categories: Option<Vec<String>>,
-    description: Option<&str>,
-    keywords: Option<&[String]>,
-    categories: Option<&[String]>,
-    force: bool,
-) -> ResolvedMetadata {
-    let description = if force {
-        description.map(String::from).or(existing_description)
+fn resolve_metadata(existing: ExistingMetadata, update: &MetadataUpdate<'_>) -> ResolvedMetadata {
+    let description = if update.force {
+        update
+            .description
+            .map(String::from)
+            .or(existing.description)
     } else {
-        existing_description.or_else(|| description.map(String::from))
+        existing
+            .description
+            .or_else(|| update.description.map(String::from))
     };
 
-    let keywords = if force && keywords.is_some() {
-        keywords.map(<[String]>::to_vec)
-    } else if existing_keywords.is_some() {
-        existing_keywords
+    let keywords = if update.force && update.keywords.is_some() {
+        update.keywords.map(<[String]>::to_vec)
+    } else if existing.keywords.is_some() {
+        existing.keywords
     } else {
-        keywords.map(<[String]>::to_vec)
+        update.keywords.map(<[String]>::to_vec)
     };
 
-    let categories = if force && categories.is_some() {
-        categories.map(<[String]>::to_vec)
-    } else if existing_categories.is_some() {
-        existing_categories
+    let categories = if update.force && update.categories.is_some() {
+        update.categories.map(<[String]>::to_vec)
+    } else if existing.categories.is_some() {
+        existing.categories
     } else {
-        categories.map(<[String]>::to_vec)
+        update.categories.map(<[String]>::to_vec)
     };
 
     ResolvedMetadata {
@@ -409,15 +418,25 @@ fn resolve_metadata(
     }
 }
 
-fn rebuild_package_fields(
-    package: &mut Table,
-    original: &DocumentMut,
-    ws: &WorkspaceInfo,
-    name: &str,
-    version: &str,
-    meta: &ResolvedMetadata,
+/// Context for rebuilding package fields during fix.
+struct RebuildContext<'a> {
+    original: &'a DocumentMut,
+    ws: &'a WorkspaceInfo,
     force: bool,
-) {
+}
+
+fn rebuild_package_fields(package: &mut Table, ctx: &RebuildContext<'_>, meta: &ResolvedMetadata) {
+    let name = package
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let version = package
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.0.1")
+        .to_string();
+
     let known_fields: HashSet<&str> = PACKAGE_FIELD_ORDER.iter().copied().collect();
     let unknown_fields: Vec<(String, Item)> = package
         .iter()
@@ -430,8 +449,8 @@ fn rebuild_package_fields(
         package.remove(key);
     }
 
-    package.insert("name", toml_edit::value(name));
-    package.insert("version", toml_edit::value(version));
+    package.insert("name", toml_edit::value(&name));
+    package.insert("version", toml_edit::value(&version));
 
     for field in &PACKAGE_FIELD_ORDER[2..] {
         match *field {
@@ -455,7 +474,7 @@ fn rebuild_package_fields(
                 }
             }
             f if WORKSPACE_INHERITABLE.contains(&f) => {
-                insert_workspace_field(package, original, ws, f, force);
+                insert_workspace_field(package, ctx, f);
             }
             _ => {}
         }
@@ -466,21 +485,16 @@ fn rebuild_package_fields(
     }
 }
 
-fn insert_workspace_field(
-    package: &mut Table,
-    original: &DocumentMut,
-    ws: &WorkspaceInfo,
-    field: &str,
-    force: bool,
-) {
-    if !ws.package_fields.contains(field) {
+fn insert_workspace_field(package: &mut Table, ctx: &RebuildContext<'_>, field: &str) {
+    if !ctx.ws.package_fields.contains(field) {
         return;
     }
-    if force {
+    if ctx.force {
         package.insert(field, workspace_true());
         return;
     }
-    let orig_item = original
+    let orig_item = ctx
+        .original
         .get("package")
         .and_then(|p| p.as_table())
         .and_then(|t| t.get(field));
@@ -501,10 +515,7 @@ fn insert_workspace_field(
 pub fn fix_cargo_toml(
     crate_dir: &Path,
     ws: &WorkspaceInfo,
-    description: Option<&str>,
-    keywords: Option<&[String]>,
-    categories: Option<&[String]>,
-    force: bool,
+    update: &MetadataUpdate<'_>,
 ) -> Result<CrateMetadata> {
     let cargo_toml_path = crate_dir.join("Cargo.toml");
     let content = std::fs::read_to_string(&cargo_toml_path)
@@ -526,26 +537,23 @@ pub fn fix_cargo_toml(
         .and_then(|v| v.as_str())
         .context("package.name is missing")?
         .to_string();
-    let version = package
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("0.0.1")
-        .to_string();
 
-    let meta = resolve_metadata(
-        package
+    let existing = ExistingMetadata {
+        description: package
             .get("description")
             .and_then(|v| v.as_str())
             .map(String::from),
-        get_string_array(package, "keywords"),
-        get_string_array(package, "categories"),
-        description,
-        keywords,
-        categories,
-        force,
-    );
+        keywords: get_string_array(package, "keywords"),
+        categories: get_string_array(package, "categories"),
+    };
+    let meta = resolve_metadata(existing, update);
 
-    rebuild_package_fields(package, &original, ws, &name, &version, &meta, force);
+    let rebuild_ctx = RebuildContext {
+        original: &original,
+        ws,
+        force: update.force,
+    };
+    rebuild_package_fields(package, &rebuild_ctx, &meta);
 
     if ws.has_workspace_lints && doc.get("lints").is_none() {
         let mut lints = Table::new();

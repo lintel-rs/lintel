@@ -185,6 +185,7 @@ async fn post_check_run(
     Ok(response)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn patch_remaining_annotations(
     client: &reqwest::Client,
     url: &str,
