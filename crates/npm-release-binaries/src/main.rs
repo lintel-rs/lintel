@@ -27,33 +27,33 @@ struct Cli {
 }
 
 #[derive(Debug, Clone, Bpaf)]
+#[bpaf(generate(generate_args))]
+struct GenerateArgs {
+    /// Package key from config (e.g. lintel)
+    #[bpaf(long("package"), argument("NAME"))]
+    package: String,
+    /// Release version (e.g. 0.0.7)
+    #[bpaf(long("release-version"), argument("VERSION"))]
+    version: String,
+    /// Skip copying binaries from archives (generate metadata only)
+    #[bpaf(long("skip-artifact-copy"), switch)]
+    skip_artifact_copy: bool,
+}
+
+#[derive(Debug, Clone, Bpaf)]
 enum Command {
     #[bpaf(command("release"))]
     /// Generate and publish npm packages (generate + publish)
     Release {
-        /// Package key from config to release (e.g. lintel)
-        #[bpaf(long("package"), argument("NAME"))]
-        package: String,
-        /// Release version (e.g. 0.0.7)
-        #[bpaf(long("release-version"), argument("VERSION"))]
-        version: String,
-        /// Skip copying binaries from archives (generate metadata only)
-        #[bpaf(long("skip-artifact-copy"), switch)]
-        skip_artifact_copy: bool,
+        #[bpaf(external(generate_args))]
+        args: GenerateArgs,
     },
 
     #[bpaf(command("generate"))]
     /// Generate npm packages without publishing
     Generate {
-        /// Package key from config to generate (e.g. lintel)
-        #[bpaf(long("package"), argument("NAME"))]
-        package: String,
-        /// Release version (e.g. 0.0.7)
-        #[bpaf(long("release-version"), argument("VERSION"))]
-        version: String,
-        /// Skip copying binaries from archives (generate metadata only)
-        #[bpaf(long("skip-artifact-copy"), switch)]
-        skip_artifact_copy: bool,
+        #[bpaf(external(generate_args))]
+        args: GenerateArgs,
     },
 
     #[bpaf(command("publish"))]
@@ -76,35 +76,13 @@ fn main() -> miette::Result<()> {
     let output_dir = resolve_output_dir(&config);
 
     match cli.command {
-        Command::Release {
-            package,
-            version,
-            skip_artifact_copy,
-        } => {
-            let pkg_config = resolve_package(&config, &package)?;
-            commands::release::run(
-                &package,
-                pkg_config,
-                &version,
-                config.artifacts_dir.as_deref(),
-                &output_dir,
-                skip_artifact_copy,
-            )?;
+        Command::Release { args } => {
+            let opts = resolve_generate_opts(&args, &config, &output_dir)?;
+            commands::release::run(&opts)?;
         }
-        Command::Generate {
-            package,
-            version,
-            skip_artifact_copy,
-        } => {
-            let pkg_config = resolve_package(&config, &package)?;
-            commands::generate::run(
-                &package,
-                pkg_config,
-                &version,
-                config.artifacts_dir.as_deref(),
-                &output_dir,
-                skip_artifact_copy,
-            )?;
+        Command::Generate { args } => {
+            let opts = resolve_generate_opts(&args, &config, &output_dir)?;
+            commands::generate::run(&opts)?;
         }
         Command::Publish { package, dry_run } => {
             let pkg_config = resolve_package(&config, &package)?;
@@ -113,6 +91,22 @@ fn main() -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+fn resolve_generate_opts<'a>(
+    args: &'a GenerateArgs,
+    config: &'a config::Config,
+    output_dir: &'a std::path::Path,
+) -> miette::Result<commands::generate::Options<'a>> {
+    let pkg_config = resolve_package(config, &args.package)?;
+    Ok(commands::generate::Options {
+        pkg_key: &args.package,
+        pkg_config,
+        version: &args.version,
+        artifacts_dir: config.artifacts_dir.as_deref(),
+        output_dir,
+        skip_artifact_copy: args.skip_artifact_copy,
+    })
 }
 
 fn resolve_package<'a>(

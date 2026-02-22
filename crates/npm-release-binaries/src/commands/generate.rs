@@ -10,50 +10,46 @@ use serde_json::json;
 use crate::config::{self, PackageConfig, ResolvedTarget};
 use crate::metadata::{self, ResolvedMetadata};
 
-pub fn run(
-    pkg_key: &str,
-    pkg_config: &PackageConfig,
-    version: &str,
-    artifacts_dir: Option<&Path>,
-    output_dir: &Path,
-    skip_artifact_copy: bool,
-) -> miette::Result<()> {
-    let metadata = metadata::resolve(pkg_key, pkg_config)?;
+pub struct Options<'a> {
+    pub pkg_key: &'a str,
+    pub pkg_config: &'a PackageConfig,
+    pub version: &'a str,
+    pub artifacts_dir: Option<&'a Path>,
+    pub output_dir: &'a Path,
+    pub skip_artifact_copy: bool,
+}
+
+pub fn run(opts: &Options<'_>) -> miette::Result<()> {
+    let metadata = metadata::resolve(opts.pkg_key, opts.pkg_config)?;
 
     // When skipping artifact copy, use a dummy dir so resolve_targets
     // doesn't need archive-base-url — the resolved paths are never accessed.
-    let effective_dir = if skip_artifact_copy {
+    let effective_dir = if opts.skip_artifact_copy {
         Some(Path::new("skip"))
     } else {
-        artifacts_dir
+        opts.artifacts_dir
     };
-    let targets = config::resolve_targets(pkg_key, pkg_config, version, effective_dir)?;
+    let targets =
+        config::resolve_targets(opts.pkg_key, opts.pkg_config, opts.version, effective_dir)?;
 
-    generate_main_package(
-        &metadata,
-        &targets,
-        version,
-        output_dir,
-        pkg_config.readme.as_deref(),
-    )?;
+    generate_main_package(&metadata, &targets, opts)?;
 
     for target in &targets {
-        generate_platform_package(&metadata, target, version, output_dir, skip_artifact_copy)
+        generate_platform_package(&metadata, target, opts)
             .map_err(|e| miette::miette!("target {}: {e}", target.key))?;
     }
 
-    eprintln!("Generated packages in {}", output_dir.display());
+    eprintln!("Generated packages in {}", opts.output_dir.display());
     Ok(())
 }
 
 fn generate_main_package(
     metadata: &ResolvedMetadata,
     targets: &[ResolvedTarget],
-    version: &str,
-    output_dir: &Path,
-    readme: Option<&Path>,
+    opts: &Options<'_>,
 ) -> miette::Result<()> {
-    let pkg_dir = output_dir.join(&metadata.name);
+    let version = opts.version;
+    let pkg_dir = opts.output_dir.join(&metadata.name);
     let bin_dir = pkg_dir.join("bin");
     fs::create_dir_all(&bin_dir)
         .map_err(|e| miette::miette!("failed to create {}: {e}", bin_dir.display()))?;
@@ -90,7 +86,7 @@ fn generate_main_package(
         .map_err(|e| miette::miette!("failed to write package.json: {e}"))?;
 
     // README.md
-    if let Some(readme_path) = readme {
+    if let Some(readme_path) = opts.pkg_config.readme.as_deref() {
         fs::copy(readme_path, pkg_dir.join("README.md")).map_err(|e| {
             miette::miette!("failed to copy README from {}: {e}", readme_path.display())
         })?;
@@ -120,15 +116,14 @@ fn generate_main_package(
 fn generate_platform_package(
     metadata: &ResolvedMetadata,
     target: &ResolvedTarget,
-    version: &str,
-    output_dir: &Path,
-    skip_artifact_copy: bool,
+    opts: &Options<'_>,
 ) -> miette::Result<()> {
-    let pkg_path = package_dir(output_dir, &target.package_name);
+    let version = opts.version;
+    let pkg_path = package_dir(opts.output_dir, &target.package_name);
     fs::create_dir_all(&pkg_path)
         .map_err(|e| miette::miette!("failed to create {}: {e}", pkg_path.display()))?;
 
-    if !skip_artifact_copy {
+    if !opts.skip_artifact_copy {
         let binary_data = extract_binary(&target.archive, &target.binary_name)?;
         let dest_path = pkg_path.join(&target.binary_name);
         fs::write(&dest_path, &binary_data)
