@@ -4,10 +4,10 @@ use core::fmt::Write;
 
 use anyhow::Result;
 
-use crate::PrettierConfig;
-use crate::printer::Doc;
 use parser::{Comment, Key, Node, Quote};
+pub use prettier_config::PrettierConfig;
 use prettier_config::{QuoteProps, TrailingComma};
+use wadler_lindig::Doc;
 
 /// Format JSON5 content, preserving comments.
 ///
@@ -42,7 +42,7 @@ pub fn format_json5(content: &str, options: &PrettierConfig) -> Result<String> {
     }
 
     let full_doc = Doc::concat(parts);
-    let mut result = crate::printer::print(&full_doc, options);
+    let mut result = wadler_lindig::print(&full_doc, options);
 
     // Trim trailing whitespace on each line (prettier does this)
     result = result

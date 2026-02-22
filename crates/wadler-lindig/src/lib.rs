@@ -1,5 +1,5 @@
-use crate::PrettierConfig;
 use prettier_config::EndOfLine;
+use prettier_config::PrettierConfig;
 
 /// Document IR for the pretty-printing algorithm.
 #[derive(Debug, Clone)]

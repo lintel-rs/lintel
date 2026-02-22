@@ -26,14 +26,24 @@ pub enum Format {
 pub fn format_str(content: &str, format: Format, options: &PrettierConfig) -> Result<String> {
     match format {
         Format::Json => {
-            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
+            // Use JSONC parser first; fall back to JSON5 parser for edge cases
+            // like +123 or Infinity that JSONC doesn't handle.
+            if let Ok(result) =
+                prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
+            {
+                Ok(result)
+            } else {
+                let mut j5_options = options.clone();
+                j5_options.trailing_comma = prettier_config::TrailingComma::None;
+                j5_options.single_quote = false;
+                j5_options.quote_props = prettier_config::QuoteProps::Consistent;
+                prettier_json5::format_json5(content, &j5_options)
+            }
         }
         Format::Jsonc => {
             prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Jsonc, options)
         }
-        Format::Json5 => {
-            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json5, options)
-        }
+        Format::Json5 => prettier_json5::format_json5(content, options),
         Format::Yaml => prettier_yaml::format_yaml(content, options),
     }
 }

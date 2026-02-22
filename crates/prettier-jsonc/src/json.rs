@@ -3,7 +3,7 @@ use core::fmt::Write;
 use serde_json::Value;
 
 use crate::PrettierConfig;
-use crate::printer::Doc;
+use wadler_lindig::Doc;
 
 /// Convert a JSON value to a document IR.
 pub fn json_to_doc(value: &Value, options: &PrettierConfig) -> Doc {
@@ -102,12 +102,10 @@ fn escape_json_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::printer;
-
     fn format_json(input: &str) -> String {
         let value: Value = serde_json::from_str(input).expect("valid JSON");
         let doc = json_to_doc(&value, &PrettierConfig::default());
-        let mut result = printer::print(&doc, &PrettierConfig::default());
+        let mut result = wadler_lindig::print(&doc, &PrettierConfig::default());
         result.push('\n');
         result
     }
@@ -169,7 +167,7 @@ mod tests {
         };
         let value: Value = serde_json::from_str(r#"{"a": 1}"#).expect("valid JSON");
         let doc = json_to_doc(&value, &opts);
-        let mut result = printer::print(&doc, &opts);
+        let mut result = wadler_lindig::print(&doc, &opts);
         result.push('\n');
         assert_eq!(result, "{\"a\": 1}\n");
     }

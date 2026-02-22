@@ -3,8 +3,8 @@ use jsonc_parser::ast::Comment;
 use jsonc_parser::common::Ranged;
 
 use crate::PrettierConfig;
-use crate::printer::Doc;
 use prettier_config::TrailingComma;
+use wadler_lindig::Doc;
 
 /// Format JSONC content, preserving comments.
 ///
@@ -61,7 +61,7 @@ pub fn format_jsonc(content: &str, options: &PrettierConfig) -> Result<String> {
     }
 
     let full_doc = Doc::concat(parts);
-    let mut result = crate::printer::print(&full_doc, options);
+    let mut result = wadler_lindig::print(&full_doc, options);
     // Trim trailing whitespace on each line (prettier does this)
     result = trim_trailing_whitespace(&result);
     result.push('\n');

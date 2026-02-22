@@ -1,14 +1,11 @@
 [package]
-name = "prettier-jsonc"
+name = "prettier-json5"
 version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
 wadler-lindig = { version = "0.1.0", path = "../wadler-lindig" }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
-jsonc-parser = { version = "0.24", features = ["serde"] }
 anyhow = "1"
 
 [lints]
