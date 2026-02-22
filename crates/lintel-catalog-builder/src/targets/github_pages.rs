@@ -102,6 +102,7 @@ mod tests {
                 name: "Test Schema".into(),
                 description: "A test".into(),
                 url: "schemas/test.json".into(),
+                source_url: None,
                 file_match: vec!["*.test".into()],
                 versions: BTreeMap::new(),
             }],

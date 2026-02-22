@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 /// Top-level configuration loaded from `lintel-catalog.toml`.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CatalogConfig {
     #[allow(dead_code)]
     pub catalog: CatalogMeta,
@@ -18,7 +18,7 @@ pub struct CatalogConfig {
 
 /// Metadata about the catalog being built.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CatalogMeta {
     /// Optional title for the catalog, included in the output `catalog.json`.
     #[serde(default)]
@@ -27,7 +27,7 @@ pub struct CatalogMeta {
 
 /// GitHub Pages hosting options (`.nojekyll`, `CNAME`).
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct GitHubPagesConfig {
     #[serde(default)]
     pub cname: Option<String>,
@@ -41,6 +41,7 @@ pub enum TargetConfig {
     #[serde(rename = "dir")]
     Dir {
         dir: String,
+        #[serde(rename = "base-url", alias = "base_url")]
         base_url: String,
         #[serde(default)]
         github: Option<GitHubPagesConfig>,
@@ -48,6 +49,7 @@ pub enum TargetConfig {
     /// Generate output optimized for GitHub Pages deployment.
     #[serde(rename = "github-pages")]
     GitHubPages {
+        #[serde(rename = "base-url", alias = "base_url")]
         base_url: String,
         #[serde(default)]
         cname: Option<String>,
@@ -58,7 +60,7 @@ pub enum TargetConfig {
 
 /// A named group of schema definitions.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct GroupConfig {
     pub name: String,
     pub description: String,
@@ -68,20 +70,20 @@ pub struct GroupConfig {
 
 /// A single schema definition within a group.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SchemaDefinition {
     /// URL to download the schema from. If absent, the schema is expected to
     /// already exist locally at `schemas/<group>/<key>.json`.
     pub url: Option<String>,
     pub name: String,
     pub description: String,
-    #[serde(default, rename = "file-match")]
+    #[serde(default)]
     pub file_match: Vec<String>,
 }
 
 /// An external catalog source (e.g. `SchemaStore`).
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SourceConfig {
     /// URL to the external catalog JSON.
     pub url: String,
@@ -95,7 +97,7 @@ pub struct SourceConfig {
 /// Group metadata (name, description) is owned by the corresponding `[groups.*]`
 /// entry; the organize section only handles schema routing via match patterns.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct OrganizeEntry {
     #[serde(rename = "match")]
     pub match_patterns: Vec<String>,
@@ -126,18 +128,18 @@ mod tests {
     }
 
     #[test]
-    fn parse_full_config() {
+    fn parse_full_config_kebab_case() {
         let toml = r#"
 [catalog]
 
 [target.local]
 type = "dir"
 dir = "../catalog-generated"
-base_url = "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
+base-url = "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
 
 [target.pages]
 type = "github-pages"
-base_url = "https://catalog.lintel.tools/"
+base-url = "https://catalog.lintel.tools/"
 cname = "catalog.lintel.tools"
 
 [groups.claude-code]
@@ -216,6 +218,25 @@ match = ["**.github**"]
     }
 
     #[test]
+    fn base_url_snake_case_alias_accepted() {
+        let toml = r#"
+[catalog]
+
+[target.local]
+type = "dir"
+dir = "out"
+base_url = "https://example.com/"
+"#;
+        let config = load_config(toml).expect("snake_case base_url should be accepted");
+        match &config.target["local"] {
+            TargetConfig::Dir { base_url, .. } => {
+                assert_eq!(base_url, "https://example.com/");
+            }
+            TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
+        }
+    }
+
+    #[test]
     fn unknown_fields_rejected() {
         let toml = r"
 [catalog]
@@ -231,7 +252,7 @@ unknown_field = 'bad'
 
 [target.pages]
 type = "github-pages"
-base_url = "https://example.github.io/catalog/"
+base-url = "https://example.github.io/catalog/"
 "#;
         let config = load_config(toml).expect("parse");
         match &config.target["pages"] {

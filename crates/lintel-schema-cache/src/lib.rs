@@ -27,6 +27,16 @@ pub enum CacheStatus {
     Disabled,
 }
 
+impl core::fmt::Display for CacheStatus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Hit => f.write_str("cached"),
+            Self::Miss => f.write_str("fetched"),
+            Self::Disabled => f.write_str("fetched (no cache)"),
+        }
+    }
+}
+
 /// Response from a conditional HTTP request.
 struct ConditionalResponse {
     /// Response body. `None` indicates a 304 Not Modified response.
@@ -169,7 +179,7 @@ impl SchemaCache {
     /// Returns an error if the schema cannot be fetched from the network,
     /// read from disk cache, or parsed as JSON.
     #[allow(clippy::missing_panics_doc)] // Mutex poisoning is unreachable
-    #[tracing::instrument(skip(self), fields(status))]
+    #[tracing::instrument(level = "debug", skip(self), fields(status))]
     pub async fn fetch(
         &self,
         uri: &str,

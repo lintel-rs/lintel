@@ -57,22 +57,26 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // Set up tracing subscriber controlled by LINTEL_LOG env var.
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
-        tracing_subscriber::registry()
-            .with(
-                tracing_tree::HierarchicalLayer::new(2)
-                    .with_targets(true)
-                    .with_bracketed_fields(true)
-                    .with_indent_lines(true)
-                    .with_verbose_exit(true)
-                    .with_verbose_entry(true)
-                    .with_timer(tracing_tree::time::Uptime::default())
-                    .with_writer(std::io::stderr),
-            )
-            .with(filter)
-            .init();
-    }
+    // Set up tracing subscriber. Uses LINTEL_LOG env var if set, otherwise
+    // defaults to `info` level so that fetch URLs and progress are always visible.
+    // Verbose entry/exit is only enabled when LINTEL_LOG is explicitly set.
+    let (filter, explicit) = match tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
+        Ok(f) => (f, true),
+        Err(_) => (tracing_subscriber::EnvFilter::new("info"), false),
+    };
+    tracing_subscriber::registry()
+        .with(
+            tracing_tree::HierarchicalLayer::new(2)
+                .with_targets(true)
+                .with_bracketed_fields(true)
+                .with_indent_lines(true)
+                .with_verbose_exit(explicit)
+                .with_verbose_entry(explicit)
+                .with_timer(tracing_tree::time::Uptime::default())
+                .with_writer(std::io::stderr),
+        )
+        .with(filter)
+        .init();
 
     let cli = cli().run();
 
