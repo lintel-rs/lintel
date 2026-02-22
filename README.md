@@ -17,7 +17,7 @@
 
 </div>
 
-**Lintel** validates JSON, YAML, TOML, JSON5, and JSONC files against [JSON Schema](https://json-schema.org/) in a single command. It auto-discovers schemas via [SchemaStore](https://www.schemastore.org/), the [Lintel catalog](https://github.com/lintel-rs/catalog), inline `$schema` properties, and YAML modelines — zero config required.
+**Lintel** validates JSON, YAML, TOML, JSON5, and JSONC files against [JSON Schema](https://json-schema.org/) in a single command. It auto-discovers schemas via [SchemaStore](https://www.schemastore.org/), the [Lintel catalog](https://catalog.lintel.tools/), inline `$schema` properties, and YAML modelines — zero config required.
 
 **Fast.** Written in Rust with no async runtime, deterministic schema caching, and pre-compiled SchemaStore catalog matching. Warm runs are pure computation.
 
@@ -66,16 +66,18 @@ Lintel auto-discovers schemas in priority order:
 1. **YAML modeline** — `# yaml-language-server: $schema=...`
 2. **Inline `$schema` property** — in the document itself
 3. **`lintel.toml` mappings** — custom `[schemas]` table entries
-4. **Lintel catalog** — schemas for tools not in SchemaStore (Cargo.toml, Claude Code agents/skills/commands, devenv.yaml, and more)
-5. **SchemaStore catalog** — matching by filename
+4. **Custom registries** — additional catalogs from `lintel.toml`
+5. **[Lintel catalog](https://catalog.lintel.tools/)** — aggregates SchemaStore with additional schemas (Cargo.toml, Claude Code, devenv.yaml, and more)
 
 Files without a matching schema are silently skipped. Lintel respects `.gitignore` — `node_modules`, `target/`, and build artifacts are skipped automatically.
 
 ## The Lintel Catalog
 
-The [Lintel catalog](https://github.com/lintel-rs/catalog) provides schemas for tools that don't have SchemaStore entries. It's fetched automatically alongside SchemaStore — no configuration needed.
+The [Lintel catalog](https://catalog.lintel.tools/) is an aggregate of [SchemaStore](https://www.schemastore.org/) and additional schemas for tools that don't have SchemaStore entries. When both catalogs have a match, the Lintel catalog takes precedence.
 
-Currently includes schemas for:
+See the [lintel-rs/catalog](https://github.com/lintel-rs/catalog) repository for more information.
+
+Currently includes additional schemas for:
 
 - **Cargo.toml** — Rust package manifests
 - **Claude Code** — agent, skill, and command definitions
