@@ -11,7 +11,10 @@ homepage = "https://github.com/lintel-rs/lintel"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+complexity = { level = "deny", priority = -1 }
 must_use_candidate = "allow"
 unwrap_used = "deny"
 std_instead_of_alloc = "deny"
 std_instead_of_core = "deny"
+cognitive_complexity = "deny"
+too_many_lines = "deny"
