@@ -52,6 +52,10 @@ enum Commands {
     /// Print version information
     #[bpaf(command("version"))]
     Version,
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 #[tokio::main]
@@ -73,9 +77,9 @@ async fn main() -> ExitCode {
             .init();
     }
 
-    let cli = cli().run();
+    let opts = cli().run();
 
-    let result = match cli.command {
+    let result = match opts.command {
         Commands::Generate {
             output,
             concurrency,
@@ -86,6 +90,17 @@ async fn main() -> ExitCode {
         }
         Commands::Version => {
             println!("lintel-schemastore-catalog {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Commands::Man => {
+            let roff = cli().render_manpage(
+                "lintel-schemastore-catalog",
+                bpaf::doc::Section::General,
+                None,
+                None,
+                Some("Lintel Manual"),
+            );
+            print!("{roff}");
             return ExitCode::SUCCESS;
         }
     };

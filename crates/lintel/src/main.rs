@@ -142,6 +142,10 @@ enum Commands {
     #[bpaf(command("version"))]
     /// Print version information
     Version,
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 /// Set up tracing from CLI `--log-level` flag, falling back to `LINTEL_LOG` env.
@@ -203,9 +207,9 @@ fn setup_miette(global: &CLIGlobalOptions) {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = cli().run();
+    let opts = cli().run();
 
-    let result = match cli.command {
+    let result = match opts.command {
         Commands::Check(global, reporter_kind, mut args) => {
             setup_tracing(&global);
             setup_miette(&global);
@@ -247,6 +251,17 @@ async fn main() -> ExitCode {
         }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Commands::Man => {
+            let roff = cli().render_manpage(
+                "lintel",
+                bpaf::doc::Section::General,
+                None,
+                None,
+                Some("Lintel Manual"),
+            );
+            print!("{roff}");
             return ExitCode::SUCCESS;
         }
     };

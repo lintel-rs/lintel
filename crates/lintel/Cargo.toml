@@ -1,6 +1,6 @@
 [package]
 name = "lintel"
-version = "0.0.7"
+version = "0.0.8"
 edition.workspace = true
 authors.workspace = true
 description = "Validate JSON and YAML files against JSON Schema"
@@ -23,7 +23,7 @@ lintel-identify = { version = "0.0.4", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.6", path = "../lintel-reporters" }
 lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
 schemastore = { version = "0.0.6", path = "../schemastore" }
-bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color"] }
+bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 glob-match = "0.2"
 humantime = "2"
 miette = { version = "7", features = ["fancy", "syntect-highlighter"] }
