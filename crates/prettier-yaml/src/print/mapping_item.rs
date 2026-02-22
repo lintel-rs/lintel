@@ -1,4 +1,3 @@
-use crate::YamlFormatOptions;
 use crate::ast::{MappingEntry, MappingNode, Node};
 use crate::print::misc::{comment_indent, comment_indent_capped, indent_str, renders_multiline};
 use crate::printer::{format_node, format_scalar};
@@ -6,6 +5,7 @@ use crate::utilities::{
     has_node_props, is_block_collection, is_block_scalar_value, is_null_value, is_simple_value,
     needs_space_before_colon,
 };
+use prettier_config::PrettierConfig;
 use saphyr_parser::ScalarStyle;
 
 /// Check if a key node is multiline (plain scalar spanning multiple source lines).
@@ -28,7 +28,7 @@ pub(crate) fn format_block_mapping(
     mapping: &MappingNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     is_top: bool,
     inline: bool,
 ) {
@@ -336,7 +336,7 @@ fn format_simple_value(
     entry: &MappingEntry,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     let value_indent = indent + tw;
@@ -399,7 +399,7 @@ fn format_key_comments_and_value(
     entry: &MappingEntry,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     let value_indent = indent + tw;
@@ -498,7 +498,7 @@ pub(crate) fn format_explicit_key_entry(
     entry: &MappingEntry,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     // Content after "? " is at indent + 2 (the width of "? ")

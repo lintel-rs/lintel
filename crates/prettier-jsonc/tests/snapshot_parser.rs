@@ -1,10 +1,9 @@
-use prettier_jsonc::PrettierOptions;
-use prettier_jsonc::options::{ProseWrap, QuoteProps, TrailingComma};
+use prettier_config::{PrettierConfig, ProseWrap, QuoteProps, TrailingComma};
 
 pub struct TestCase {
     pub name: String,
     pub parser: String,
-    pub options: PrettierOptions,
+    pub options: PrettierConfig,
     pub input: String,
     pub expected: String,
 }
@@ -92,8 +91,8 @@ fn is_end_marker(line: &str) -> bool {
     trimmed.len() > 20 && trimmed.chars().all(|c| c == '=')
 }
 
-fn parse_options(lines: &[&str]) -> (String, PrettierOptions, bool) {
-    let mut options = PrettierOptions::default();
+fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
+    let mut options = PrettierConfig::default();
     let mut parser = String::new();
     let mut skip = false;
 

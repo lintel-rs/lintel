@@ -1,4 +1,5 @@
-use crate::options::{EndOfLine, PrettierOptions};
+use crate::PrettierConfig;
+use prettier_config::EndOfLine;
 
 /// Document IR for the pretty-printing algorithm.
 #[derive(Debug, Clone)]
@@ -71,7 +72,7 @@ enum Cmd<'a> {
 
 /// Print a document to a string using the Wadler-Lindig algorithm.
 #[allow(clippy::too_many_lines)]
-pub fn print(doc: &Doc, options: &PrettierOptions) -> String {
+pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
     let eol = match options.end_of_line {
         EndOfLine::Lf | EndOfLine::Auto => "\n",
         EndOfLine::Crlf => "\r\n",
@@ -281,7 +282,7 @@ mod tests {
     #[test]
     fn simple_text() {
         let doc = Doc::text("hello");
-        let result = print(&doc, &PrettierOptions::default());
+        let result = print(&doc, &PrettierConfig::default());
         assert_eq!(result, "hello");
     }
 
@@ -299,13 +300,13 @@ mod tests {
             Doc::Softline,
             Doc::text("]"),
         ]));
-        let result = print(&doc, &PrettierOptions::default());
+        let result = print(&doc, &PrettierConfig::default());
         assert_eq!(result, "[1, 2]");
     }
 
     #[test]
     fn group_breaks_when_too_wide() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 10,
             ..Default::default()
         };
@@ -328,13 +329,13 @@ mod tests {
     #[test]
     fn hardline_always_breaks() {
         let doc = Doc::concat(vec![Doc::text("a"), Doc::Hardline, Doc::text("b")]);
-        let result = print(&doc, &PrettierOptions::default());
+        let result = print(&doc, &PrettierConfig::default());
         assert_eq!(result, "a\nb");
     }
 
     #[test]
     fn crlf_line_endings() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             end_of_line: EndOfLine::Crlf,
             ..Default::default()
         };
@@ -345,7 +346,7 @@ mod tests {
 
     #[test]
     fn tabs_indentation() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 10,
             use_tabs: true,
             ..Default::default()
@@ -378,13 +379,13 @@ mod tests {
             Doc::Line,
             Doc::text("}"),
         ]));
-        let result = print(&doc, &PrettierOptions::default());
+        let result = print(&doc, &PrettierConfig::default());
         assert_eq!(result, "{\n  a\n}");
     }
 
     #[test]
     fn fill_packs_items_on_lines() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 20,
             ..Default::default()
         };
@@ -407,7 +408,7 @@ mod tests {
 
     #[test]
     fn fill_breaks_when_needed() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 10,
             ..Default::default()
         };
@@ -438,7 +439,7 @@ mod tests {
 
     #[test]
     fn fill_with_hardline_separator() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 80,
             ..Default::default()
         };

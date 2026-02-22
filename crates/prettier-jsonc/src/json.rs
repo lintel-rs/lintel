@@ -2,15 +2,15 @@ use core::fmt::Write;
 
 use serde_json::Value;
 
-use crate::options::PrettierOptions;
+use crate::PrettierConfig;
 use crate::printer::Doc;
 
 /// Convert a JSON value to a document IR.
-pub fn json_to_doc(value: &Value, options: &PrettierOptions) -> Doc {
+pub fn json_to_doc(value: &Value, options: &PrettierConfig) -> Doc {
     value_to_doc(value, options)
 }
 
-fn value_to_doc(value: &Value, options: &PrettierOptions) -> Doc {
+fn value_to_doc(value: &Value, options: &PrettierConfig) -> Doc {
     match value {
         Value::Null => Doc::text("null"),
         Value::Bool(b) => Doc::text(if *b { "true" } else { "false" }),
@@ -21,7 +21,7 @@ fn value_to_doc(value: &Value, options: &PrettierOptions) -> Doc {
     }
 }
 
-fn array_to_doc(arr: &[Value], options: &PrettierOptions) -> Doc {
+fn array_to_doc(arr: &[Value], options: &PrettierConfig) -> Doc {
     if arr.is_empty() {
         return Doc::text("[]");
     }
@@ -45,7 +45,7 @@ fn array_to_doc(arr: &[Value], options: &PrettierOptions) -> Doc {
     ]))
 }
 
-fn object_to_doc(obj: &serde_json::Map<String, Value>, options: &PrettierOptions) -> Doc {
+fn object_to_doc(obj: &serde_json::Map<String, Value>, options: &PrettierConfig) -> Doc {
     if obj.is_empty() {
         return Doc::text("{}");
     }
@@ -106,8 +106,8 @@ mod tests {
 
     fn format_json(input: &str) -> String {
         let value: Value = serde_json::from_str(input).expect("valid JSON");
-        let doc = json_to_doc(&value, &PrettierOptions::default());
-        let mut result = printer::print(&doc, &PrettierOptions::default());
+        let doc = json_to_doc(&value, &PrettierConfig::default());
+        let mut result = printer::print(&doc, &PrettierConfig::default());
         result.push('\n');
         result
     }
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn no_bracket_spacing() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             bracket_spacing: false,
             ..Default::default()
         };

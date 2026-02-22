@@ -1,5 +1,7 @@
-use prettier_rs::PrettierOptions;
-use prettier_rs::options::{ProseWrap, QuoteProps, TrailingComma};
+use prettier_config::{PrettierConfig, ProseWrap, QuoteProps, TrailingComma};
+
+/// Backwards-compatible type alias.
+type PrettierOptions = PrettierConfig;
 
 pub struct TestCase {
     pub name: String,

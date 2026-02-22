@@ -2,8 +2,6 @@ use core::fmt::Write;
 
 use saphyr_parser::ScalarStyle;
 
-use crate::ProseWrap;
-use crate::YamlFormatOptions;
 use crate::ast::{Node, ScalarNode, SequenceNode, YamlStream};
 use crate::print::block::format_block_scalar;
 use crate::print::flow::{format_flow_mapping, format_flow_sequence};
@@ -13,8 +11,9 @@ use crate::utilities::{
     has_node_props, is_block_collection, is_block_scalar_value, is_null_value, is_simple_value,
     needs_space_before_colon,
 };
+use prettier_config::{PrettierConfig, ProseWrap};
 
-pub(crate) fn format_stream(stream: &YamlStream, options: &YamlFormatOptions) -> String {
+pub(crate) fn format_stream(stream: &YamlStream, options: &PrettierConfig) -> String {
     let mut output = String::new();
 
     for (i, doc) in stream.documents.iter().enumerate() {
@@ -122,7 +121,7 @@ pub(crate) fn format_node(
     node: &Node,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     is_top: bool,
     inline: bool,
 ) {
@@ -153,7 +152,7 @@ pub(crate) fn format_scalar(
     s: &ScalarNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     first_line_prefix: usize,
 ) {
     // Write tag
@@ -247,7 +246,7 @@ fn format_plain_scalar(
     s: &ScalarNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     first_line_prefix: usize,
 ) {
     let indent = indent_str(indent);
@@ -404,7 +403,7 @@ fn format_quoted_scalar(
     raw_source: Option<&str>,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     was_single_quoted: bool,
 ) {
     let contains_single = value.contains('\'');
@@ -494,7 +493,7 @@ fn format_multiline_double_quoted(
     raw_source: &str,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let indent = if indent == 0 {
         String::new()
@@ -824,7 +823,7 @@ fn format_multiline_single_quoted(
     raw_source: &str,
     output: &mut String,
     indent: usize,
-    _options: &YamlFormatOptions,
+    _options: &PrettierConfig,
 ) {
     let indent = if indent == 0 {
         String::new()
@@ -895,7 +894,7 @@ pub(crate) fn format_block_sequence(
     seq: &SequenceNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
     is_top: bool,
     inline: bool,
 ) {
@@ -1082,7 +1081,7 @@ fn format_sequence_mapping_item(
     output: &mut String,
     seq_indent: usize,
     seq_indent_s: &str,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     // Entry indent is sequence indent + 2 (for "- " prefix)
@@ -1283,7 +1282,7 @@ fn format_nested_sequence_inline(
     seq: &SequenceNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let indent_s = indent_str(indent);
     let item_content_indent = indent + 2;

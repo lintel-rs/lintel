@@ -1,14 +1,14 @@
-use crate::YamlFormatOptions;
 use crate::ast::{MappingNode, Node, SequenceNode};
 use crate::print::misc::{indent_str, renders_multiline};
 use crate::printer::format_node;
 use crate::utilities::{has_node_props, is_collection, is_null_value, needs_space_before_colon};
+use prettier_config::PrettierConfig;
 
 pub(crate) fn format_flow_mapping(
     mapping: &MappingNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let has_props = mapping.tag.is_some() || mapping.anchor.is_some();
     let has_middle_comments = !mapping.middle_comments.is_empty();
@@ -79,7 +79,7 @@ pub(crate) fn format_flow_mapping(
 fn format_flow_mapping_flat(
     mapping: &MappingNode,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) -> String {
     let mut parts = Vec::new();
     for entry in &mapping.entries {
@@ -133,7 +133,7 @@ fn format_flow_mapping_broken(
     mapping: &MappingNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     let inner_indent = indent + tw;
@@ -240,7 +240,7 @@ pub(crate) fn format_flow_sequence(
     seq: &SequenceNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let has_props = seq.tag.is_some() || seq.anchor.is_some();
     let has_middle_comments = !seq.middle_comments.is_empty();
@@ -326,7 +326,7 @@ pub(crate) fn format_flow_sequence(
 fn format_flow_sequence_flat(
     seq: &SequenceNode,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) -> String {
     let mut parts = Vec::new();
     for item in &seq.items {
@@ -397,7 +397,7 @@ fn format_flow_sequence_broken(
     seq: &SequenceNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     let inner_indent = indent + tw;

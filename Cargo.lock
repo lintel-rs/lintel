@@ -1983,14 +1983,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "prettier-jsonc"
+name = "prettier-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "glob-match",
+ "json5 0.4.1",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "toml 1.0.3+spec-1.1.0",
+]
+
+[[package]]
+name = "prettier-jsonc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "insta",
  "json5 0.4.1",
  "jsonc-parser 0.24.0",
+ "prettier-config",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -2001,14 +2014,9 @@ name = "prettier-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "glob-match",
- "json5 0.4.1",
+ "prettier-config",
  "prettier-jsonc",
  "prettier-yaml",
- "serde",
- "serde_json",
- "serde_yaml",
- "toml 1.0.3+spec-1.1.0",
 ]
 
 [[package]]
@@ -2017,6 +2025,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "insta",
+ "prettier-config",
  "pretty_assertions",
  "saphyr-parser",
 ]

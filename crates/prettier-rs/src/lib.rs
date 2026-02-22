@@ -1,13 +1,13 @@
-pub mod config;
-
 use std::path::Path;
 
 use anyhow::Result;
 
-// Re-export from prettier-jsonc for backwards compatibility
-pub use prettier_jsonc::options;
-pub use prettier_jsonc::options::PrettierOptions;
-pub use prettier_jsonc::printer;
+// Re-export config types from prettier-config
+pub use prettier_config::resolve::resolve_config;
+pub use prettier_config::{self, PrettierConfig};
+
+/// Backwards-compatible type alias.
+pub type PrettierOptions = PrettierConfig;
 
 /// Supported format types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +23,7 @@ pub enum Format {
 /// # Errors
 ///
 /// Returns an error if the content cannot be parsed as the specified format.
-pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> Result<String> {
+pub fn format_str(content: &str, format: Format, options: &PrettierConfig) -> Result<String> {
     match format {
         Format::Json => {
             prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
@@ -34,21 +34,7 @@ pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> R
         Format::Json5 => {
             prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json5, options)
         }
-        Format::Yaml => {
-            let yaml_opts = prettier_yaml::YamlFormatOptions {
-                print_width: options.print_width,
-                tab_width: options.tab_width,
-                use_tabs: options.use_tabs,
-                single_quote: options.single_quote,
-                bracket_spacing: options.bracket_spacing,
-                prose_wrap: match options.prose_wrap {
-                    options::ProseWrap::Always => prettier_yaml::ProseWrap::Always,
-                    options::ProseWrap::Never => prettier_yaml::ProseWrap::Never,
-                    options::ProseWrap::Preserve => prettier_yaml::ProseWrap::Preserve,
-                },
-            };
-            prettier_yaml::format_yaml(content, &yaml_opts)
-        }
+        Format::Yaml => prettier_yaml::format_yaml(content, options),
     }
 }
 
@@ -57,7 +43,7 @@ pub fn format_str(content: &str, format: Format, options: &PrettierOptions) -> R
 /// # Errors
 ///
 /// Returns an error if the file cannot be read, parsed, or written.
-pub fn format_file(path: &Path, options: Option<&PrettierOptions>) -> Result<bool> {
+pub fn format_file(path: &Path, options: Option<&PrettierConfig>) -> Result<bool> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
 
@@ -68,7 +54,7 @@ pub fn format_file(path: &Path, options: Option<&PrettierOptions>) -> Result<boo
     let opts = if let Some(o) = options {
         o
     } else {
-        resolved_options = config::resolve_config(path)?;
+        resolved_options = resolve_config(path)?;
         &resolved_options
     };
 
@@ -81,15 +67,6 @@ pub fn format_file(path: &Path, options: Option<&PrettierOptions>) -> Result<boo
     std::fs::write(path, &formatted)
         .map_err(|e| anyhow::anyhow!("writing {}: {e}", path.display()))?;
     Ok(true)
-}
-
-/// Resolve prettier config for a file path.
-///
-/// # Errors
-///
-/// Returns an error if a config file exists but cannot be read or parsed.
-pub fn resolve_config(path: &Path) -> Result<PrettierOptions> {
-    config::resolve_config(path)
 }
 
 /// Detect format from file extension.

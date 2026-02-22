@@ -2,15 +2,16 @@ use anyhow::{Context, Result};
 use jsonc_parser::ast::Comment;
 use jsonc_parser::common::Ranged;
 
-use crate::options::{PrettierOptions, TrailingComma};
+use crate::PrettierConfig;
 use crate::printer::Doc;
+use prettier_config::TrailingComma;
 
 /// Format JSONC content, preserving comments.
 ///
 /// # Errors
 ///
 /// Returns an error if the content is not valid JSONC.
-pub fn format_jsonc(content: &str, options: &PrettierOptions) -> Result<String> {
+pub fn format_jsonc(content: &str, options: &PrettierConfig) -> Result<String> {
     let parsed = jsonc_parser::parse_to_ast(
         content,
         &jsonc_parser::CollectOptions {
@@ -156,7 +157,7 @@ fn comment_doc(c: &Comment) -> Doc {
 
 fn jsonc_value_to_doc<'a>(
     value: &jsonc_parser::ast::Value<'a>,
-    options: &PrettierOptions,
+    options: &PrettierConfig,
     ctx: &mut CommentCtx<'a, '_>,
     source: &str,
 ) -> Doc {
@@ -178,7 +179,7 @@ fn jsonc_value_to_doc<'a>(
 
 fn jsonc_array_to_doc<'a>(
     arr: &jsonc_parser::ast::Array<'a>,
-    options: &PrettierOptions,
+    options: &PrettierConfig,
     ctx: &mut CommentCtx<'a, '_>,
     source: &str,
 ) -> Doc {
@@ -293,7 +294,7 @@ fn is_concise_array(arr: &jsonc_parser::ast::Array<'_>) -> bool {
 /// Packs numbers onto lines, breaking only when needed or at blank lines.
 fn jsonc_array_to_doc_concise<'a>(
     arr: &jsonc_parser::ast::Array<'a>,
-    options: &PrettierOptions,
+    options: &PrettierConfig,
     ctx: &mut CommentCtx<'a, '_>,
     source: &str,
 ) -> Doc {
@@ -351,7 +352,7 @@ fn jsonc_array_to_doc_concise<'a>(
 
 fn jsonc_object_to_doc<'a>(
     obj: &jsonc_parser::ast::Object<'a>,
-    options: &PrettierOptions,
+    options: &PrettierConfig,
     ctx: &mut CommentCtx<'a, '_>,
     source: &str,
 ) -> Doc {
@@ -636,37 +637,37 @@ mod tests {
     #[test]
     fn format_simple_jsonc() {
         let input = r#"{"a":1,"b":2}"#;
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{ \"a\": 1, \"b\": 2 }\n");
     }
 
     #[test]
     fn format_jsonc_with_trailing_comma() {
         let input = r#"{"a": 1,}"#;
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{ \"a\": 1 }\n");
     }
 
     #[test]
     fn format_empty_jsonc_object() {
         let input = "{}";
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{}\n");
     }
 
     #[test]
     fn format_block_comment_before_property() {
         let input = r#"{/*comment*/"K":"V"}"#;
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{ /*comment*/ \"K\": \"V\" }\n");
     }
 
     #[test]
     fn format_line_comment_before_property() {
         let input = "{\n  //comment\n  \"K\":\"V\"\n}";
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             trailing_comma: TrailingComma::None,
-            ..PrettierOptions::default()
+            ..PrettierConfig::default()
         };
         let result = format_jsonc(input, &opts).expect("format");
         assert_eq!(result, "{\n  //comment\n  \"K\": \"V\"\n}\n");
@@ -675,21 +676,21 @@ mod tests {
     #[test]
     fn format_line_comment_before_property_trailing_comma() {
         let input = "{\n  //comment\n  \"K\":\"V\"\n}";
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{\n  //comment\n  \"K\": \"V\",\n}\n");
     }
 
     #[test]
     fn format_trailing_block_comment() {
         let input = "1 /* block-comment */";
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "1 /* block-comment */\n");
     }
 
     #[test]
     fn format_trailing_line_comment() {
         let input = "1 // line-comment";
-        let result = format_jsonc(input, &PrettierOptions::default()).expect("format");
+        let result = format_jsonc(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "1 // line-comment\n");
     }
 
@@ -697,9 +698,9 @@ mod tests {
     fn format_leading_block_comment() {
         // Leading comments on root value force the container to break
         let input = "/* comment */{\n  \"foo\": \"bar\"\n}";
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             trailing_comma: TrailingComma::None,
-            ..PrettierOptions::default()
+            ..PrettierConfig::default()
         };
         let result = format_jsonc(input, &opts).expect("format");
         assert_eq!(result, "/* comment */ {\n  \"foo\": \"bar\"\n}\n");
@@ -709,9 +710,9 @@ mod tests {
     fn format_leading_line_comments() {
         // Leading comments on root value force the container to break
         let input = "// comment 1\n// comment 2\n{\n  \"foo\": \"bar\"\n}";
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             trailing_comma: TrailingComma::None,
-            ..PrettierOptions::default()
+            ..PrettierConfig::default()
         };
         let result = format_jsonc(input, &opts).expect("format");
         assert_eq!(

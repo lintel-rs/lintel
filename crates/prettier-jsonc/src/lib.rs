@@ -1,12 +1,14 @@
 pub mod json;
 pub mod json5;
 pub mod jsonc;
-pub mod options;
 pub mod printer;
 
 use anyhow::Result;
 
-pub use options::PrettierOptions;
+pub use prettier_config::{self, PrettierConfig};
+
+/// Backwards-compatible type alias.
+pub type PrettierOptions = PrettierConfig;
 
 /// Supported JSON format types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,22 +23,22 @@ pub enum JsonFormat {
 /// # Errors
 ///
 /// Returns an error if the content cannot be parsed as the specified format.
-pub fn format_str(content: &str, format: JsonFormat, options: &PrettierOptions) -> Result<String> {
+pub fn format_str(content: &str, format: JsonFormat, options: &PrettierConfig) -> Result<String> {
     match format {
         JsonFormat::Json => {
             // Use JSONC parser for JSON too — it preserves number literals
             // and handles all valid JSON. For strict JSON format, disable
             // trailing commas since JSON doesn't support them.
             let mut json_options = options.clone();
-            json_options.trailing_comma = options::TrailingComma::None;
+            json_options.trailing_comma = prettier_config::TrailingComma::None;
             if let Ok(result) = jsonc::format_jsonc(content, &json_options) {
                 Ok(result)
             } else {
                 // If JSONC parser fails (e.g. +123, Infinity), try JSON5
                 let mut j5_options = options.clone();
-                j5_options.trailing_comma = options::TrailingComma::None;
+                j5_options.trailing_comma = prettier_config::TrailingComma::None;
                 j5_options.single_quote = false;
-                j5_options.quote_props = options::QuoteProps::Consistent;
+                j5_options.quote_props = prettier_config::QuoteProps::Consistent;
                 json5::format_json5(content, &j5_options)
             }
         }

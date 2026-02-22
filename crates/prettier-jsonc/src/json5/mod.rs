@@ -4,16 +4,17 @@ use core::fmt::Write;
 
 use anyhow::Result;
 
-use crate::options::{PrettierOptions, QuoteProps, TrailingComma};
+use crate::PrettierConfig;
 use crate::printer::Doc;
 use parser::{Comment, Key, Node, Quote};
+use prettier_config::{QuoteProps, TrailingComma};
 
 /// Format JSON5 content, preserving comments.
 ///
 /// # Errors
 ///
 /// Returns an error if the content is not valid JSON5.
-pub fn format_json5(content: &str, options: &PrettierOptions) -> Result<String> {
+pub fn format_json5(content: &str, options: &PrettierConfig) -> Result<String> {
     let (node, leading_comments, trailing_comments) =
         parser::parse(content).map_err(|e| anyhow::anyhow!("JSON5 parse error: {e}"))?;
 
@@ -63,7 +64,7 @@ fn force_group_break(doc: Doc) -> Doc {
 }
 
 #[allow(clippy::too_many_lines)]
-fn node_to_doc(node: &Node, options: &PrettierOptions) -> Doc {
+fn node_to_doc(node: &Node, options: &PrettierConfig) -> Doc {
     match node {
         Node::Null => Doc::text("null"),
         Node::Undefined => Doc::text("undefined"),
@@ -276,7 +277,7 @@ fn node_to_doc(node: &Node, options: &PrettierOptions) -> Doc {
 fn json5_array_concise(
     elements: &[parser::ArrayElement],
     trailing: bool,
-    options: &PrettierOptions,
+    options: &PrettierConfig,
 ) -> Doc {
     let mut fill_parts: Vec<Doc> = Vec::new();
 
@@ -315,7 +316,7 @@ fn json5_array_concise(
     ]))
 }
 
-fn format_key(key: &Key, options: &PrettierOptions) -> Doc {
+fn format_key(key: &Key, options: &PrettierConfig) -> Doc {
     match key {
         Key::Identifier(name) => match options.quote_props {
             QuoteProps::AsNeeded | QuoteProps::Preserve => Doc::text(name.clone()),
@@ -739,13 +740,13 @@ mod tests {
     #[test]
     fn format_simple_json5() {
         let input = r#"{key: "value", num: 42}"#;
-        let result = format_json5(input, &PrettierOptions::default()).expect("format");
+        let result = format_json5(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{ key: \"value\", num: 42 }\n");
     }
 
     #[test]
     fn format_json5_single_quotes() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             single_quote: true,
             ..Default::default()
         };
@@ -759,7 +760,7 @@ mod tests {
 
     #[test]
     fn format_json5_trailing_commas() {
-        let opts = PrettierOptions {
+        let opts = PrettierConfig {
             print_width: 10, // force break
             trailing_comma: TrailingComma::All,
             ..Default::default()
@@ -771,7 +772,7 @@ mod tests {
 
     #[test]
     fn format_json5_empty() {
-        let result = format_json5("{}", &PrettierOptions::default()).expect("format");
+        let result = format_json5("{}", &PrettierConfig::default()).expect("format");
         assert_eq!(result, "{}\n");
     }
 }

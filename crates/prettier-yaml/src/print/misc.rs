@@ -1,5 +1,5 @@
-use crate::YamlFormatOptions;
 use crate::ast::{Comment, Node};
+use prettier_config::PrettierConfig;
 
 /// Create an indentation string of `indent` spaces.
 /// `indent` is the actual column count (number of spaces), not a depth level.
@@ -15,7 +15,7 @@ pub(crate) fn indent_str(indent: usize) -> String {
 pub(crate) fn comment_indent(
     comment: &Comment,
     min_indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) -> String {
     let tw = options.tab_width;
     // Snap the source column UP to the nearest tab_width boundary.
@@ -36,7 +36,7 @@ pub(crate) fn comment_indent_capped(
     comment: &Comment,
     min_indent: usize,
     max_indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) -> String {
     let tw = options.tab_width;
     let snapped = if tw > 0 {
@@ -49,7 +49,7 @@ pub(crate) fn comment_indent_capped(
 }
 
 /// Check if a node would render as multi-line (contains newlines).
-pub(crate) fn renders_multiline(node: &Node, indent: usize, options: &YamlFormatOptions) -> bool {
+pub(crate) fn renders_multiline(node: &Node, indent: usize, options: &PrettierConfig) -> bool {
     let mut buf = String::new();
     crate::printer::format_node(node, &mut buf, indent, options, false, true);
     buf.contains('\n')

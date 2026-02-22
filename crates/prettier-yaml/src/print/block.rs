@@ -1,8 +1,7 @@
 use saphyr_parser::ScalarStyle;
 
-use crate::ProseWrap;
-use crate::YamlFormatOptions;
 use crate::ast::ScalarNode;
+use prettier_config::{PrettierConfig, ProseWrap};
 
 /// Normalize block scalar header indicator order.
 /// YAML spec says digit (indentation indicator) comes before chomping indicator.
@@ -43,7 +42,7 @@ pub(crate) fn format_block_scalar(
     s: &ScalarNode,
     output: &mut String,
     indent: usize,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let tw = options.tab_width;
     let Some(block_src) = &s.block_source else {
@@ -223,7 +222,7 @@ fn format_block_folded_rewrap(
     output: &mut String,
     base_indent: usize,
     target_indent: &str,
-    options: &YamlFormatOptions,
+    options: &PrettierConfig,
 ) {
     let mut i = 0;
     while i < body_lines.len() {

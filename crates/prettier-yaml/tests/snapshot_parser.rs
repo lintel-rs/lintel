@@ -1,8 +1,8 @@
-use prettier_yaml::{ProseWrap, YamlFormatOptions};
+use prettier_config::{PrettierConfig, ProseWrap};
 
 pub struct TestCase {
     pub name: String,
-    pub options: YamlFormatOptions,
+    pub options: PrettierConfig,
     pub input: String,
     pub expected: String,
 }
@@ -89,8 +89,8 @@ fn is_end_marker(line: &str) -> bool {
     trimmed.len() > 20 && trimmed.chars().all(|c| c == '=')
 }
 
-fn parse_options(lines: &[&str]) -> (String, YamlFormatOptions, bool) {
-    let mut options = YamlFormatOptions::default();
+fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
+    let mut options = PrettierConfig::default();
     let mut parser = String::new();
     let mut skip = false;
 
