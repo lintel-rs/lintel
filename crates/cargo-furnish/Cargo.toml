@@ -1,6 +1,6 @@
 [package]
 name = "cargo-furnish"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
 authors.workspace = true
 description = "Furnish Rust crates with standardized Cargo.toml metadata, READMEs, and doc attributes"

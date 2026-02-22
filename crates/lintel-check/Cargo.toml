@@ -1,6 +1,6 @@
 [package]
 name = "lintel-check"
-version = "0.0.6"
+version = "0.0.7"
 edition.workspace = true
 authors.workspace = true
 description = "Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC against JSON Schema"
@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 lintel-config = { version = "0.0.4", path = "../lintel-config" }
-lintel-schema-cache = { version = "0.0.6", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.7", path = "../lintel-schema-cache" }
 lintel-validation-cache = { version = "0.0.5", path = "../lintel-validation-cache" }
 jsonschema = { version = "0.42", features = ["resolve-async"] }
 tokio = { version = "1", features = ["rt", "fs"] }
