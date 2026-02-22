@@ -1,9 +1,18 @@
-name: Release
+# Release workflow for the lintel CLI binary.
+# Triggered via workflow_dispatch by release-plz or manually.
+#
+# Builds native binaries (nix + cargo), creates a GitHub release,
+# publishes to NPM, and pushes multi-arch Docker images to GHCR.
+
+name: Release Lintel
 
 on:
-  push:
-    tags: ["lintel-v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.0.7)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,8 +23,20 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check ref is a version tag
+        run: |
+          if [[ ! "${{ github.ref }}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::This workflow must be run on a vX.Y.Z tag (via --ref), got ${{ github.ref }}"
+            exit 1
+          fi
+
   build-nix:
     name: Build (${{ matrix.target }})
+    needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -48,6 +69,7 @@ jobs:
 
   build-cargo:
     name: Build (${{ matrix.target }})
+    needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -106,6 +128,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ inputs.version }}
           files: lintel-*
           generate_release_notes: true
 
@@ -115,21 +138,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
-
-      - name: Set version from tag
+      - name: Generate and publish npm packages
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
-          cd npm
-          npm version "$VERSION" --no-git-tag-version
-
-      - name: Publish
-        run: npm publish --access public
-        working-directory: npm
+          cargo run --release --package npm-release-binaries -- release \
+            --package lintel \
+            --release-version ${{ inputs.version }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -165,8 +190,7 @@ jobs:
 
       - name: Tag and push
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
-          ARCH_TAG=${VERSION}-${{ matrix.arch }}
+          ARCH_TAG=${{ inputs.version }}-${{ matrix.arch }}
 
           docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
@@ -184,11 +208,16 @@ jobs:
 
       - name: Create and push manifests
         run: |
-          VERSION=${GITHUB_REF_NAME#lintel-v}
+          VERSION=${{ inputs.version }}
           MAJOR_MINOR=${VERSION%.*}
           IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-          for TAG in "${VERSION}" "${MAJOR_MINOR}" "latest"; do
+          TAGS=("${VERSION}" "latest")
+          if [[ "${MAJOR_MINOR}" != "${VERSION}" ]]; then
+            TAGS+=("${MAJOR_MINOR}")
+          fi
+
+          for TAG in "${TAGS[@]}"; do
             docker manifest create ${IMAGE}:${TAG} \
               ${IMAGE}:${VERSION}-amd64 \
               ${IMAGE}:${VERSION}-arm64

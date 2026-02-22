@@ -19,6 +19,10 @@
     cargo run --release -p cargo-furnish -- "$@"
   '';
 
+  scripts.npm-release-binaries.exec = ''
+    cargo run --release -p npm-release-binaries -- "$@"
+  '';
+
   git-hooks.hooks = {
     clippy = {
       enable = true;
