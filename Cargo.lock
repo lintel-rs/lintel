@@ -1290,8 +1290,6 @@ version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
- "glob",
- "glob-match",
  "humantime",
  "lintel-check",
  "tokio",
