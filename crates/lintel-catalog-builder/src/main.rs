@@ -53,6 +53,10 @@ enum Commands {
     /// Print version information
     #[bpaf(command("version"))]
     Version,
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 #[tokio::main]
@@ -78,9 +82,9 @@ async fn main() -> ExitCode {
         .with(filter)
         .init();
 
-    let cli = cli().run();
+    let opts = cli().run();
 
-    let result = match cli.command {
+    let result = match opts.command {
         Commands::Generate {
             config,
             target,
@@ -89,6 +93,17 @@ async fn main() -> ExitCode {
         } => commands::generate::run(&config, target.as_deref(), concurrency, no_cache).await,
         Commands::Version => {
             println!("lintel-catalog-builder {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Commands::Man => {
+            let roff = cli().render_manpage(
+                "lintel-catalog-builder",
+                bpaf::doc::Section::General,
+                None,
+                None,
+                Some("Lintel Manual"),
+            );
+            print!("{roff}");
             return ExitCode::SUCCESS;
         }
     };
@@ -123,7 +138,7 @@ mod tests {
                 assert_eq!(concurrency, 20);
                 assert!(!no_cache);
             }
-            Commands::Version => panic!("expected Generate"),
+            _ => panic!("expected Generate"),
         }
         Ok(())
     }
@@ -154,7 +169,7 @@ mod tests {
                 assert_eq!(concurrency, 50);
                 assert!(no_cache);
             }
-            Commands::Version => panic!("expected Generate"),
+            _ => panic!("expected Generate"),
         }
         Ok(())
     }
