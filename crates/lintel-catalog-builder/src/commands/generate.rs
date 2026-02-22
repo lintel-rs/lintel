@@ -216,6 +216,7 @@ async fn generate_for_target(
                 name: schema_def.name.clone(),
                 description: schema_def.description.clone(),
                 url: schema_url,
+                source_url: schema_def.url.clone(),
                 file_match: schema_def.file_match.clone(),
                 versions: BTreeMap::new(),
             });
@@ -443,6 +444,7 @@ async fn process_source(
                 name: info.name.clone(),
                 description: info.description.clone(),
                 url,
+                source_url: Some(info.url.clone()),
                 file_match: info.file_match.clone(),
                 versions: info.versions.clone(),
             }
@@ -640,6 +642,7 @@ mod tests {
             name: name.into(),
             description: String::new(),
             url: url.into(),
+            source_url: None,
             file_match: file_match.into_iter().map(String::from).collect(),
             versions: BTreeMap::new(),
         }

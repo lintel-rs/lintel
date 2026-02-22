@@ -36,6 +36,8 @@ pub struct SchemaEntry {
     pub name: String,
     pub description: String,
     pub url: String,
+    #[serde(default, rename = "sourceUrl", skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
     #[serde(default, rename = "fileMatch", skip_serializing_if = "Vec::is_empty")]
     pub file_match: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -73,6 +75,7 @@ mod tests {
                 name: "Test Schema".into(),
                 description: "A test schema".into(),
                 url: "https://example.com/test.json".into(),
+                source_url: None,
                 file_match: vec!["*.test.json".into()],
                 versions: BTreeMap::new(),
             }],
@@ -101,12 +104,36 @@ mod tests {
             name: "No Match".into(),
             description: "desc".into(),
             url: "https://example.com/no.json".into(),
+            source_url: None,
             file_match: vec![],
             versions: BTreeMap::new(),
         };
         let json = serde_json::to_string(&entry).expect("serialize");
         assert!(!json.contains("fileMatch"));
+        assert!(!json.contains("sourceUrl"));
         assert!(!json.contains("versions"));
+    }
+
+    #[test]
+    fn source_url_serialized_as_camel_case() {
+        let entry = SchemaEntry {
+            name: "Test".into(),
+            description: "desc".into(),
+            url: "https://catalog.example.com/test.json".into(),
+            source_url: Some("https://upstream.example.com/test.json".into()),
+            file_match: vec![],
+            versions: BTreeMap::new(),
+        };
+        let json = serde_json::to_string(&entry).expect("serialize");
+        assert!(json.contains("\"sourceUrl\""));
+        assert!(json.contains("https://upstream.example.com/test.json"));
+
+        // Round-trip
+        let parsed: SchemaEntry = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            parsed.source_url.as_deref(),
+            Some("https://upstream.example.com/test.json")
+        );
     }
 
     #[test]
