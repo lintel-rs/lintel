@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.5...lintel-reporters-v0.0.6) - 2026-02-22
+
+### Added
+
+- add `lintel explain` command and consolidate cache CLI options
+
+### Other
+
+- Merge origin/master into ansi branch
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.4...lintel-reporters-v0.0.5) - 2026-02-21
 
 ### Other
