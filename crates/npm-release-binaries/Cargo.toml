@@ -7,6 +7,8 @@ description = "Generate and publish platform-specific npm packages from Rust bin
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+keywords = ["npm", "release", "binary", "cli"]
+categories = ["command-line-utilities"]
 publish = false
 
 [lints]
