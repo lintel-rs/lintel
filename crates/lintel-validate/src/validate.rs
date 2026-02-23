@@ -840,12 +840,19 @@ pub async fn run_with(
         // Compile the schema for cache misses.
         let t = std::time::Instant::now();
         let validator = {
-            match jsonschema::async_options()
+            // Set base URI for remote schemas so relative $ref values
+            // (e.g. "./rule.json") resolve correctly.
+            let is_remote_schema =
+                schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+            let opts = jsonschema::async_options()
                 .with_retriever(retriever.clone())
-                .should_validate_formats(validate_formats)
-                .build(&schema_value)
-                .await
-            {
+                .should_validate_formats(validate_formats);
+            let opts = if is_remote_schema {
+                opts.with_base_uri(schema_uri.clone())
+            } else {
+                opts
+            };
+            match opts.build(&schema_value).await {
                 Ok(v) => v,
                 Err(e) => {
                     compile_time += t.elapsed();
