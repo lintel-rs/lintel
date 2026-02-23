@@ -1,6 +1,6 @@
 [package]
 name = "lintel-config-schema-generator"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors.workspace = true
 description = "Generate JSON Schemas for Lintel configuration files (lintel.toml, lintel-catalog.toml)"
@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 lintel-config = { version = "0.0.5", path = "../lintel-config" }
-lintel-catalog-builder = { version = "0.0.6", path = "../lintel-catalog-builder" }
-schema-catalog = { version = "0.0.3", path = "../schema-catalog" }
+lintel-catalog-builder = { version = "0.0.7", path = "../lintel-catalog-builder" }
+schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
 bpaf = { version = "0.9", features = ["derive"] }
 serde_json = "1"

@@ -1,6 +1,6 @@
 [package]
 name = "lintel-check"
-version = "0.0.9"
+version = "0.0.10"
 edition.workspace = true
 authors.workspace = true
 description = "Check command for Lintel — runs schema validation and additional checks"
@@ -14,6 +14,6 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-validate = { version = "0.0.2", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 bpaf = { version = "0.9", features = ["derive"] }
 anyhow = "1"

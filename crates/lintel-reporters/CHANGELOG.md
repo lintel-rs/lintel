@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.7...lintel-reporters-v0.0.8) - 2026-02-23
+
+### Other
+
+- updated the following local packages: lintel-validate
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.6...lintel-reporters-v0.0.7) - 2026-02-23
 
 ### Other
