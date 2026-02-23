@@ -1,7 +1,63 @@
 mod snapshot_parser;
 
 use prettier_rs::{Format, format_str};
+use std::collections::HashSet;
 use std::path::Path;
+
+/// Known test failures with explanations.
+///
+/// Each entry is a `(dir, test_name, reason)` tuple. Tests listed here are
+/// expected to fail and won't cause CI failures. If a listed test starts
+/// passing, the test harness will flag it as a stale exclusion so we can
+/// remove it.
+///
+/// These mirror the known failures in the individual formatter crates
+/// (prettier-yaml, prettier-json5, prettier-jsonc) since prettier-rs
+/// delegates to them.
+const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
+    // ── Flow sequence with nested sequences ──────────────────────────────
+    // Spec example 7.14 uses a flow sequence with an embedded nested flow
+    // sequence (`[nested]`) and a trailing comma. Our flow sequence formatter
+    // doesn't handle the nested sequence boundary correctly, duplicating the
+    // nested content.
+    (
+        "yaml/spec",
+        "spec-example-7-14-flow-sequence-entries.yml - {\"useTabs\":true} format 1",
+        "flow sequence with nested sequence formatting",
+    ),
+    // ── Explicit key (?) in flow sequences ───────────────────────────────
+    // Spec example 7.20 uses the `?` (explicit key) indicator inside a flow
+    // sequence (`[? foo bar : baz]`). Our formatter doesn't preserve the
+    // explicit key indicator in flow contexts.
+    (
+        "yaml/spec",
+        "spec-example-7-20-single-pair-explicit-entry.yml - {\"useTabs\":true} format 1",
+        "explicit key (?) in flow sequence not supported",
+    ),
+    // ── Explicit key in flow mapping with document markers ───────────────
+    // Spec example 9.4 uses explicit keys (`?`) inside a flow mapping combined
+    // with document start/end markers (`---`/`...`). Our formatter doesn't
+    // handle explicit keys in flow mappings, causing the output structure to
+    // diverge from prettier's.
+    (
+        "yaml/spec",
+        "spec-example-9-4-explicit-documents.yml - {\"useTabs\":true} format 1",
+        "explicit key (?) in flow mapping not supported",
+    ),
+    // ── %TAG directive parsing ───────────────────────────────────────────
+    // Spec example 9.5 uses the `%TAG` directive. Our YAML parser does not
+    // support `%TAG` directives, causing a parse error.
+    (
+        "yaml/spec",
+        "spec-example-9-5-directives-documents.yml - {\"proseWrap\":\"always\"} format 1",
+        "%TAG directive not supported",
+    ),
+    (
+        "yaml/spec",
+        "spec-example-9-5-directives-documents.yml - {\"useTabs\":true} format 1",
+        "%TAG directive not supported",
+    ),
+];
 
 fn run_fixture_dir(dir: &str) {
     let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
@@ -13,12 +69,15 @@ fn run_fixture_dir(dir: &str) {
     let cases = snapshot_parser::parse_snapshot(&content);
     assert!(!cases.is_empty(), "No test cases found in {dir}");
 
-    let strict = std::env::var("PRETTIER_STRICT").is_ok();
-    let mut passed = 0;
-    let mut failed = 0;
-    let mut skipped = 0;
-    let mut failures: Vec<(String, String, String)> = Vec::new();
-    let mut all_failure_names: Vec<String> = Vec::new();
+    let known: HashSet<&str> = KNOWN_FAILURES
+        .iter()
+        .filter(|(d, _, _)| *d == dir)
+        .map(|(_, name, _)| *name)
+        .collect();
+
+    let mut counts = (0usize, 0usize, 0usize, 0usize); // passed, failed, skipped, expected
+    let mut unexpected: Vec<(String, String, String)> = Vec::new();
+    let mut stale: Vec<String> = Vec::new();
 
     for case in &cases {
         let format = match case.parser.as_str() {
@@ -27,66 +86,71 @@ fn run_fixture_dir(dir: &str) {
             "jsonc" => Format::Jsonc,
             "yaml" => Format::Yaml,
             _ => {
-                skipped += 1;
+                counts.2 += 1;
                 continue;
             }
         };
 
-        match format_str(&case.input, format, &case.options) {
-            Ok(actual) => {
-                if actual == case.expected {
-                    passed += 1;
-                } else {
-                    failed += 1;
-                    all_failure_names.push(case.name.clone());
-                    if failures.len() < 50 {
-                        failures.push((case.name.clone(), case.expected.clone(), actual));
-                    }
-                }
+        let is_known = known.contains(case.name.as_str());
+        let result = format_str(&case.input, format, &case.options);
+        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
+
+        if matches {
+            counts.0 += 1;
+            if is_known {
+                stale.push(case.name.clone());
             }
-            Err(e) => {
-                failed += 1;
-                all_failure_names.push(case.name.clone());
-                if failures.len() < 20 {
-                    failures.push((
-                        case.name.clone(),
-                        case.expected.clone(),
-                        format!("ERROR: {e}"),
-                    ));
-                }
+        } else if is_known {
+            counts.3 += 1;
+        } else {
+            counts.1 += 1;
+            if unexpected.len() < 20 {
+                let actual = result.unwrap_or_else(|e| format!("ERROR: {e}"));
+                unexpected.push((case.name.clone(), case.expected.clone(), actual));
             }
         }
     }
 
-    let total = passed + failed;
-    eprintln!("{dir}: {passed}/{total} passed ({failed} failed, {skipped} skipped)");
+    let (passed, failed, skipped, expected_failures) = counts;
+    let total = passed + failed + expected_failures;
+    eprintln!(
+        "{dir}: {passed}/{total} passed ({expected_failures} known, {failed} unexpected, {skipped} skipped)"
+    );
+    print_failures(dir, &unexpected, &stale);
 
-    if !failures.is_empty() {
-        let max_diffs = 50;
-        eprintln!("\n  First {max_diffs} failure(s) in {dir}:");
-        for (name, expected, actual) in failures.iter().take(max_diffs) {
+    assert!(
+        unexpected.is_empty(),
+        "{dir}: {failed} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter"
+    );
+    assert!(
+        stale.is_empty(),
+        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
+        stale.len()
+    );
+}
+
+fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
+    if !unexpected.is_empty() {
+        eprintln!("\n  Unexpected failures in {dir}:");
+        for (name, expected, actual) in unexpected {
             eprintln!("\n  --- {name} ---");
             if actual.starts_with("ERROR:") {
                 eprintln!("  {actual}");
             } else {
-                // Show a unified-style diff
                 for diff in diff_lines(expected, actual) {
                     eprintln!("  {diff}");
                 }
             }
         }
-        // Always print all failure names for analysis
-        eprintln!("\n  All {dir} failure names ({}):", all_failure_names.len());
-        for name in &all_failure_names {
+        eprintln!();
+    }
+    if !stale.is_empty() {
+        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
+        for name in stale {
             eprintln!("  - {name}");
         }
         eprintln!();
     }
-
-    assert!(
-        !(strict && failed > 0),
-        "{dir}: {failed}/{total} tests failed (PRETTIER_STRICT=1)"
-    );
 }
 
 /// Simple line-by-line diff for readable failure output.
@@ -117,7 +181,6 @@ fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
         }
     }
 
-    // Limit output to avoid overwhelming logs
     if output.len() > 30 {
         output.truncate(30);
         output.push("  ... (diff truncated)".to_string());
