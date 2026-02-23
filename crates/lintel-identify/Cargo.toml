@@ -1,6 +1,6 @@
 [package]
 name = "lintel-identify"
-version = "0.0.6"
+version = "0.0.7"
 edition.workspace = true
 authors.workspace = true
 description = "Schema identification for JSON and YAML files using JSON Schema"
@@ -19,7 +19,7 @@ lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
 schemastore = { version = "0.0.8", path = "../schemastore" }
-jsonschema-explain = { version = "0.2.2", path = "../jsonschema-explain" }
+jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
 bpaf = { version = "0.9", features = ["derive"] }
 glob-match = "0.2"
 anyhow = "1"

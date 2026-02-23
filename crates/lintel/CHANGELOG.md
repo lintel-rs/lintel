@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/v0.0.10...v0.0.11) - 2026-02-23
+
+### Other
+
+- Replace local crates with crates.io versions
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/v0.0.9...v0.0.10) - 2026-02-23
 
 ### Other

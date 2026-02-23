@@ -248,7 +248,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cargo-furnish"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-explain"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ansi-term-styles",
  "markdown-to-ansi",
@@ -1281,7 +1281,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1403,7 +1403,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1452,7 +1452,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "ansi-term-styles",
  "lintel-validate",
