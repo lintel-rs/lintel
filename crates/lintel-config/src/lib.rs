@@ -9,64 +9,152 @@ use serde_json::Value;
 
 const CONFIG_FILENAME: &str = "lintel.toml";
 
+/// Conditional settings applied to files or schemas matching specific patterns.
+///
+/// Each `[[override]]` block targets files by path glob, schemas by URI glob,
+/// or both. When a file matches, the settings in that block override the
+/// top-level defaults. Earlier entries (from child configs) take priority over
+/// later entries (from parent configs).
+///
+/// In TOML, override blocks are written as `[[override]]` (double brackets) to
+/// create an array of tables.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Override Rule")]
 pub struct Override {
-    /// Glob patterns for instance file paths this override applies to.
+    /// Glob patterns matched against instance file paths (relative to the
+    /// working directory).
+    ///
+    /// Use standard glob syntax: `*` matches any single path component, `**`
+    /// matches zero or more path components, and `?` matches a single
+    /// character.
+    #[schemars(
+        title = "File Patterns",
+        example = &["schemas/vector.json"],
+        example = &["schemas/**/*.json"],
+        example = &["config/*.yaml"],
+    )]
     #[serde(default)]
     pub files: Vec<String>,
 
-    /// Glob patterns for schema URIs this override applies to.
-    /// Matched against the original URI (before rewrites) and the resolved
-    /// URI (after rewrites and `//` resolution).
+    /// Glob patterns matched against schema URIs.
+    ///
+    /// Each pattern is tested against both the original URI (before rewrite
+    /// rules) and the resolved URI (after rewrites and `//` prefix
+    /// resolution), so you can match on either form.
+    #[schemars(
+        title = "Schema Patterns",
+        example = &["https://json.schemastore.org/vector.json"],
+        example = &["https://json.schemastore.org/*.json"],
+    )]
     #[serde(default)]
     pub schemas: Vec<String>,
 
-    /// Whether to enable JSON Schema format validation for matched files.
-    /// When `None`, the override does not affect format validation.
+    /// Enable or disable JSON Schema `format` keyword validation for matching
+    /// files.
+    ///
+    /// When `true`, string values are validated against built-in formats such
+    /// as `date-time`, `email`, `uri`, etc. When `false`, format annotations
+    /// are ignored during validation. When omitted, this override does not
+    /// affect the format validation setting and the next matching override (or
+    /// the default of `true`) applies.
+    #[schemars(title = "Validate Formats")]
     #[serde(default)]
     pub validate_formats: Option<bool>,
 }
 
+/// Configuration file for the Lintel JSON/YAML schema validator.
+///
+/// Lintel walks up the directory tree from the validated file looking for
+/// `lintel.toml` files and merges them together. Settings in child directories
+/// take priority over parent directories. Set `root = true` to stop the upward
+/// search.
+///
+/// Place `lintel.toml` at your project root (or any subdirectory that needs
+/// different settings).
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "lintel.toml")]
 pub struct Config {
-    /// If true, stop walking up the directory tree. No parent `lintel.toml`
-    /// files will be merged.
+    /// Mark this configuration file as the project root.
+    ///
+    /// When `true`, Lintel stops walking up the directory tree and will not
+    /// merge any `lintel.toml` files from parent directories. Use this at your
+    /// repository root to prevent inheriting settings from enclosing
+    /// directories.
     #[serde(default)]
     pub root: bool,
 
     /// Glob patterns for files to exclude from validation.
+    ///
+    /// Matched against file paths relative to the working directory. Standard
+    /// glob syntax is supported: `*` matches within a single directory, `**`
+    /// matches across directory boundaries.
+    #[schemars(title = "Exclude Patterns", example = &["vendor/**", "testdata/**", "*.generated.json"])]
     #[serde(default)]
     pub exclude: Vec<String>,
 
-    /// Custom schema mappings. Keys are glob patterns matching file paths;
-    /// values are schema URLs to use for those files.
+    /// Custom schema-to-file mappings.
     ///
-    /// These take priority over catalog matching but are overridden by
-    /// inline `$schema` properties and YAML modeline comments.
+    /// Keys are glob patterns matched against file paths; values are schema
+    /// URLs (or `//`-prefixed local paths) to apply. These mappings take
+    /// priority over catalog auto-detection but are overridden by inline
+    /// `$schema` properties and YAML modeline comments.
+    ///
+    /// Example:
+    /// ```toml
+    /// [schemas]
+    /// "config/*.yaml" = "https://json.schemastore.org/github-workflow.json"
+    /// "myschema.json" = "//schemas/custom.json"
+    /// ```
+    #[schemars(title = "Schema Mappings")]
     #[serde(default)]
     pub schemas: HashMap<String, String>,
 
-    /// If true, skip the built-in Lintel catalog (only use `SchemaStore`
-    /// and any extra registries).
+    /// Disable the built-in Lintel catalog.
+    ///
+    /// When `true`, only `SchemaStore` and any additional registries listed in
+    /// `registries` are used for schema auto-detection. The default Lintel
+    /// catalog (which provides curated schema mappings) is skipped.
+    #[schemars(title = "No Default Catalog")]
     #[serde(default, rename = "no-default-catalog")]
     pub no_default_catalog: bool,
 
     /// Additional schema catalog URLs to fetch alongside `SchemaStore`.
-    /// Each URL should point to a JSON file with the same format as
-    /// the `SchemaStore` catalog (`{"schemas": [...]}`).
+    ///
+    /// Each entry should be a URL pointing to a JSON file in `SchemaStore`
+    /// catalog format (`{"schemas": [...]}`).
+    ///
+    /// Registries from child configs appear first, followed by parent
+    /// registries (duplicates are removed). This lets child directories add
+    /// project-specific catalogs while inheriting organization-wide ones.
+    #[schemars(title = "Additional Registries", example = &["https://example.com/custom-catalog.json"])]
     #[serde(default)]
     pub registries: Vec<String>,
 
-    /// Schema URI rewrite rules. Keys are prefixes to match; values are
-    /// replacements. For example, `"http://localhost:8000/" = "//schemas/"`
-    /// rewrites any schema URI starting with `http://localhost:8000/` so that
-    /// prefix becomes `//schemas/`.
+    /// Schema URI rewrite rules.
+    ///
+    /// Keys are URI prefixes to match; values are replacement prefixes. The
+    /// longest matching prefix wins. Use `//` as a value prefix to reference
+    /// paths relative to the directory containing `lintel.toml`.
+    ///
+    /// Example:
+    /// ```toml
+    /// [rewrite]
+    /// "http://localhost:8000/" = "//schemas/"
+    /// ```
+    /// This rewrites `http://localhost:8000/foo.json` to
+    /// `//schemas/foo.json`, which then resolves to a local file relative to
+    /// the config directory.
+    #[schemars(title = "Rewrite Rules")]
     #[serde(default)]
     pub rewrite: HashMap<String, String>,
 
-    /// Per-file overrides. Earlier entries (child configs) take priority.
+    /// Per-file or per-schema override rules.
+    ///
+    /// In TOML, each override is written as a `[[override]]` block (double
+    /// brackets). Earlier entries take priority; child config overrides come
+    /// before parent config overrides after merging.
     #[serde(default, rename = "override")]
     pub overrides: Vec<Override>,
 }

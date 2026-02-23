@@ -1,6 +1,6 @@
 [package]
 name = "lintel-identify"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
 description = "Schema identification for JSON and YAML files using JSON Schema"
@@ -14,13 +14,15 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.7", path = "../lintel-check" }
-lintel-cli-common = { version = "0.0.2", path = "../lintel-cli-common" }
-schemastore = { version = "0.0.5", path = "../schemastore" }
-jsonschema-explain = { version = "0.1.0", path = "../jsonschema-explain" }
+lintel-config = { version = "0.0.4", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
+lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
+lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
+schemastore = { version = "0.0.6", path = "../schemastore" }
+jsonschema-explain = { version = "0.2.0", path = "../jsonschema-explain" }
 bpaf = { version = "0.9", features = ["derive"] }
-humantime = "2"
 glob-match = "0.2"
 anyhow = "1"
 serde_json = "1"
 tracing = "0.1"
+terminal_size = "0.4"

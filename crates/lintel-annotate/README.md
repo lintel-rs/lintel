@@ -5,13 +5,13 @@
 [![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/lintel-annotate.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-Annotation-based linting for JSON and YAML files using JSON Schema
+Add schema annotations (`$schema`, YAML modelines, TOML schema comments) to JSON, YAML, and TOML files.
 
 ## Features
 
-- Runs [Lintel](https://github.com/lintel-rs/lintel) validation on the specified files
-- Collects errors with file path, line, and column information
-- Outputs annotations in a format suitable for CI systems
+- Automatically resolves schemas via catalog matching and `lintel.toml` mappings
+- Adds `$schema` to JSON/JSON5/JSONC, YAML modelines, and TOML `:schema` comments
+- Updates existing annotations with `--update`
 - Supports glob patterns and exclude filters
 
 ## License

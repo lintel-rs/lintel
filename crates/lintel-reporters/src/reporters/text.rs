@@ -1,10 +1,9 @@
 use core::time::Duration;
 
-use lintel_check::diagnostics::DEFAULT_LABEL;
-use lintel_check::validate::{CheckedFile, LintError, ValidateResult};
-
-use crate::format_checked_verbose;
-use crate::reporter::Reporter;
+use lintel_validate::diagnostics::DEFAULT_LABEL;
+use lintel_validate::format_checked_verbose;
+use lintel_validate::reporter::Reporter;
+use lintel_validate::validate::{CheckedFile, LintError, ValidateResult};
 
 /// Text reporter: plain one-line-per-error output suitable for CI pipelines.
 pub struct TextReporter {
@@ -17,10 +16,7 @@ impl Reporter for TextReporter {
         for error in &result.errors {
             let path = error.path();
             match error {
-                LintError::Validation { instance_path, .. }
-                | LintError::Config { instance_path, .. }
-                    if instance_path != DEFAULT_LABEL =>
-                {
+                LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
                     eprintln!("error: {path}: {} (at {instance_path})", error.message(),);
                 }
                 _ => {

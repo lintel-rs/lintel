@@ -1,0 +1,3 @@
+[[package]]
+name = "lintel"
+git_tag_name = "v{{ version }}"

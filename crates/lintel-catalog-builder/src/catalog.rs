@@ -77,6 +77,7 @@ mod tests {
                 name: "Test".into(),
                 description: "A test".into(),
                 url: "https://example.com/test.json".into(),
+                source_url: None,
                 file_match: vec!["*.test".into()],
                 versions: BTreeMap::new(),
             }],

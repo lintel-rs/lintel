@@ -30,30 +30,77 @@ let
       // extraArgs
     );
 
+  cargo-furnish = mkPackage ../crates/cargo-furnish {
+    postInstall = ''
+      installShellCompletion --cmd cargo-furnish \
+        --bash <($out/bin/cargo-furnish --bpaf-complete-style-bash) \
+        --zsh <($out/bin/cargo-furnish --bpaf-complete-style-zsh) \
+        --fish <($out/bin/cargo-furnish --bpaf-complete-style-fish)
+      $out/bin/cargo-furnish man > cargo-furnish.1
+      installManPage cargo-furnish.1
+    '';
+    nativeBuildInputs = [ pkgs.installShellFiles ];
+  };
+
   lintel = mkPackage ../crates/lintel {
     postInstall = ''
       installShellCompletion --cmd lintel \
         --bash <($out/bin/lintel --bpaf-complete-style-bash) \
         --zsh <($out/bin/lintel --bpaf-complete-style-zsh) \
         --fish <($out/bin/lintel --bpaf-complete-style-fish)
+      $out/bin/lintel man > lintel.1
+      installManPage lintel.1
     '';
     nativeBuildInputs = [ pkgs.installShellFiles ];
   };
 
-  lintel-schemastore-catalog = mkPackage ../crates/lintel-schemastore-catalog { };
+  lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder {
+    postInstall = ''
+      installShellCompletion --cmd lintel-catalog-builder \
+        --bash <($out/bin/lintel-catalog-builder --bpaf-complete-style-bash) \
+        --zsh <($out/bin/lintel-catalog-builder --bpaf-complete-style-zsh) \
+        --fish <($out/bin/lintel-catalog-builder --bpaf-complete-style-fish)
+      $out/bin/lintel-catalog-builder man > lintel-catalog-builder.1
+      installManPage lintel-catalog-builder.1
+    '';
+    nativeBuildInputs = [ pkgs.installShellFiles ];
+  };
+
+  lintel-config-schema-generator = mkPackage ../crates/lintel-config-schema-generator { };
 
   lintel-github-action = mkPackage ../crates/lintel-github-action { };
 
-  cargo-furnish = mkPackage ../crates/cargo-furnish { };
+  lintel-schemastore-catalog = mkPackage ../crates/lintel-schemastore-catalog {
+    postInstall = ''
+      installShellCompletion --cmd lintel-schemastore-catalog \
+        --bash <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-bash) \
+        --zsh <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-zsh) \
+        --fish <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-fish)
+      $out/bin/lintel-schemastore-catalog man > lintel-schemastore-catalog.1
+      installManPage lintel-schemastore-catalog.1
+    '';
+    nativeBuildInputs = [ pkgs.installShellFiles ];
+  };
 
-  lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder { };
+  npm-release-binaries = mkPackage ../crates/npm-release-binaries { };
+
+  packages = {
+    inherit
+      cargo-furnish
+      lintel
+      lintel-catalog-builder
+      lintel-config-schema-generator
+      lintel-github-action
+      lintel-schemastore-catalog
+      npm-release-binaries
+      ;
+  };
 in
-{
-  inherit
-    lintel
-    lintel-schemastore-catalog
-    lintel-github-action
-    cargo-furnish
-    lintel-catalog-builder
-    ;
+packages
+// {
+  default = lintel;
+  all = pkgs.symlinkJoin {
+    name = "lintel-all";
+    paths = builtins.attrValues packages;
+  };
 }

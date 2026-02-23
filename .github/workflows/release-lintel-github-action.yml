@@ -1,0 +1,63 @@
+name: Release Lintel GitHub Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.0.7)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check ref is a version tag
+        run: |
+          if [[ ! "${{ github.ref }}" =~ ^refs/tags/lintel-github-action-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::This workflow must be run on a lintel-github-action-vX.Y.Z tag (via --ref), got ${{ github.ref }}"
+            exit 1
+          fi
+
+  build-nix:
+    name: Build (x86_64-linux)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lintel
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build
+        run: nix build .#lintel-github-action
+
+      - name: Package
+        run: tar czf lintel-github-action-x86_64-unknown-linux-gnu.tar.gz -C result/bin lintel-github-action
+
+      - name: Publish release to lintel-rs/action
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
+        run: |
+          gh release create "lintel-github-action-v${{ inputs.version }}" \
+            lintel-github-action-x86_64-unknown-linux-gnu.tar.gz \
+            --repo lintel-rs/action \
+            --title "lintel-github-action-v${{ inputs.version }}" \
+            --generate-notes
+
+      - name: Update major version tag
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
+        run: |
+          MAJOR="v$(echo "${{ inputs.version }}" | cut -d. -f1)"
+          SHA=$(gh api repos/lintel-rs/action/git/ref/tags/lintel-github-action-v${{ inputs.version }} --jq .object.sha)
+          gh api repos/lintel-rs/action/git/refs/tags/${MAJOR} \
+            -X PATCH -f sha="$SHA" -F force=true 2>/dev/null \
+          || gh api repos/lintel-rs/action/git/refs \
+            -X POST -f ref="refs/tags/${MAJOR}" -f sha="$SHA"

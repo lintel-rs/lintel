@@ -32,42 +32,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Create vX.Y.Z tag for lintel
-        if: steps.release-plz.outputs.releases != '[]'
-        env:
-          RELEASES: ${{ steps.release-plz.outputs.releases }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^lintel-v\\d")) | .tag')
-          if [ -n "$TAG" ]; then
-            VERSION="${TAG#lintel-}"
-            # Look up the tag ref — release-plz creates annotated tags,
-            # so we need to dereference to get the underlying commit SHA.
-            REF=$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG")
-            OBJ_SHA=$(echo "$REF" | jq -r '.object.sha')
-            OBJ_TYPE=$(echo "$REF" | jq -r '.object.type')
-            if [ "$OBJ_TYPE" = "tag" ]; then
-              OBJ_SHA=$(gh api "repos/${{ github.repository }}/git/tags/$OBJ_SHA" --jq '.object.sha')
-            fi
-            gh api "repos/${{ github.repository }}/git/refs" \
-              -f ref="refs/tags/$VERSION" \
-              -f sha="$OBJ_SHA"
-          fi
-
       - name: Trigger release workflow
         if: steps.release-plz.outputs.releases != '[]'
         env:
           RELEASES: ${{ steps.release-plz.outputs.releases }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^lintel-v\\d")) | .tag')
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^v\\d")) | .tag')
           if [ -n "$TAG" ]; then
-            gh workflow run release.yml --ref "$TAG"
+            VERSION="${TAG#v}"
+            gh workflow run release-lintel.yml --ref "$TAG" -f version="$VERSION"
           fi
 
           ACTION_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-github-action-v")) | .tag')
           if [ -n "$ACTION_TAG" ]; then
-            gh workflow run release-github-action.yml --ref "$ACTION_TAG"
+            ACTION_VERSION="${ACTION_TAG#lintel-github-action-v}"
+            gh workflow run release-lintel-github-action.yml --ref "$ACTION_TAG" -f version="$ACTION_VERSION"
           fi
 
   release-plz-pr:

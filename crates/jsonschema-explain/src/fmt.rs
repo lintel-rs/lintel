@@ -13,10 +13,22 @@ pub(crate) struct Fmt<'a> {
     pub magenta: &'a str, // values (defaults, enums, constants)
     pub red: &'a str,     // required field markers
     pub syntax_highlight: bool,
+    pub width: usize,
 }
 
 impl Fmt<'_> {
-    pub fn color() -> Self {
+    /// Build a `Fmt` from [`ExplainOptions`](crate::ExplainOptions).
+    pub fn from_opts(opts: &crate::ExplainOptions) -> Self {
+        let mut f = if opts.color {
+            Self::color(opts.width)
+        } else {
+            Self::plain(opts.width)
+        };
+        f.syntax_highlight = opts.syntax_highlight;
+        f
+    }
+
+    pub fn color(width: usize) -> Self {
         Fmt {
             bold: BOLD,
             dim: DIM,
@@ -27,10 +39,11 @@ impl Fmt<'_> {
             magenta: MAGENTA,
             red: RED,
             syntax_highlight: true,
+            width,
         }
     }
 
-    pub fn plain() -> Self {
+    pub fn plain(width: usize) -> Self {
         Fmt {
             bold: "",
             dim: "",
@@ -41,6 +54,7 @@ impl Fmt<'_> {
             magenta: "",
             red: "",
             syntax_highlight: false,
+            width,
         }
     }
 
@@ -63,7 +77,7 @@ impl Fmt<'_> {
 /// Format a type string with color.
 ///
 /// Splits on ` | ` to colorize each alternative, and handles
-/// compound types like `array of string`.
+/// compound types like `string[]`.
 pub(crate) fn format_type(ty: &str, f: &Fmt<'_>) -> String {
     if ty.is_empty() {
         return String::new();
@@ -74,15 +88,8 @@ pub(crate) fn format_type(ty: &str, f: &Fmt<'_>) -> String {
             .map(|p| format!("{}{p}{}", f.cyan, f.reset))
             .collect::<Vec<_>>()
             .join(&separator)
-    } else if let Some(rest) = ty.strip_prefix("array of ") {
-        format!(
-            "{}array{} {}of{} {}",
-            f.cyan,
-            f.reset,
-            f.dim,
-            f.reset,
-            format_type(rest, f)
-        )
+    } else if let Some(rest) = ty.strip_suffix("[]") {
+        format!("{}{}[]{}", format_type(rest, f), f.cyan, f.reset)
     } else {
         format!("{}{ty}{}", f.cyan, f.reset)
     }
@@ -111,8 +118,7 @@ pub(crate) fn format_value(val: &serde_json::Value) -> String {
 pub(crate) const COMPOSITION_KEYWORDS: &[&str] = &["oneOf", "anyOf", "allOf"];
 
 /// Format a centered header line: `LEFT      CENTER      LEFT`
-pub(crate) fn format_header(left: &str, center: &str) -> String {
-    let width = 76;
+pub(crate) fn format_header(left: &str, center: &str, width: usize) -> String {
     let total_content = left.len() * 2 + center.len();
     if total_content >= width {
         return format!("{left}  {center}  {left}");

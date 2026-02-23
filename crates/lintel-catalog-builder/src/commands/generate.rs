@@ -9,10 +9,10 @@ use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
 use crate::catalog::build_output_catalog;
-use crate::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 use crate::download::{DownloadItem, download_batch, download_one};
 use crate::refs::{RefRewriteContext, resolve_and_rewrite};
 use crate::targets::{AnyTarget, OutputContext, Target};
+use lintel_catalog_builder::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 
 /// Cross-cutting state shared across the entire generation run.
 struct GenerateContext<'a> {
@@ -156,14 +156,14 @@ async fn generate_for_target(
 
             let schema_url = format!("{trimmed_base}/schemas/{group_key}/{filename}");
 
-            if let Some(url) = &schema_def.url {
+            let schema_text = if let Some(url) = &schema_def.url {
                 // Download external schema
-                info!(url = %url, dest = %dest_path.display(), "downloading group schema");
-                let text = download_one(ctx.cache, url, &dest_path)
+                let (text, status) = download_one(ctx.cache, url, &dest_path)
                     .await
                     .with_context(|| format!("failed to download schema for {group_key}/{key}"))?;
+                info!(url = %url, status = %status, "downloaded group schema");
 
-                // Resolve $ref dependencies
+                // Resolve $ref dependencies and set $id
                 resolve_and_rewrite(
                     &mut RefRewriteContext {
                         cache: ctx.cache,
@@ -173,8 +173,10 @@ async fn generate_for_target(
                     },
                     &text,
                     &dest_path,
+                    &schema_url,
                 )
                 .await?;
+                text
             } else {
                 // Local schema — should exist at schemas/<group>/<key>.json relative to config dir
                 let source_path = ctx
@@ -195,7 +197,7 @@ async fn generate_for_target(
                         format!("failed to read local schema {}", source_path.display())
                     })?;
 
-                // Resolve $ref deps and fix invalid URI references
+                // Resolve $ref deps, fix invalid URI references, and set $id
                 resolve_and_rewrite(
                     &mut RefRewriteContext {
                         cache: ctx.cache,
@@ -205,15 +207,32 @@ async fn generate_for_target(
                     },
                     &text,
                     &dest_path,
+                    &schema_url,
                 )
                 .await?;
-            }
+                text
+            };
 
-            group_schema_names.push(schema_def.name.clone());
+            // Auto-populate name and description from the JSON Schema if not
+            // explicitly provided in the config.
+            let (schema_title, schema_desc) = extract_schema_meta(&schema_text);
+            let name = schema_def
+                .name
+                .clone()
+                .or(schema_title)
+                .unwrap_or_else(|| key.clone());
+            let description = schema_def
+                .description
+                .clone()
+                .or(schema_desc)
+                .unwrap_or_default();
+
+            group_schema_names.push(name.clone());
             entries.push(SchemaEntry {
-                name: schema_def.name.clone(),
-                description: schema_def.description.clone(),
+                name,
+                description,
                 url: schema_url,
+                source_url: schema_def.url.clone(),
                 file_match: schema_def.file_match.clone(),
                 versions: BTreeMap::new(),
             });
@@ -441,6 +460,7 @@ async fn process_source(
                 name: info.name.clone(),
                 description: info.description.clone(),
                 url,
+                source_url: Some(info.url.clone()),
                 file_match: info.file_match.clone(),
                 versions: info.versions.clone(),
             }
@@ -488,6 +508,7 @@ async fn resolve_source_refs(
             },
             &text,
             &item.dest,
+            &info.local_url,
         )
         .await
         .with_context(|| format!("failed to process refs for {}", info.name))?;
@@ -590,6 +611,25 @@ fn organize_glob_matches(pattern: &str, text: &str) -> bool {
     true
 }
 
+/// Extract the `title` and `description` from a JSON Schema string.
+///
+/// Returns `(title, description)` — either or both may be `None` if the schema
+/// doesn't contain the corresponding top-level property or isn't valid JSON.
+fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return (None, None);
+    };
+    let title = value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let description = value
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    (title, description)
+}
+
 /// Convert a key like `"github"` to title case (`"Github"`).
 fn title_case(s: &str) -> String {
     let mut chars = s.chars();
@@ -637,6 +677,7 @@ mod tests {
             name: name.into(),
             description: String::new(),
             url: url.into(),
+            source_url: None,
             file_match: file_match.into_iter().map(String::from).collect(),
             versions: BTreeMap::new(),
         }

@@ -2,3 +2,4 @@
 crates/prettier-jsonc/tests/fixtures/
 crates/prettier-rs/tests/fixtures/
 crates/prettier-yaml/tests/fixtures/
+**/testdata/malformed/

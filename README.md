@@ -9,11 +9,14 @@
 
 [![CI][ci-badge]][ci-url]
 [![crates.io][crates-badge]][crates-url]
+[![npm][npm-badge]][npm-url]
 
 [ci-badge]: https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/lintel-rs/lintel/actions/workflows/ci.yml
 [crates-badge]: https://img.shields.io/crates/v/lintel?color=60a5fa
 [crates-url]: https://crates.io/crates/lintel
+[npm-badge]: https://img.shields.io/npm/v/@lintel/lintel?color=60a5fa
+[npm-url]: https://www.npmjs.com/package/@lintel/lintel
 
 </div>
 
@@ -31,10 +34,12 @@
 cargo install lintel
 ```
 
-Or with npm:
+Or with [npm](https://www.npmjs.com/package/@lintel/lintel):
 
 ```shell
-npx lintel check
+npx @lintel/lintel check
+bunx @lintel/lintel check
+pnpx @lintel/lintel check
 ```
 
 Or with Nix:

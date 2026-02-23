@@ -1,6 +1,6 @@
 use core::time::Duration;
 
-use lintel_check::validate::{CheckedFile, ValidateResult};
+use crate::validate::{CheckedFile, ValidateResult};
 
 /// Trait for formatting and outputting validation results.
 pub trait Reporter {

@@ -13,7 +13,7 @@ Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel)
 - **Hierarchical loading** — walks up the directory tree merging `lintel.toml` files until `root = true`
 - **URI rewriting** — prefix-based rewrite rules with longest-prefix-wins semantics
 - **`//` path resolution** — resolve `//`-prefixed paths relative to the config directory
-- **Schema generation** — generates the JSON Schema for `lintel.toml` (used at build time by `lintel-check` and as a standalone binary)
+- **Schema generation** — generates the JSON Schema for `lintel.toml` (used at build time by `lintel-validate` and as a standalone binary)
 
 ## Usage
 

@@ -4,12 +4,13 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use lintel_schema_cache::SchemaCache;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 /// A downloaded `$ref` dependency pending recursive processing.
 struct DownloadedDep {
     text: String,
     filename: String,
+    url: String,
 }
 
 /// Shared context for [`resolve_and_rewrite`], grouping cross-cutting state
@@ -210,9 +211,19 @@ pub async fn resolve_and_rewrite(
     ctx: &mut RefRewriteContext<'_>,
     schema_text: &str,
     schema_dest: &Path,
+    schema_url: &str,
 ) -> Result<()> {
     let mut value: serde_json::Value =
         serde_json::from_str(schema_text).context("failed to parse schema JSON")?;
+
+    // Set $id to the canonical URL where this schema will be hosted
+    value
+        .as_object_mut()
+        .context("schema root must be an object")?
+        .insert(
+            "$id".to_string(),
+            serde_json::Value::String(schema_url.to_string()),
+        );
 
     let external_refs = find_external_refs(&value);
     if external_refs.is_empty() {
@@ -251,17 +262,19 @@ pub async fn resolve_and_rewrite(
         let dest_path = ctx.shared_dir.join(&filename);
 
         match crate::download::download_one(ctx.cache, ref_url, &dest_path).await {
-            Ok(dep_text) => {
+            Ok((dep_text, status)) => {
+                info!(url = %ref_url, status = %status, "downloaded $ref dependency");
                 ctx.already_downloaded
                     .insert(ref_url.clone(), filename.clone());
                 let local_url = format!(
                     "{}/{filename}",
                     ctx.base_url_for_shared.trim_end_matches('/')
                 );
-                url_map.insert(ref_url.clone(), local_url);
+                url_map.insert(ref_url.clone(), local_url.clone());
                 to_process.push(DownloadedDep {
                     text: dep_text,
                     filename,
+                    url: local_url,
                 });
             }
             Err(e) => {
@@ -279,7 +292,7 @@ pub async fn resolve_and_rewrite(
     // Recursively process transitive deps
     for dep in to_process {
         let dep_dest = ctx.shared_dir.join(&dep.filename);
-        Box::pin(resolve_and_rewrite(ctx, &dep.text, &dep_dest)).await?;
+        Box::pin(resolve_and_rewrite(ctx, &dep.text, &dep_dest, &dep.url)).await?;
     }
 
     Ok(())

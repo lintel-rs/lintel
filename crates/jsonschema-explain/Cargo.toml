@@ -1,6 +1,6 @@
 [package]
 name = "jsonschema-explain"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 authors.workspace = true
 description = "Render JSON Schema as human-readable terminal documentation"
@@ -16,5 +16,4 @@ workspace = true
 [dependencies]
 ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
 serde_json = "1"
-markdown-to-ansi = { version = "0.1.0", path = "../markdown-to-ansi" }
-terminal_size = "0.4"
+markdown-to-ansi = { version = "0.1.1", path = "../markdown-to-ansi" }

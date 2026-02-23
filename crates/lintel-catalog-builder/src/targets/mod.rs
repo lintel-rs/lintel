@@ -9,7 +9,7 @@ use schema_catalog::{Catalog, SchemaEntry};
 use tracing::debug;
 
 use crate::catalog::write_catalog_json;
-use crate::config::TargetConfig;
+use lintel_catalog_builder::config::TargetConfig;
 
 pub use self::dir::DirTarget;
 pub use self::github_pages::GitHubPagesTarget;
@@ -397,6 +397,7 @@ mod tests {
                     name: "A".into(),
                     description: String::new(),
                     url: String::new(),
+                    source_url: None,
                     file_match: vec![],
                     versions: BTreeMap::new(),
                 },
@@ -404,6 +405,7 @@ mod tests {
                     name: "B".into(),
                     description: String::new(),
                     url: String::new(),
+                    source_url: None,
                     file_match: vec![],
                     versions: BTreeMap::new(),
                 },

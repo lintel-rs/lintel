@@ -7,8 +7,11 @@ use lintel_cli_common::CLIGlobalOptions;
 use tracing_subscriber::prelude::*;
 
 use lintel_annotate::annotate_args;
+use lintel_check::{CheckArgs, check_args};
+use lintel_explain::explain_args;
 use lintel_identify::identify_args;
-use lintel_reporters::{ReporterKind, ValidateArgs, make_reporter, validate_args};
+use lintel_reporters::{ReporterKind, make_reporter};
+use lintel_validate::{ValidateArgs, validate_args};
 
 mod commands;
 
@@ -66,7 +69,7 @@ enum Commands {
             fallback(ReporterKind::Pretty)
         )]
         ReporterKind,
-        #[bpaf(external(validate_args))] ValidateArgs,
+        #[bpaf(external(check_args))] CheckArgs,
     ),
 
     #[bpaf(command("ci"))]
@@ -78,6 +81,20 @@ enum Commands {
             long("reporter"),
             argument("pretty|text|github"),
             fallback(ReporterKind::Text)
+        )]
+        ReporterKind,
+        #[bpaf(external(validate_args))] ValidateArgs,
+    ),
+
+    #[bpaf(command("validate"))]
+    /// Validate files against their schemas
+    Validate(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        /// Output format
+        #[bpaf(
+            long("reporter"),
+            argument("pretty|text|github"),
+            fallback(ReporterKind::Pretty)
         )]
         ReporterKind,
         #[bpaf(external(validate_args))] ValidateArgs,
@@ -95,6 +112,13 @@ enum Commands {
     Format(
         #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
         #[bpaf(external(lintel_format::format_args))] lintel_format::FormatArgs,
+    ),
+
+    #[bpaf(command("explain"))]
+    /// Show JSON Schema documentation for a schema or file
+    Explain(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(explain_args))] lintel_explain::ExplainArgs,
     ),
 
     #[bpaf(command("init"))]
@@ -125,6 +149,10 @@ enum Commands {
     #[bpaf(command("version"))]
     /// Print version information
     Version,
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 /// Set up tracing from CLI `--log-level` flag, falling back to `LINTEL_LOG` env.
@@ -186,20 +214,31 @@ fn setup_miette(global: &CLIGlobalOptions) {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = cli().run();
+    let opts = cli().run();
 
-    let result = match cli.command {
-        Commands::Check(global, reporter_kind, mut args)
-        | Commands::CI(global, reporter_kind, mut args) => {
+    let result = match opts.command {
+        Commands::Check(global, reporter_kind, mut args) => {
             setup_tracing(&global);
             setup_miette(&global);
             let mut reporter = make_reporter(reporter_kind, global.verbose);
-            lintel_reporters::run(&mut args, reporter.as_mut()).await
+            lintel_check::run(&mut args, reporter.as_mut()).await
+        }
+        Commands::CI(global, reporter_kind, mut args)
+        | Commands::Validate(global, reporter_kind, mut args) => {
+            setup_tracing(&global);
+            setup_miette(&global);
+            let mut reporter = make_reporter(reporter_kind, global.verbose);
+            lintel_validate::run(&mut args, reporter.as_mut()).await
         }
         Commands::Identify(global, args) => {
             setup_tracing(&global);
             setup_miette(&global);
             lintel_identify::run(args, &global).await
+        }
+        Commands::Explain(global, args) => {
+            setup_tracing(&global);
+            setup_miette(&global);
+            lintel_explain::run(args, &global).await
         }
         Commands::Annotate(global, args) => {
             setup_tracing(&global);
@@ -226,6 +265,17 @@ async fn main() -> ExitCode {
         }
         Commands::Version => {
             println!("lintel {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Commands::Man => {
+            let roff = cli().render_manpage(
+                "lintel",
+                bpaf::doc::Section::General,
+                None,
+                None,
+                Some("Lintel Manual"),
+            );
+            print!("{roff}");
             return ExitCode::SUCCESS;
         }
     };
@@ -256,13 +306,13 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert_eq!(args.globs, vec!["*.json"]);
-                assert!(args.exclude.is_empty());
-                assert!(args.cache_dir.is_none());
-                assert!(!args.force_schema_fetch);
-                assert!(!args.force_validation);
-                assert!(!args.force);
-                assert!(!args.no_catalog);
+                assert_eq!(args.validate.globs, vec!["*.json"]);
+                assert!(args.validate.exclude.is_empty());
+                assert!(args.validate.cache.cache_dir.is_none());
+                assert!(!args.validate.cache.force_schema_fetch);
+                assert!(!args.validate.cache.force_validation);
+                assert!(!args.validate.cache.force);
+                assert!(!args.validate.cache.no_catalog);
             }
             _ => panic!("expected Check"),
         }
@@ -289,13 +339,13 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert_eq!(args.globs, vec!["*.json", "**/*.json"]);
-                assert_eq!(args.exclude, vec!["node_modules/**", "vendor/**"]);
-                assert_eq!(args.cache_dir.as_deref(), Some("/tmp/cache"));
-                assert!(args.force_schema_fetch);
-                assert!(args.force_validation);
-                assert!(!args.force);
-                assert!(args.no_catalog);
+                assert_eq!(args.validate.globs, vec!["*.json", "**/*.json"]);
+                assert_eq!(args.validate.exclude, vec!["node_modules/**", "vendor/**"]);
+                assert_eq!(args.validate.cache.cache_dir.as_deref(), Some("/tmp/cache"));
+                assert!(args.validate.cache.force_schema_fetch);
+                assert!(args.validate.cache.force_validation);
+                assert!(!args.validate.cache.force);
+                assert!(args.validate.cache.no_catalog);
             }
             _ => panic!("expected Check"),
         }
@@ -309,10 +359,10 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert!(args.force);
+                assert!(args.validate.cache.force);
                 // The individual flags should be false in the CLI struct --
                 // the combination happens in the From impl.
-                let lib_args = lintel_check::validate::ValidateArgs::from(&args);
+                let lib_args = lintel_validate::validate::ValidateArgs::from(&args.validate);
                 assert!(lib_args.force_schema_fetch);
                 assert!(lib_args.force_validation);
             }
@@ -328,7 +378,7 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match cli.command {
             Commands::Check(_, _, args) => {
-                assert!(args.globs.is_empty());
+                assert!(args.validate.globs.is_empty());
             }
             _ => panic!("expected Check"),
         }
@@ -343,7 +393,7 @@ mod tests {
         match cli.command {
             Commands::CI(_, _, args) => {
                 assert_eq!(args.globs, vec!["*.json"]);
-                assert!(args.no_catalog);
+                assert!(args.cache.no_catalog);
             }
             _ => panic!("expected CI"),
         }
@@ -402,6 +452,180 @@ mod tests {
                 assert_eq!(reporter_kind, ReporterKind::Pretty);
             }
             _ => panic!("expected CI"),
+        }
+        Ok(())
+    }
+
+    // --- explain subcommand ---
+
+    #[test]
+    fn cli_parses_explain_schema() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--schema", "https://example.com/s.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.schema.as_deref(), Some("https://example.com/s.json"));
+                assert!(args.file.is_none());
+                assert!(args.positional.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_file_with_pointer() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--file", "config.yaml", "/properties/name"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.file.as_deref(), Some("config.yaml"));
+                assert_eq!(args.positional.as_deref(), Some("/properties/name"));
+                assert!(args.schema.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_with_jsonpath() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--schema", "s.json", "$.name.age"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.schema.as_deref(), Some("s.json"));
+                assert_eq!(args.positional.as_deref(), Some("$.name.age"));
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_cache_options() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&[
+                "explain",
+                "--schema",
+                "s.json",
+                "--cache-dir",
+                "/tmp/cache",
+                "--no-catalog",
+                "--force",
+            ])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.cache.cache_dir.as_deref(), Some("/tmp/cache"));
+                assert!(args.cache.no_catalog);
+                assert!(args.cache.force);
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_display_options() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&[
+                "explain",
+                "--schema",
+                "s.json",
+                "--no-syntax-highlighting",
+                "--no-pager",
+            ])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert!(args.no_syntax_highlighting);
+                assert!(args.no_pager);
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_path() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--path", "tsconfig.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.resolve_path.as_deref(), Some("tsconfig.json"));
+                assert!(args.file.is_none());
+                assert!(args.schema.is_none());
+                assert!(args.positional.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_path_with_pointer() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--path", "config.yaml", "/properties/name"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.resolve_path.as_deref(), Some("config.yaml"));
+                assert_eq!(args.positional.as_deref(), Some("/properties/name"));
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_schema_with_file() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--schema", "s.json", "--file", "data.yaml"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.schema.as_deref(), Some("s.json"));
+                assert_eq!(args.file.as_deref(), Some("data.yaml"));
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_positional_only() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "package.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.positional.as_deref(), Some("package.json"));
+                assert!(args.pointer.is_none());
+                assert!(args.file.is_none());
+                assert!(args.resolve_path.is_none());
+                assert!(args.schema.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_positional_with_pointer() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "package.json", "name"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.positional.as_deref(), Some("package.json"));
+                assert_eq!(args.pointer.as_deref(), Some("name"));
+            }
+            _ => panic!("expected Explain"),
         }
         Ok(())
     }

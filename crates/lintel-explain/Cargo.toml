@@ -1,0 +1,30 @@
+[package]
+name = "lintel-explain"
+version = "0.0.1"
+edition.workspace = true
+authors.workspace = true
+description = "Inspect JSON Schema documentation for specific properties"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "documentation", "terminal", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
+lintel-identify = { version = "0.0.4", path = "../lintel-identify" }
+lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
+jsonschema-explain = { version = "0.2.0", path = "../jsonschema-explain" }
+bpaf = { version = "0.9", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+terminal_size = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+tempfile = "3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

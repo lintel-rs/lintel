@@ -10,7 +10,6 @@ use tracing_subscriber::prelude::*;
 
 mod catalog;
 mod commands;
-mod config;
 mod download;
 mod refs;
 mod targets;
@@ -53,30 +52,38 @@ enum Commands {
     /// Print version information
     #[bpaf(command("version"))]
     Version,
+
+    #[bpaf(command("man"), hide)]
+    /// Generate man page in roff format
+    Man,
 }
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // Set up tracing subscriber controlled by LINTEL_LOG env var.
-    if let Ok(filter) = tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
-        tracing_subscriber::registry()
-            .with(
-                tracing_tree::HierarchicalLayer::new(2)
-                    .with_targets(true)
-                    .with_bracketed_fields(true)
-                    .with_indent_lines(true)
-                    .with_verbose_exit(true)
-                    .with_verbose_entry(true)
-                    .with_timer(tracing_tree::time::Uptime::default())
-                    .with_writer(std::io::stderr),
-            )
-            .with(filter)
-            .init();
-    }
+    // Set up tracing subscriber. Uses LINTEL_LOG env var if set, otherwise
+    // defaults to `info` level so that fetch URLs and progress are always visible.
+    // Verbose entry/exit is only enabled when LINTEL_LOG is explicitly set.
+    let (filter, explicit) = match tracing_subscriber::EnvFilter::try_from_env("LINTEL_LOG") {
+        Ok(f) => (f, true),
+        Err(_) => (tracing_subscriber::EnvFilter::new("info"), false),
+    };
+    tracing_subscriber::registry()
+        .with(
+            tracing_tree::HierarchicalLayer::new(2)
+                .with_targets(true)
+                .with_bracketed_fields(true)
+                .with_indent_lines(true)
+                .with_verbose_exit(explicit)
+                .with_verbose_entry(explicit)
+                .with_timer(tracing_tree::time::Uptime::default())
+                .with_writer(std::io::stderr),
+        )
+        .with(filter)
+        .init();
 
-    let cli = cli().run();
+    let opts = cli().run();
 
-    let result = match cli.command {
+    let result = match opts.command {
         Commands::Generate {
             config,
             target,
@@ -85,6 +92,17 @@ async fn main() -> ExitCode {
         } => commands::generate::run(&config, target.as_deref(), concurrency, no_cache).await,
         Commands::Version => {
             println!("lintel-catalog-builder {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Commands::Man => {
+            let roff = cli().render_manpage(
+                "lintel-catalog-builder",
+                bpaf::doc::Section::General,
+                None,
+                None,
+                Some("Lintel Manual"),
+            );
+            print!("{roff}");
             return ExitCode::SUCCESS;
         }
     };
@@ -119,7 +137,7 @@ mod tests {
                 assert_eq!(concurrency, 20);
                 assert!(!no_cache);
             }
-            Commands::Version => panic!("expected Generate"),
+            _ => panic!("expected Generate"),
         }
         Ok(())
     }
@@ -150,7 +168,7 @@ mod tests {
                 assert_eq!(concurrency, 50);
                 assert!(no_cache);
             }
-            Commands::Version => panic!("expected Generate"),
+            _ => panic!("expected Generate"),
         }
         Ok(())
     }

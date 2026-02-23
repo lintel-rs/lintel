@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+use core::time::Duration;
+
 use bpaf::Bpaf;
 
 /// Global options applied to all commands
@@ -84,6 +86,87 @@ impl core::fmt::Display for LogLevel {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shared cache options
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::needless_pass_by_value)] // bpaf parse() requires owned String
+fn parse_duration(s: String) -> Result<Duration, String> {
+    humantime::parse_duration(&s).map_err(|e| format!("invalid duration '{s}': {e}"))
+}
+
+/// Cache-related CLI flags shared across commands.
+#[derive(Debug, Clone, Bpaf)]
+#[bpaf(generate(cli_cache_options))]
+#[allow(clippy::struct_excessive_bools)]
+pub struct CliCacheOptions {
+    #[bpaf(long("cache-dir"), argument("DIR"))]
+    pub cache_dir: Option<String>,
+
+    /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
+    #[bpaf(long("schema-cache-ttl"), argument::<String>("DURATION"), parse(parse_duration), optional)]
+    pub schema_cache_ttl: Option<Duration>,
+
+    /// Bypass schema cache reads (still writes fetched schemas to cache)
+    #[bpaf(long("force-schema-fetch"), switch)]
+    pub force_schema_fetch: bool,
+
+    /// Bypass validation cache reads (still writes results to cache)
+    #[bpaf(long("force-validation"), switch)]
+    pub force_validation: bool,
+
+    /// Bypass all cache reads (combines --force-schema-fetch and --force-validation)
+    #[bpaf(long("force"), switch)]
+    pub force: bool,
+
+    #[bpaf(long("no-catalog"), switch)]
+    pub no_catalog: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Pager
+// ---------------------------------------------------------------------------
+
+/// Pipe content through a pager (respects `$PAGER`, defaults to `less -R`).
+///
+/// Spawns the pager as a child process and writes `content` to its stdin.
+/// Falls back to printing directly if the pager cannot be spawned.
+pub fn pipe_to_pager(content: &str) {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let pager_env = std::env::var("PAGER").unwrap_or_default();
+    let (program, args) = if pager_env.is_empty() {
+        ("less", vec!["-R"])
+    } else {
+        let mut parts: Vec<&str> = pager_env.split_whitespace().collect();
+        let prog = parts.remove(0);
+        // Ensure less gets -R for ANSI color passthrough
+        if prog == "less" && !parts.iter().any(|a| a.contains('R')) {
+            parts.push("-R");
+        }
+        (prog, parts)
+    };
+
+    match Command::new(program)
+        .args(&args)
+        .stdin(Stdio::piped())
+        .spawn()
+    {
+        Ok(mut child) => {
+            if let Some(mut stdin) = child.stdin.take() {
+                // Ignore broken-pipe errors (user quit the pager early)
+                let _ = write!(stdin, "{content}");
+            }
+            let _ = child.wait();
+        }
+        Err(_) => {
+            // Pager unavailable -- print directly
+            print!("{content}");
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -92,6 +175,10 @@ mod tests {
 
     fn opts() -> bpaf::OptionParser<CLIGlobalOptions> {
         cli_global_options().to_options()
+    }
+
+    fn cache_opts() -> bpaf::OptionParser<CliCacheOptions> {
+        cli_cache_options().to_options()
     }
 
     #[test]
@@ -168,5 +255,90 @@ mod tests {
         assert!(parsed.verbose);
         assert_eq!(parsed.log_level, LogLevel::Debug);
         assert_eq!(parsed.colors, Some(ColorsArg::Force));
+    }
+
+    // --- CliCacheOptions tests ---
+
+    #[test]
+    fn cache_defaults() {
+        let parsed = cache_opts().run_inner(&[]).unwrap();
+        assert!(parsed.cache_dir.is_none());
+        assert!(parsed.schema_cache_ttl.is_none());
+        assert!(!parsed.force_schema_fetch);
+        assert!(!parsed.force_validation);
+        assert!(!parsed.force);
+        assert!(!parsed.no_catalog);
+    }
+
+    #[test]
+    fn cache_dir_parsed() {
+        let parsed = cache_opts()
+            .run_inner(&["--cache-dir", "/tmp/cache"])
+            .unwrap();
+        assert_eq!(parsed.cache_dir.as_deref(), Some("/tmp/cache"));
+    }
+
+    #[test]
+    fn schema_cache_ttl_parsed() {
+        let parsed = cache_opts()
+            .run_inner(&["--schema-cache-ttl", "12h"])
+            .unwrap();
+        assert_eq!(
+            parsed.schema_cache_ttl,
+            Some(Duration::from_secs(12 * 3600))
+        );
+    }
+
+    #[test]
+    fn schema_cache_ttl_invalid() {
+        assert!(
+            cache_opts()
+                .run_inner(&["--schema-cache-ttl", "invalid"])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn force_schema_fetch_flag() {
+        let parsed = cache_opts().run_inner(&["--force-schema-fetch"]).unwrap();
+        assert!(parsed.force_schema_fetch);
+    }
+
+    #[test]
+    fn force_validation_flag() {
+        let parsed = cache_opts().run_inner(&["--force-validation"]).unwrap();
+        assert!(parsed.force_validation);
+    }
+
+    #[test]
+    fn force_flag() {
+        let parsed = cache_opts().run_inner(&["--force"]).unwrap();
+        assert!(parsed.force);
+    }
+
+    #[test]
+    fn no_catalog_flag() {
+        let parsed = cache_opts().run_inner(&["--no-catalog"]).unwrap();
+        assert!(parsed.no_catalog);
+    }
+
+    #[test]
+    fn cache_combined_flags() {
+        let parsed = cache_opts()
+            .run_inner(&[
+                "--cache-dir",
+                "/tmp/cache",
+                "--schema-cache-ttl",
+                "30m",
+                "--force-schema-fetch",
+                "--force-validation",
+                "--no-catalog",
+            ])
+            .unwrap();
+        assert_eq!(parsed.cache_dir.as_deref(), Some("/tmp/cache"));
+        assert_eq!(parsed.schema_cache_ttl, Some(Duration::from_secs(30 * 60)));
+        assert!(parsed.force_schema_fetch);
+        assert!(parsed.force_validation);
+        assert!(parsed.no_catalog);
     }
 }

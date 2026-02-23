@@ -5,11 +5,9 @@ use anyhow::{Context, Result, bail};
 use bpaf::Bpaf;
 use lintel_cli_common::CLIGlobalOptions;
 
-use lintel_check::config;
-use lintel_check::parsers;
-use lintel_check::retriever::{CacheStatus, SchemaCache};
-use lintel_check::validate;
-use lintel_check::validation_cache;
+use lintel_schema_cache::{CacheStatus, SchemaCache};
+use lintel_validate::parsers;
+use lintel_validate::validate;
 
 #[derive(Debug, Clone, Bpaf)]
 pub enum CacheCommand {
@@ -66,7 +64,7 @@ fn inspect_schema(args: InspectSchemaArgs) -> Result<()> {
     let hash = SchemaCache::hash_uri(&args.url);
     let cache_dir = args
         .cache_dir
-        .map_or_else(lintel_check::retriever::ensure_cache_dir, PathBuf::from);
+        .map_or_else(lintel_schema_cache::ensure_cache_dir, PathBuf::from);
     let cache_path = cache_dir.join(format!("{hash}.json"));
 
     println!("URL:        {}", args.url);
@@ -173,7 +171,7 @@ async fn trace(args: TraceArgs) -> Result<()> {
 
 async fn trace_catalog(
     retriever: &SchemaCache,
-    cfg: &config::Config,
+    cfg: &lintel_config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
 ) -> Vec<schemastore::CompiledCatalog> {
@@ -183,7 +181,7 @@ async fn trace_catalog(
     if no_catalog {
         println!("  status: disabled (--no-catalog)");
     } else {
-        let catalog_url = lintel_check::catalog::CATALOG_URL;
+        let catalog_url = schemastore::CATALOG_URL;
         let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
@@ -202,7 +200,7 @@ fn trace_schema_resolution(
     parser: &dyn parsers::Parser,
     content: &str,
     instance: &serde_json::Value,
-    cfg: &config::Config,
+    cfg: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: &[schemastore::CompiledCatalog],
     path_str: &str,
@@ -240,8 +238,8 @@ fn trace_schema_resolution(
     };
 
     // Apply rewrites
-    let schema_uri = config::apply_rewrites(&schema_uri, &cfg.rewrite);
-    let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
+    let schema_uri = lintel_config::apply_rewrites(&schema_uri, &cfg.rewrite);
+    let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
     let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
     let schema_uri = if is_remote {
         schema_uri
@@ -303,13 +301,13 @@ async fn trace_validation_cache(
     retriever: &SchemaCache,
     schema_uri: &str,
     is_remote: bool,
-    cfg: &config::Config,
+    cfg: &lintel_config::Config,
     path_str: &str,
     content: &str,
 ) {
     println!();
     println!("validation cache:");
-    let vcache_dir = validation_cache::ensure_cache_dir();
+    let vcache_dir = lintel_validation_cache::ensure_cache_dir();
     println!("  dir: {}", vcache_dir.display());
 
     let schema_value = if is_remote {
@@ -324,20 +322,20 @@ async fn trace_validation_cache(
     };
 
     if let Some(schema_value) = schema_value {
-        let schema_hash = validation_cache::schema_hash(&schema_value);
-        let vcache = validation_cache::ValidationCache::new(vcache_dir, false);
+        let schema_hash = lintel_validation_cache::schema_hash(&schema_value);
+        let vcache = lintel_validation_cache::ValidationCache::new(vcache_dir, false);
         let validate_formats = cfg.should_validate_formats(path_str, &[schema_uri]);
-        let ck = validation_cache::CacheKey {
+        let ck = lintel_validation_cache::CacheKey {
             file_content: content,
             schema_hash: &schema_hash,
             validate_formats,
         };
-        let cache_key = validation_cache::ValidationCache::cache_key(&ck);
+        let cache_key = lintel_validation_cache::ValidationCache::cache_key(&ck);
         println!("  key: {cache_key}");
         let (_cached_errors, vcache_status) = vcache.lookup(&ck).await;
         let label = match vcache_status {
-            validation_cache::ValidationCacheStatus::Hit => "hit",
-            validation_cache::ValidationCacheStatus::Miss => "miss",
+            lintel_validation_cache::ValidationCacheStatus::Hit => "hit",
+            lintel_validation_cache::ValidationCacheStatus::Miss => "miss",
         };
         println!("  status: {label}");
     } else {

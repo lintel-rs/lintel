@@ -1,10 +1,11 @@
+use core::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Result;
 use futures::stream::{self, StreamExt};
-use lintel_schema_cache::SchemaCache;
-use tracing::{debug, warn};
+use lintel_schema_cache::{CacheStatus, SchemaCache};
+use tracing::{info, warn};
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this
 /// are skipped and the catalog retains the original upstream URL.
@@ -17,13 +18,16 @@ pub struct DownloadItem {
 }
 
 /// Download a single schema via the cache, validate it is parseable JSON, and
-/// write to disk. Returns the JSON text on success (needed for `$ref` scanning).
+/// write to disk. Returns the JSON text and cache status on success.
 ///
 /// Schemas whose serialized output exceeds [`MAX_SCHEMA_SIZE`] are skipped so
 /// that very large files don't bloat the output.
-pub async fn download_one(cache: &SchemaCache, url: &str, path: &Path) -> Result<String> {
-    debug!(url = %url, "fetching schema");
-    let (value, _status) = cache.fetch(url).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+pub async fn download_one(
+    cache: &SchemaCache,
+    url: &str,
+    path: &Path,
+) -> Result<(String, CacheStatus)> {
+    let (value, status) = cache.fetch(url).await.map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let text = serde_json::to_string_pretty(&value)?;
 
@@ -39,7 +43,7 @@ pub async fn download_one(cache: &SchemaCache, url: &str, path: &Path) -> Result
         tokio::fs::create_dir_all(parent).await?;
     }
     tokio::fs::write(path, &text).await?;
-    Ok(text)
+    Ok((text, status))
 }
 
 /// Download a batch of items concurrently. Returns the set of URLs that were
@@ -50,18 +54,27 @@ pub async fn download_batch(
     concurrency: usize,
 ) -> Result<HashSet<String>> {
     let total = items.len();
-    let downloaded: HashSet<String> = stream::iter(items.iter().enumerate())
-        .map(|(i, item)| {
+    let completed = AtomicUsize::new(0);
+    let downloaded: HashSet<String> = stream::iter(items.iter())
+        .map(|item| {
             let cache = cache.clone();
             let url = item.url.clone();
             let dest = item.dest.clone();
+            let completed = &completed;
             async move {
                 match download_one(&cache, &url, &dest).await {
-                    Ok(_text) => {
-                        debug!(url = %url, progress = format!("{}/{total}", i + 1), "downloaded");
+                    Ok((_text, status)) => {
+                        let n = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                        info!(
+                            url = %url,
+                            status = %status,
+                            progress = format!("{n}/{total}"),
+                            "downloaded"
+                        );
                         Some(url)
                     }
                     Err(e) => {
+                        completed.fetch_add(1, Ordering::Relaxed);
                         warn!(url = %url, error = %e, "failed to download schema, skipping");
                         None
                     }

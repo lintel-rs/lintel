@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.4...cargo-furnish-v0.0.5) - 2026-02-22
+
+### Added
+
+- auto-generate man pages and shell completions for all CLIs
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into man-page
+
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.3...cargo-furnish-v0.0.4) - 2026-02-22
+
+### Other
+
+- reduce too-many-arguments violations across workspace
+- Merge origin/master into ansi branch
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.2...cargo-furnish-v0.0.3) - 2026-02-21
 
 ### Added
