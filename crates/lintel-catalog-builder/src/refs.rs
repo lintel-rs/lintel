@@ -205,8 +205,9 @@ fn encode_ref_fragment(ref_str: &str) -> Option<String> {
 /// - `schema_text`: the JSON text of the schema
 /// - `schema_dest`: where to write the rewritten schema
 ///
-/// Filenames in `_shared/` are disambiguated with numeric suffixes when
-/// different URLs produce the same last path segment.
+/// Filenames in `_shared/` are prefixed with the parent schema stem
+/// (e.g. `github-workflow--schema.json`) and disambiguated with numeric
+/// suffixes when collisions remain.
 pub async fn resolve_and_rewrite(
     ctx: &mut RefRewriteContext<'_>,
     schema_text: &str,
@@ -255,7 +256,12 @@ pub async fn resolve_and_rewrite(
             continue;
         }
 
-        let base_filename = filename_from_url(ref_url)?;
+        let dep_basename = filename_from_url(ref_url)?;
+        let parent_stem = schema_dest
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let base_filename = format!("{parent_stem}--{dep_basename}");
         tokio::fs::create_dir_all(ctx.shared_dir).await?;
         // Disambiguate filename if another URL already produced the same name
         let filename = unique_filename_in(ctx.shared_dir, &base_filename);
