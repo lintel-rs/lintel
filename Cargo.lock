@@ -1407,8 +1407,11 @@ dependencies = [
  "lintel-check",
  "lintel-cli-common",
  "lintel-identify",
+ "reqwest",
  "serde_json",
+ "tempfile",
  "terminal_size",
+ "tokio",
  "tracing",
 ]
 

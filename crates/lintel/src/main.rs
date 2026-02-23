@@ -431,7 +431,7 @@ mod tests {
             Commands::Explain(_, args) => {
                 assert_eq!(args.schema.as_deref(), Some("https://example.com/s.json"));
                 assert!(args.file.is_none());
-                assert!(args.path.is_none());
+                assert!(args.positional.is_none());
             }
             _ => panic!("expected Explain"),
         }
@@ -446,7 +446,7 @@ mod tests {
         match parsed.command {
             Commands::Explain(_, args) => {
                 assert_eq!(args.file.as_deref(), Some("config.yaml"));
-                assert_eq!(args.path.as_deref(), Some("/properties/name"));
+                assert_eq!(args.positional.as_deref(), Some("/properties/name"));
                 assert!(args.schema.is_none());
             }
             _ => panic!("expected Explain"),
@@ -462,7 +462,7 @@ mod tests {
         match parsed.command {
             Commands::Explain(_, args) => {
                 assert_eq!(args.schema.as_deref(), Some("s.json"));
-                assert_eq!(args.path.as_deref(), Some("$.name.age"));
+                assert_eq!(args.positional.as_deref(), Some("$.name.age"));
             }
             _ => panic!("expected Explain"),
         }
@@ -508,6 +508,86 @@ mod tests {
             Commands::Explain(_, args) => {
                 assert!(args.no_syntax_highlighting);
                 assert!(args.no_pager);
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_path() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--path", "tsconfig.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.resolve_path.as_deref(), Some("tsconfig.json"));
+                assert!(args.file.is_none());
+                assert!(args.schema.is_none());
+                assert!(args.positional.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_path_with_pointer() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--path", "config.yaml", "/properties/name"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.resolve_path.as_deref(), Some("config.yaml"));
+                assert_eq!(args.positional.as_deref(), Some("/properties/name"));
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_schema_with_file() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "--schema", "s.json", "--file", "data.yaml"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.schema.as_deref(), Some("s.json"));
+                assert_eq!(args.file.as_deref(), Some("data.yaml"));
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_positional_only() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "package.json"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.positional.as_deref(), Some("package.json"));
+                assert!(args.pointer.is_none());
+                assert!(args.file.is_none());
+                assert!(args.resolve_path.is_none());
+                assert!(args.schema.is_none());
+            }
+            _ => panic!("expected Explain"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cli_parses_explain_positional_with_pointer() -> anyhow::Result<()> {
+        let parsed = cli()
+            .run_inner(&["explain", "package.json", "name"])
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        match parsed.command {
+            Commands::Explain(_, args) => {
+                assert_eq!(args.positional.as_deref(), Some("package.json"));
+                assert_eq!(args.pointer.as_deref(), Some("name"));
             }
             _ => panic!("expected Explain"),
         }
