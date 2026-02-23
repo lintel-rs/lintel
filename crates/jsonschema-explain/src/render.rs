@@ -162,6 +162,8 @@ fn render_property_details(
         write_label(out, desc_indent, "Examples", &joined);
     }
 
+    render_constraints(out, prop_schema, f, desc_indent);
+
     for keyword in COMPOSITION_KEYWORDS {
         if let Some(variants) = prop_schema.get(*keyword).and_then(Value::as_array) {
             let label = match *keyword {
@@ -184,6 +186,78 @@ fn render_property_details(
         let nested_required = required_set(prop_schema);
         out.push('\n');
         render_properties(out, nested_props, &nested_required, root, f, depth + 1);
+    }
+}
+
+/// Render JSON Schema validation constraints (numeric bounds, string length,
+/// pattern, array items, format, etc.) as a compact annotation line.
+fn render_constraints(out: &mut String, schema: &Value, f: &Fmt<'_>, indent: &str) {
+    let mut parts: Vec<String> = Vec::new();
+
+    // Format
+    if let Some(fmt_val) = schema.get("format").and_then(Value::as_str) {
+        parts.push(format!("format={}{fmt_val}{}", f.magenta, f.reset));
+    }
+
+    // String constraints
+    if let Some(v) = schema.get("minLength").and_then(Value::as_u64) {
+        parts.push(format!("minLength={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("maxLength").and_then(Value::as_u64) {
+        parts.push(format!("maxLength={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("pattern").and_then(Value::as_str) {
+        parts.push(format!("pattern={}{v}{}", f.magenta, f.reset));
+    }
+
+    // Numeric constraints
+    if let Some(v) = schema.get("minimum") {
+        parts.push(format!("min={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("maximum") {
+        parts.push(format!("max={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("exclusiveMinimum") {
+        parts.push(format!("exclusiveMin={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("exclusiveMaximum") {
+        parts.push(format!("exclusiveMax={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("multipleOf") {
+        parts.push(format!("multipleOf={}{v}{}", f.magenta, f.reset));
+    }
+
+    // Array constraints
+    if let Some(v) = schema.get("minItems").and_then(Value::as_u64) {
+        parts.push(format!("minItems={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("maxItems").and_then(Value::as_u64) {
+        parts.push(format!("maxItems={}{v}{}", f.magenta, f.reset));
+    }
+    if schema
+        .get("uniqueItems")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        parts.push(format!("{}unique{}", f.magenta, f.reset));
+    }
+
+    // Object constraints
+    if let Some(v) = schema.get("minProperties").and_then(Value::as_u64) {
+        parts.push(format!("minProperties={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.get("maxProperties").and_then(Value::as_u64) {
+        parts.push(format!("maxProperties={}{v}{}", f.magenta, f.reset));
+    }
+
+    if !parts.is_empty() {
+        let _ = writeln!(
+            out,
+            "{indent}{}Constraints:{} {}",
+            f.dim,
+            f.reset,
+            parts.join(", ")
+        );
     }
 }
 
