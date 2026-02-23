@@ -36,6 +36,7 @@ jobs:
 
   package-verify:
     name: Verify publishable crates
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
