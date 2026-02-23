@@ -13,6 +13,10 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// The default `$schema` URL for Lintel catalogs.
+pub const DEFAULT_SCHEMA_URL: &str =
+    "https://catalog.lintel.tools/schemas/lintel/catalog/latest.json";
+
 /// Schema catalog index that maps file patterns to JSON Schema URLs.
 ///
 /// A catalog is a collection of schema entries used by editors and tools to
@@ -20,21 +24,53 @@ use serde_json::Value;
 /// completion. Follows the `SchemaStore` catalog format.
 ///
 /// See: <https://json.schemastore.org/schema-catalog.json>
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[schemars(title = "catalog.json")]
+#[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
+#[schemars(title = "Schema Catalog")]
 pub struct Catalog {
-    /// The catalog format version. Currently always `1`.
+    /// The `$schema` URL for this catalog. Defaults to the Lintel catalog schema.
+    #[serde(default, rename = "$schema")]
+    pub schema: Option<String>,
+    /// The catalog format version.
     pub version: u32,
     /// An optional human-readable title for the catalog.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub title: Option<String>,
     /// The list of schema entries in this catalog.
     pub schemas: Vec<SchemaEntry>,
     /// Optional grouping of related schemas for catalog consumers that
     /// support richer organization. Consumers that don't understand
     /// `groups` simply ignore this field.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub groups: Vec<CatalogGroup>,
+}
+
+impl Serialize for Catalog {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        let mut len = 3; // $schema, version, schemas
+        if self.title.is_some() {
+            len += 1;
+        }
+        if !self.groups.is_empty() {
+            len += 1;
+        }
+
+        let mut map = serializer.serialize_map(Some(len))?;
+        map.serialize_entry(
+            "$schema",
+            self.schema.as_deref().unwrap_or(DEFAULT_SCHEMA_URL),
+        )?;
+        map.serialize_entry("version", &self.version)?;
+        if let Some(ref title) = self.title {
+            map.serialize_entry("title", title)?;
+        }
+        map.serialize_entry("schemas", &self.schemas)?;
+        if !self.groups.is_empty() {
+            map.serialize_entry("groups", &self.groups)?;
+        }
+        map.end()
+    }
 }
 
 /// A group of related schemas in the catalog.
@@ -133,7 +169,6 @@ mod tests {
     fn round_trip_catalog() {
         let catalog = Catalog {
             version: 1,
-            title: None,
             schemas: vec![SchemaEntry {
                 name: "Test Schema".into(),
                 description: "A test schema".into(),
@@ -142,7 +177,7 @@ mod tests {
                 file_match: vec!["*.test.json".into()],
                 versions: BTreeMap::new(),
             }],
-            groups: vec![],
+            ..Catalog::default()
         };
         let json = serde_json::to_string_pretty(&catalog).expect("serialize");
         let parsed: Catalog = serde_json::from_str(&json).expect("deserialize");

@@ -1493,6 +1493,7 @@ dependencies = [
  "bpaf",
  "futures-util",
  "reqwest",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "tempfile",
@@ -1520,6 +1521,7 @@ dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "serde_yaml",
@@ -2368,7 +2370,6 @@ dependencies = [
  "anyhow",
  "globset",
  "schema-catalog",
- "serde",
  "serde_json",
 ]
 

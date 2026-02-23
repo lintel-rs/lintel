@@ -1,5 +1,5 @@
 use lintel_schema_cache::SchemaCache;
-use schemastore::Catalog;
+use schema_catalog::Catalog;
 
 /// The default Lintel catalog registry (always fetched unless `--no-catalog`).
 pub const DEFAULT_REGISTRY: &str = "https://catalog.lintel.tools/catalog.json";
