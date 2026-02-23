@@ -2,7 +2,6 @@
 
 extern crate alloc;
 
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bpaf::Bpaf;
@@ -28,27 +27,7 @@ struct CLI {
 enum Commands {
     /// Generate catalog.json and download schemas
     #[bpaf(command("generate"))]
-    Generate {
-        /// Path to lintel-catalog.toml config file
-        #[bpaf(
-            long("config"),
-            argument("PATH"),
-            fallback(PathBuf::from("lintel-catalog.toml"))
-        )]
-        config: PathBuf,
-
-        /// Build only a specific target (default: all targets)
-        #[bpaf(long("target"), argument("NAME"))]
-        target: Option<String>,
-
-        /// Maximum concurrent downloads
-        #[bpaf(long("concurrency"), argument("N"), fallback(20))]
-        concurrency: usize,
-
-        /// Skip reading from cache (still writes fetched schemas to cache)
-        #[bpaf(long("no-cache"), switch)]
-        no_cache: bool,
-    },
+    Generate(#[bpaf(external(commands::generate::generate_args))] commands::generate::GenerateArgs),
 
     /// Print version information
     #[bpaf(command("version"))]
@@ -85,12 +64,7 @@ async fn main() -> ExitCode {
     let opts = cli().run();
 
     let result = match opts.command {
-        Commands::Generate {
-            config,
-            target,
-            concurrency,
-            no_cache,
-        } => commands::generate::run(&config, target.as_deref(), concurrency, no_cache).await,
+        Commands::Generate(args) => args.run().await,
         Commands::Version => {
             println!("lintel-catalog-builder {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
@@ -119,6 +93,8 @@ async fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]
@@ -127,16 +103,11 @@ mod tests {
             .run_inner(&["generate"])
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
-            Commands::Generate {
-                config,
-                target,
-                concurrency,
-                no_cache,
-            } => {
-                assert_eq!(config, PathBuf::from("lintel-catalog.toml"));
-                assert!(target.is_none());
-                assert_eq!(concurrency, 20);
-                assert!(!no_cache);
+            Commands::Generate(args) => {
+                assert_eq!(args.config, PathBuf::from("lintel-catalog.toml"));
+                assert!(args.target.is_none());
+                assert_eq!(args.concurrency, 20);
+                assert!(!args.no_cache);
             }
             _ => panic!("expected Generate"),
         }
@@ -158,16 +129,11 @@ mod tests {
             ])
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         match parsed.command {
-            Commands::Generate {
-                config,
-                target,
-                concurrency,
-                no_cache,
-            } => {
-                assert_eq!(config, PathBuf::from("my-catalog.toml"));
-                assert_eq!(target, Some("pages".to_string()));
-                assert_eq!(concurrency, 50);
-                assert!(no_cache);
+            Commands::Generate(args) => {
+                assert_eq!(args.config, PathBuf::from("my-catalog.toml"));
+                assert_eq!(args.target, Some("pages".to_string()));
+                assert_eq!(args.concurrency, 50);
+                assert!(args.no_cache);
             }
             _ => panic!("expected Generate"),
         }
