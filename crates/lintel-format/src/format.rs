@@ -30,6 +30,7 @@ enum FormatKind {
     Jsonc,
     Json5,
     Yaml,
+    Markdown,
     Toml,
 }
 
@@ -41,6 +42,7 @@ fn detect_format(path: &Path) -> Option<FormatKind> {
         "jsonc" => Some(FormatKind::Jsonc),
         "json5" => Some(FormatKind::Json5),
         "yaml" | "yml" => Some(FormatKind::Yaml),
+        "md" | "markdown" => Some(FormatKind::Markdown),
         "toml" => Some(FormatKind::Toml),
         _ => None,
     }
@@ -68,6 +70,10 @@ fn format_single_file(path: &Path, content: &str, kind: FormatKind) -> Result<St
         FormatKind::Yaml => {
             let opts = prettier_rs::resolve_config(path)?;
             prettier_rs::format_str(content, prettier_rs::Format::Yaml, &opts)
+        }
+        FormatKind::Markdown => {
+            let opts = prettier_rs::resolve_config(path)?;
+            prettier_rs::format_str(content, prettier_rs::Format::Markdown, &opts)
         }
         FormatKind::Toml => {
             let formatted = taplo::formatter::format(content, taplo::formatter::Options::default());
@@ -144,7 +150,11 @@ fn walk_directory(dir: &Path, _excludes: &[String], files: &mut Vec<PathBuf>) ->
 
 fn tool_name(kind: FormatKind) -> &'static str {
     match kind {
-        FormatKind::Json | FormatKind::Jsonc | FormatKind::Json5 | FormatKind::Yaml => "prettier",
+        FormatKind::Json
+        | FormatKind::Jsonc
+        | FormatKind::Json5
+        | FormatKind::Yaml
+        | FormatKind::Markdown => "prettier",
         FormatKind::Toml => "taplo",
     }
 }

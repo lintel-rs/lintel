@@ -8,6 +8,7 @@ prettier-config = { version = "0.1.0", path = "../prettier-config" }
 prettier-jsonc = { version = "0.1.0", path = "../prettier-jsonc" }
 prettier-json5 = { version = "0.1.0", path = "../prettier-json5" }
 prettier-yaml = { version = "0.1.0", path = "../prettier-yaml" }
+prettier-markdown = { version = "0.1.0", path = "../prettier-markdown" }
 anyhow = "1"
 
 [lints]

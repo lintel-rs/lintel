@@ -1,0 +1,53 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`simple.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+123  
+456
+
+123\\
+456
+
+- 123  
+  123
+
+=====================================output=====================================
+123  
+456
+
+123\\
+456
+
+- 123  
+  123
+
+================================================================================
+`;
+
+exports[`wrap.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+a  
+ very-very-very-very-very-very-very-very-very-very-long-word very-very-very-very-very-very-very-very-very-very-long-word very-very-very-very-very-very-very-very-very-very-long-word
+
+\\
+word very-very-very-very-very-very-very-very-very-very-long-word very-very-very-very-very-very-very-very-very-very-long-word
+
+=====================================output=====================================
+a  
+very-very-very-very-very-very-very-very-very-very-long-word very-very-very-very-very-very-very-very-very-very-long-word
+very-very-very-very-very-very-very-very-very-very-long-word
+
+\\
+word very-very-very-very-very-very-very-very-very-very-long-word
+very-very-very-very-very-very-very-very-very-very-long-word
+
+================================================================================
+`;

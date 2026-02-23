@@ -1,0 +1,19 @@
+[package]
+name = "prettier-markdown"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+prettier-config = { version = "0.1.0", path = "../prettier-config" }
+prettier-yaml = { version = "0.1.0", path = "../prettier-yaml" }
+wadler-lindig = { version = "0.1.0", path = "../wadler-lindig" }
+comrak = { version = "0.36", default-features = false }
+unicode-width = "0.2"
+anyhow = "1"
+
+[dev-dependencies]
+insta = "1"
+pretty_assertions = "1"
+
+[lints]
+workspace = true

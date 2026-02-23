@@ -12,6 +12,9 @@ pub enum Doc {
     Group(Box<Doc>),
     /// Increase indent level for the inner document.
     Indent(Box<Doc>),
+    /// Add a fixed number of spaces to the current indent (alignment).
+    /// Unlike `Indent` which adds `tab_width` chars, `Align` adds exactly `n` spaces.
+    Align(usize, Box<Doc>),
     /// Space when flat, newline+indent when broken.
     Line,
     /// Always a newline.
@@ -44,6 +47,10 @@ impl Doc {
         Self::Indent(Box::new(doc))
     }
 
+    pub fn align(n: usize, doc: Doc) -> Self {
+        Self::Align(n, Box::new(doc))
+    }
+
     pub fn if_break(flat: Doc, broken: Doc) -> Self {
         Self::IfBreak {
             flat: Box::new(flat),
@@ -62,12 +69,49 @@ enum Mode {
     Break,
 }
 
+/// Indent tracking: level-based indent plus extra alignment spaces.
+#[derive(Debug, Clone, Copy)]
+struct IndentState {
+    /// Number of tab-width indentations.
+    level: usize,
+    /// Additional alignment spaces (from `Align`).
+    align: usize,
+}
+
+impl IndentState {
+    fn new() -> Self {
+        Self { level: 0, align: 0 }
+    }
+
+    fn add_indent(self) -> Self {
+        Self {
+            level: self.level + 1,
+            align: self.align,
+        }
+    }
+
+    fn add_align(self, n: usize) -> Self {
+        Self {
+            level: self.level,
+            align: self.align + n,
+        }
+    }
+
+    fn to_string(self, indent_str: &str) -> String {
+        let mut s = indent_str.repeat(self.level);
+        for _ in 0..self.align {
+            s.push(' ');
+        }
+        s
+    }
+}
+
 /// Stack command for the printer.
 enum Cmd<'a> {
     /// Print a doc with a given indent and mode.
-    Print(usize, Mode, &'a Doc),
+    Print(IndentState, Mode, &'a Doc),
     /// Continue processing a fill from the given offset.
-    FillParts(usize, &'a [Doc], usize),
+    FillParts(IndentState, &'a [Doc], usize),
 }
 
 /// Print a document to a string using the Wadler-Lindig algorithm.
@@ -86,7 +130,7 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
     };
 
     let mut output = String::new();
-    let mut stack: Vec<Cmd> = vec![Cmd::Print(0, Mode::Break, doc)];
+    let mut stack: Vec<Cmd> = vec![Cmd::Print(IndentState::new(), Mode::Break, doc)];
     let mut pos: usize = 0; // current column position
 
     while let Some(cmd) = stack.pop() {
@@ -109,7 +153,10 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
                     }
                 }
                 Doc::Indent(inner) => {
-                    stack.push(Cmd::Print(indent + 1, mode, inner));
+                    stack.push(Cmd::Print(indent.add_indent(), mode, inner));
+                }
+                Doc::Align(n, inner) => {
+                    stack.push(Cmd::Print(indent.add_align(*n), mode, inner));
                 }
                 Doc::Line => match mode {
                     Mode::Flat => {
@@ -118,14 +165,14 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
                     }
                     Mode::Break => {
                         output.push_str(eol);
-                        let indent_text = indent_str.repeat(indent);
+                        let indent_text = indent.to_string(&indent_str);
                         output.push_str(&indent_text);
                         pos = indent_text.len();
                     }
                 },
                 Doc::Hardline => {
                     output.push_str(eol);
-                    let indent_text = indent_str.repeat(indent);
+                    let indent_text = indent.to_string(&indent_str);
                     output.push_str(&indent_text);
                     pos = indent_text.len();
                 }
@@ -135,7 +182,7 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
                     }
                     Mode::Break => {
                         output.push_str(eol);
-                        let indent_text = indent_str.repeat(indent);
+                        let indent_text = indent.to_string(&indent_str);
                         output.push_str(&indent_text);
                         pos = indent_text.len();
                     }
@@ -214,20 +261,34 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
         }
     }
 
-    output
+    // Trim whitespace-only lines (e.g., blank lines between blocks
+    // that pick up indentation from Align/Indent contexts)
+    let trimmed: String = output
+        .split(eol)
+        .map(|line| {
+            if line.chars().all(|c| c == ' ' || c == '\t') {
+                ""
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(eol);
+
+    trimmed
 }
 
 /// Check if a document fits within the remaining width when printed flat.
-fn fits(doc: &Doc, remaining: usize, indent: usize) -> bool {
+fn fits(doc: &Doc, remaining: usize, indent: IndentState) -> bool {
     fits_with_stack(vec![(indent, doc)], remaining)
 }
 
 /// Check if multiple documents fit within the remaining width when printed flat.
-fn fits_multi(docs: &[&Doc], remaining: usize, indent: usize) -> bool {
+fn fits_multi(docs: &[&Doc], remaining: usize, indent: IndentState) -> bool {
     fits_with_stack(docs.iter().rev().map(|d| (indent, *d)).collect(), remaining)
 }
 
-fn fits_with_stack(mut stack: Vec<(usize, &Doc)>, remaining: usize) -> bool {
+fn fits_with_stack(mut stack: Vec<(IndentState, &Doc)>, remaining: usize) -> bool {
     #[allow(clippy::cast_possible_wrap)]
     let mut rem = remaining as isize;
 
@@ -247,15 +308,17 @@ fn fits_with_stack(mut stack: Vec<(usize, &Doc)>, remaining: usize) -> bool {
                     stack.push((ind, d));
                 }
             }
-            Doc::Group(inner) | Doc::Indent(inner) => {
+            Doc::Group(inner) | Doc::Indent(inner) | Doc::Align(_, inner) => {
                 stack.push((ind, inner));
             }
             Doc::Line => {
                 rem -= 1; // space in flat mode
             }
             Doc::Hardline | Doc::BreakParent => {
-                // Both force the enclosing group to break
-                return false;
+                // A hard break or break-parent means the line ends here.
+                // In prettier's `fits`, this returns true — the content up to
+                // this point fits on the current line.
+                return true;
             }
             Doc::Softline => {
                 // empty in flat mode

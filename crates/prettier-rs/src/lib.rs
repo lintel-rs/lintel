@@ -16,6 +16,7 @@ pub enum Format {
     Jsonc,
     Json5,
     Yaml,
+    Markdown,
 }
 
 /// Format a string given its format type.
@@ -45,6 +46,7 @@ pub fn format_str(content: &str, format: Format, options: &PrettierConfig) -> Re
         }
         Format::Json5 => prettier_json5::format_json5(content, options),
         Format::Yaml => prettier_yaml::format_yaml(content, options),
+        Format::Markdown => prettier_markdown::format_markdown(content, options),
     }
 }
 
@@ -87,6 +89,7 @@ pub fn detect_format(path: &Path) -> Option<Format> {
         "jsonc" => Some(Format::Jsonc),
         "json5" => Some(Format::Json5),
         "yaml" | "yml" => Some(Format::Yaml),
+        "md" | "markdown" => Some(Format::Markdown),
         _ => None,
     }
 }

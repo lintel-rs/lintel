@@ -1,0 +1,83 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`atx.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+# h1
+
+## h2
+
+=====================================output=====================================
+# h1
+
+## h2
+
+================================================================================
+`;
+
+exports[`hash-sign.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+# Programming languages
+
+## C#
+
+## JavaScript
+
+=====================================output=====================================
+# Programming languages
+
+## C#
+
+## JavaScript
+
+================================================================================
+`;
+
+exports[`long-heading.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+# this is a long long long long long long long long long long long long long long heading.
+
+=====================================output=====================================
+# this is a long long long long long long long long long long long long long long heading.
+
+================================================================================
+`;
+
+exports[`mixed.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+## LaraCart - Laravel Shopping Cart Package (<a href="http://laracart.lukepolo.com/">http://laracart.lukepolo.com</a>)
+
+=====================================output=====================================
+## LaraCart - Laravel Shopping Cart Package (<a href="http://laracart.lukepolo.com/">http://laracart.lukepolo.com</a>)
+
+================================================================================
+`;
+
+exports[`unbreakable.md - {"proseWrap":"always"} format 1`] = `
+====================================options=====================================
+parsers: ["markdown"]
+proseWrap: "always"
+                                                      printWidth: 80 (default) |
+=====================================input======================================
+### \`reporters\` [array<moduleName | [moduleName, options]>]
+
+=====================================output=====================================
+### \`reporters\` [array<moduleName | [moduleName, options]>]
+
+================================================================================
+`;
