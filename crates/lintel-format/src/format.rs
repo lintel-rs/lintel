@@ -54,32 +54,22 @@ fn detect_format(path: &Path) -> Option<FormatKind> {
 ///
 /// Returns an error if the file cannot be read, parsed, or formatted.
 fn format_single_file(path: &Path, content: &str, kind: FormatKind) -> Result<String> {
-    match kind {
-        FormatKind::Json => {
-            let opts = prettier_rs::resolve_config(path)?;
-            prettier_rs::format_str(content, prettier_rs::Format::Json, &opts)
-        }
-        FormatKind::Jsonc => {
-            let opts = prettier_rs::resolve_config(path)?;
-            prettier_rs::format_str(content, prettier_rs::Format::Jsonc, &opts)
-        }
-        FormatKind::Json5 => {
-            let opts = prettier_rs::resolve_config(path)?;
-            prettier_rs::format_str(content, prettier_rs::Format::Json5, &opts)
-        }
-        FormatKind::Yaml => {
-            let opts = prettier_rs::resolve_config(path)?;
-            prettier_rs::format_str(content, prettier_rs::Format::Yaml, &opts)
-        }
-        FormatKind::Markdown => {
-            let opts = prettier_rs::resolve_config(path)?;
-            prettier_rs::format_str(content, prettier_rs::Format::Markdown, &opts)
-        }
-        FormatKind::Toml => {
-            let formatted = taplo::formatter::format(content, taplo::formatter::Options::default());
-            Ok(formatted)
-        }
+    if kind == FormatKind::Toml {
+        return Ok(taplo::formatter::format(
+            content,
+            taplo::formatter::Options::default(),
+        ));
     }
+    let opts = prettier_rs::resolve_config(path)?;
+    let format = match kind {
+        FormatKind::Json => prettier_rs::Format::Json,
+        FormatKind::Jsonc => prettier_rs::Format::Jsonc,
+        FormatKind::Json5 => prettier_rs::Format::Json5,
+        FormatKind::Yaml => prettier_rs::Format::Yaml,
+        FormatKind::Markdown => prettier_rs::Format::Markdown,
+        FormatKind::Toml => unreachable!(),
+    };
+    prettier_rs::format_str(content, format, &opts)
 }
 
 /// Collect files to format from the given paths.

@@ -6,9 +6,6 @@ use anyhow::Result;
 pub use prettier_config::resolve::resolve_config;
 pub use prettier_config::{self, PrettierConfig};
 
-/// Backwards-compatible type alias.
-pub type PrettierOptions = PrettierConfig;
-
 /// Supported format types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {

@@ -4,7 +4,7 @@ use jsonc_parser::common::Ranged;
 
 use crate::PrettierConfig;
 use prettier_config::TrailingComma;
-use wadler_lindig::Doc;
+use wadler_lindig::{Doc, force_group_break, trim_trailing_whitespace};
 
 /// Format JSONC content, preserving comments.
 ///
@@ -136,14 +136,6 @@ impl<'a, 'b> CommentCtx<'a, 'b> {
             }
         }
         result
-    }
-}
-
-/// Force the outermost Group in a Doc to break by inserting `BreakParent`.
-fn force_group_break(doc: Doc) -> Doc {
-    match doc {
-        Doc::Group(inner) => Doc::Group(Box::new(Doc::concat(vec![Doc::BreakParent, *inner]))),
-        other => other,
     }
 }
 
@@ -574,11 +566,6 @@ fn normalize_number(s: &str) -> String {
     } else {
         mantissa
     }
-}
-
-/// Trim trailing whitespace from each line.
-fn trim_trailing_whitespace(s: &str) -> String {
-    s.lines().map(str::trim_end).collect::<Vec<_>>().join("\n")
 }
 
 /// Re-quote a string literal to use double quotes.

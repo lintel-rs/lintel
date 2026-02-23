@@ -1,13 +1,8 @@
-pub mod json;
 pub mod jsonc;
 
 use anyhow::Result;
 
 pub use prettier_config::{self, PrettierConfig};
-pub use wadler_lindig;
-
-/// Backwards-compatible type alias.
-pub type PrettierOptions = PrettierConfig;
 
 /// Supported JSON format types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

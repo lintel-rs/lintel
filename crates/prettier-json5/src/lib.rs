@@ -7,7 +7,7 @@ use anyhow::Result;
 use parser::{Comment, Key, Node, Quote};
 pub use prettier_config::PrettierConfig;
 use prettier_config::{QuoteProps, TrailingComma};
-use wadler_lindig::Doc;
+use wadler_lindig::{Doc, force_group_break, trim_trailing_whitespace};
 
 /// Format JSON5 content, preserving comments.
 ///
@@ -45,22 +45,10 @@ pub fn format_json5(content: &str, options: &PrettierConfig) -> Result<String> {
     let mut result = wadler_lindig::print(&full_doc, options);
 
     // Trim trailing whitespace on each line (prettier does this)
-    result = result
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n");
+    result = trim_trailing_whitespace(&result);
 
     result.push('\n');
     Ok(result)
-}
-
-/// Force the outermost Group in a Doc to break by inserting `BreakParent`.
-fn force_group_break(doc: Doc) -> Doc {
-    match doc {
-        Doc::Group(inner) => Doc::Group(Box::new(Doc::concat(vec![Doc::BreakParent, *inner]))),
-        other => other,
-    }
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]

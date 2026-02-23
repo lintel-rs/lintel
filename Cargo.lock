@@ -1547,7 +1547,7 @@ dependencies = [
  "ignore",
  "lintel-cli-common",
  "prettier-rs",
- "taplo 0.14.0",
+ "taplo",
  "tracing",
 ]
 
@@ -2140,8 +2140,6 @@ dependencies = [
  "prettier-config",
  "prettier-test-harness",
  "pretty_assertions",
- "serde",
- "serde_json",
  "wadler-lindig",
 ]
 
@@ -2158,7 +2156,7 @@ dependencies = [
  "prettier-test-harness",
  "prettier-yaml",
  "pretty_assertions",
- "taplo 0.13.2",
+ "taplo",
  "unicode-width 0.2.2",
  "wadler-lindig",
 ]
@@ -2172,7 +2170,6 @@ dependencies = [
  "prettier-json5",
  "prettier-jsonc",
  "prettier-markdown",
- "prettier-test-harness",
  "prettier-yaml",
 ]
 
@@ -2997,27 +2994,6 @@ dependencies = [
  "thiserror 2.0.18",
  "walkdir",
  "yaml-rust",
-]
-
-[[package]]
-name = "taplo"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "010941ac4171eaf12f1e26dfc11dadaf78619ea2330940fef01fe6bb0442d14d"
-dependencies = [
- "ahash",
- "arc-swap",
- "either",
- "globset",
- "itertools",
- "logos",
- "once_cell",
- "rowan",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "time",
- "tracing",
 ]
 
 [[package]]

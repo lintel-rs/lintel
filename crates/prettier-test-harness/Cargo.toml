@@ -2,6 +2,11 @@
 name = "prettier-test-harness"
 version = "0.1.0"
 edition.workspace = true
+description = "Test harness for prettier-compatible formatter crates"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }

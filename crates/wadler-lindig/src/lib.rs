@@ -341,6 +341,19 @@ fn fits_with_stack(mut stack: Vec<(IndentState, &Doc)>, remaining: usize) -> boo
     rem >= 0
 }
 
+/// Force the outermost Group in a Doc to break by inserting `BreakParent`.
+pub fn force_group_break(doc: Doc) -> Doc {
+    match doc {
+        Doc::Group(inner) => Doc::Group(Box::new(Doc::concat(vec![Doc::BreakParent, *inner]))),
+        other => other,
+    }
+}
+
+/// Trim trailing whitespace from each line.
+pub fn trim_trailing_whitespace(s: &str) -> String {
+    s.lines().map(str::trim_end).collect::<Vec<_>>().join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

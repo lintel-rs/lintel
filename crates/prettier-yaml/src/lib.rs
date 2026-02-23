@@ -11,9 +11,6 @@ use anyhow::Result;
 
 pub use prettier_config::{self, PrettierConfig, ProseWrap};
 
-/// Backwards-compatible type alias.
-pub type YamlFormatOptions = PrettierConfig;
-
 /// Format YAML content with prettier-compatible output.
 ///
 /// # Errors
@@ -251,53 +248,6 @@ mod tests {
             "#6445\n\nobj:\n  # before\n\n  # before\n\n  key: value\n\n  # after\n\n  # after\n";
         let result = format_yaml(input, &PrettierConfig::default()).expect("format");
         assert_eq!(result, input);
-    }
-
-    #[test]
-    fn debug_spec_88_ast() {
-        let input = "|\n \n  \n  literal\n   \n  \n  text\n\n # Comment\n";
-        let events = crate::parser::collect_events(input).expect("parse");
-        let comments = crate::comments::extract_comments(input);
-        eprintln!("COMMENTS:");
-        for (i, c) in comments.iter().enumerate() {
-            eprintln!(
-                "  {} line={} col={} whole={} text={:?}",
-                i, c.line, c.col, c.whole_line, c.text
-            );
-        }
-        eprintln!("EVENTS:");
-        for (i, (ev, sp)) in events.iter().enumerate() {
-            eprintln!(
-                "  {} {:?} {}:{}-{}:{}",
-                i,
-                ev,
-                sp.start.line(),
-                sp.start.col(),
-                sp.end.line(),
-                sp.end.col()
-            );
-        }
-        let mut builder = crate::parser::AstBuilder::new(input, &events, &comments);
-        let stream = builder.build_stream().expect("build");
-        eprintln!(
-            "STREAM trailing_comments: {:?}",
-            stream.trailing_comments.len()
-        );
-        for c in &stream.trailing_comments {
-            eprintln!(
-                "  line={} col={} blank_before={} text={:?}",
-                c.line, c.col, c.blank_line_before, c.text
-            );
-        }
-        for (i, doc) in stream.documents.iter().enumerate() {
-            eprintln!("DOC {}: end_comments={}", i, doc.end_comments.len());
-            for c in &doc.end_comments {
-                eprintln!(
-                    "  line={} col={} blank_before={} text={:?}",
-                    c.line, c.col, c.blank_line_before, c.text
-                );
-            }
-        }
     }
 
     #[test]

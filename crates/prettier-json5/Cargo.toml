@@ -2,6 +2,11 @@
 name = "prettier-json5"
 version = "0.1.0"
 edition.workspace = true
+description = "Prettier-compatible JSON5 formatter"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
