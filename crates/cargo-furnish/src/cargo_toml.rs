@@ -130,6 +130,20 @@ pub struct UnnecessaryReadme {
     pub span: SourceSpan,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("`publish = false` should not be set")]
+#[diagnostic(
+    code(furnish::publish_false),
+    severity(Warning),
+    help("autofixable with cargo furnish check --fix")
+)]
+pub struct PublishFalse {
+    #[source_code]
+    pub src: NamedSource<String>,
+    #[label("remove this field")]
+    pub span: SourceSpan,
+}
+
 /// Fields that should use `.workspace = true` when the workspace defines them.
 const WORKSPACE_INHERITABLE: &[&str] = &["edition", "authors", "license", "repository", "homepage"];
 
@@ -264,6 +278,14 @@ fn check_package_fields(
     if ctx.package.get("readme").is_some() {
         let (offset, len) = find_line_span(ctx.content, "readme");
         diagnostics.push(Box::new(UnnecessaryReadme {
+            src: (ctx.src)(ctx.content),
+            span: (offset, len).into(),
+        }));
+    }
+
+    if ctx.package.get("publish").and_then(Item::as_bool) == Some(false) {
+        let (offset, len) = find_line_span(ctx.content, "publish =");
+        diagnostics.push(Box::new(PublishFalse {
             src: (ctx.src)(ctx.content),
             span: (offset, len).into(),
         }));
@@ -531,6 +553,7 @@ pub fn fix_cargo_toml(
         .context("Cargo.toml has no [package] table")?;
 
     package.remove("readme");
+    package.remove("publish");
 
     let name = package
         .get("name")
