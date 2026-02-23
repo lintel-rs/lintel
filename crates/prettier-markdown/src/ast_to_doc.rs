@@ -167,7 +167,7 @@ fn block_to_doc_with_options<'a>(
         NodeValue::Heading(heading) => heading_to_doc(node, *heading, options, source),
         NodeValue::CodeBlock(_) => {
             drop(data);
-            code_block_to_doc_node(node, source)
+            code_block_to_doc_node(node, source, options)
         }
         NodeValue::BlockQuote => blockquote_to_doc(node, options, source),
         NodeValue::List(list) => list_to_doc(
@@ -555,7 +555,11 @@ fn heading_to_doc<'a>(
 /// comrak strips the "optional space" after `>` in blockquote continuation lines
 /// (per `CommonMark` spec), but prettier preserves it for code blocks. This function
 /// detects blockquote ancestry and restores the stripped space by checking source lines.
-fn code_block_to_doc_node<'a>(node: &'a Node<'a, RefCell<Ast>>, source: &str) -> Doc {
+fn code_block_to_doc_node<'a>(
+    node: &'a Node<'a, RefCell<Ast>>,
+    source: &str,
+    options: &PrettierConfig,
+) -> Doc {
     let data = node.data.borrow();
     let NodeValue::CodeBlock(cb) = &data.value else {
         return Doc::text("");
@@ -578,7 +582,7 @@ fn code_block_to_doc_node<'a>(node: &'a Node<'a, RefCell<Ast>>, source: &str) ->
     };
 
     if !in_blockquote || !cb.fenced {
-        return code_block_to_doc(cb);
+        return code_block_to_doc(cb, options);
     }
 
     // For fenced code blocks inside blockquotes, fix the stripped optional space.
@@ -620,10 +624,30 @@ fn code_block_to_doc_node<'a>(node: &'a Node<'a, RefCell<Ast>>, source: &str) ->
         literal: fixed_literal,
     };
     drop(data);
-    code_block_to_doc(&fixed_cb)
+    code_block_to_doc(&fixed_cb, options)
 }
 
-fn code_block_to_doc(cb: &NodeCodeBlock) -> Doc {
+/// Format embedded code using language-specific formatters.
+/// Returns `None` if the language is unsupported or formatting fails.
+fn format_embedded_code(code: &str, lang: &str, options: &PrettierConfig) -> Option<String> {
+    // Extract language name from info string (e.g., "js title=foo" → "js")
+    let lang = lang.split_whitespace().next().unwrap_or(lang);
+    match lang {
+        "json" => prettier_jsonc::format_str(code, prettier_jsonc::JsonFormat::Json, options).ok(),
+        "jsonc" => {
+            prettier_jsonc::format_str(code, prettier_jsonc::JsonFormat::Jsonc, options).ok()
+        }
+        "json5" => prettier_json5::format_json5(code, options).ok(),
+        "yaml" | "yml" => prettier_yaml::format_yaml(code, options).ok(),
+        "toml" => Some(taplo::formatter::format(
+            code,
+            taplo::formatter::Options::default(),
+        )),
+        _ => None,
+    }
+}
+
+fn code_block_to_doc(cb: &NodeCodeBlock, options: &PrettierConfig) -> Doc {
     // Indented code blocks: preserve as-is with 4-space indent
     if !cb.fenced {
         let literal = cb.literal.strip_suffix('\n').unwrap_or(&cb.literal);
@@ -649,6 +673,11 @@ fn code_block_to_doc(cb: &NodeCodeBlock) -> Doc {
     // for indentation inside list items), so we normalize it.
     let literal = strip_common_leading_whitespace(&cb.literal);
 
+    // Try to format embedded code using language-specific formatters.
+    // Falls back to pass-through if the formatter fails (e.g., syntax error).
+    let formatted = format_embedded_code(&literal, info, options);
+    let literal = formatted.as_deref().unwrap_or(&literal);
+
     // Determine fence character: use ``` by default, ```` (quadruple) if code contains ```
     let fence = if literal.contains("```") || cb.literal.contains("```") {
         "````"
@@ -660,7 +689,7 @@ fn code_block_to_doc(cb: &NodeCodeBlock) -> Doc {
     parts.push(Doc::text(format!("{fence}{info}")));
     parts.push(Doc::Hardline);
 
-    let code = literal.strip_suffix('\n').unwrap_or(&literal);
+    let code = literal.strip_suffix('\n').unwrap_or(literal);
     if !code.is_empty() {
         // Prettier collapses consecutive blank lines inside code blocks to at most 1,
         // but preserves trailing blank lines.

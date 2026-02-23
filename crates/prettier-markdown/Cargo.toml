@@ -5,9 +5,12 @@ edition.workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
+prettier-jsonc = { version = "0.1.0", path = "../prettier-jsonc" }
+prettier-json5 = { version = "0.1.0", path = "../prettier-json5" }
 prettier-yaml = { version = "0.1.0", path = "../prettier-yaml" }
 wadler-lindig = { version = "0.1.0", path = "../wadler-lindig" }
 comrak = { version = "0.36", default-features = false }
+taplo = "0.13"
 unicode-width = "0.2"
 anyhow = "1"
 

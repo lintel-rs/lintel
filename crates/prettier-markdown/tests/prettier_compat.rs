@@ -1,7 +1,253 @@
 mod snapshot_parser;
 
 use prettier_markdown::format_markdown;
+use std::collections::HashSet;
 use std::path::Path;
+
+/// Known test failures with explanations.
+///
+/// Each entry is a `(dir, test_name, reason)` tuple. Tests listed here are
+/// expected to fail and won't cause CI failures. If a listed test starts
+/// passing, the test harness will flag it as a stale exclusion so we can
+/// remove it.
+const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
+    // ── Embedded CSS formatting ──────────────────────────────────────────
+    // These tests expect prettier's CSS formatter to reformat CSS code blocks.
+    // We don't have a CSS formatter, so the code blocks are passed through as-is.
+    (
+        "markdown/code",
+        "mdn-auth-api.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS/JS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-1.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-2.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-3.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-4.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-5.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-6.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-7.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-8.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-background-9.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-filter-1.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-filter-2.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-font-face-1.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-font-face-2.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-grid-auto-columns.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-import.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-mask-image.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-padding-1.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-padding-2.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-transform.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    (
+        "markdown/code",
+        "mdn-unicode-range.md - {\"proseWrap\":\"always\"} format 1",
+        "no CSS formatter",
+    ),
+    // ── Embedded JS/TS formatting ────────────────────────────────────────
+    // These tests expect prettier's JavaScript/TypeScript formatter to reformat
+    // JS/TS code blocks. We don't have JS/TS formatters.
+    (
+        "markdown/code",
+        "0-indent-js.md - {\"proseWrap\":\"always\"} format 1",
+        "no JS formatter",
+    ),
+    (
+        "markdown/code",
+        "format.md - {\"proseWrap\":\"always\"} format 1",
+        "no JS formatter",
+    ),
+    (
+        "markdown/code",
+        "leading-trailing-newlines.md - {\"proseWrap\":\"always\"} format 1",
+        "no JS formatter",
+    ),
+    (
+        "markdown/code",
+        "ts-trailing-comma.md - {\"proseWrap\":\"always\"} format 1",
+        "no TS formatter",
+    ),
+    // ── Embedded Angular formatting ──────────────────────────────────────
+    // These tests expect prettier's Angular formatter for angular-html and
+    // angular-ts code blocks. We don't have an Angular formatter.
+    (
+        "markdown/code/angular",
+        "angular-html.md format 1",
+        "no Angular formatter",
+    ),
+    (
+        "markdown/code/angular",
+        "angular-ts.md format 1",
+        "no Angular formatter",
+    ),
+    // ── JSON formatting differences ──────────────────────────────────────
+    // Our JSON formatter collapses single-entry objects to one line (e.g.,
+    // `{ "browser": true }`) while prettier's JSON formatter always expands
+    // them. The formatting is valid but differs from prettier's output.
+    (
+        "markdown/blockquote",
+        "code.md - {\"proseWrap\":\"always\"} format 1",
+        "JSON object collapsing differs from prettier",
+    ),
+    (
+        "markdown/blockquote",
+        "code.md - {\"proseWrap\":\"never\"} format 1",
+        "JSON object collapsing differs from prettier",
+    ),
+    (
+        "markdown/blockquote",
+        "code.md - {\"proseWrap\":\"preserve\"} format 1",
+        "JSON object collapsing differs from prettier",
+    ),
+    // ── prettier-ignore in blockquotes ───────────────────────────────────
+    // These tests exercise `<!-- prettier-ignore -->` comments inside blockquotes
+    // and embedded JS formatting with `// prettier-ignore`. We don't implement
+    // prettier-ignore semantics or JS formatting.
+    (
+        "markdown/blockquote",
+        "ignore-code.md - {\"proseWrap\":\"always\"} format 1",
+        "no prettier-ignore or JS formatter",
+    ),
+    (
+        "markdown/blockquote",
+        "ignore-code.md - {\"proseWrap\":\"never\"} format 1",
+        "no prettier-ignore or JS formatter",
+    ),
+    (
+        "markdown/blockquote",
+        "ignore-code.md - {\"proseWrap\":\"preserve\"} format 1",
+        "no prettier-ignore or JS formatter",
+    ),
+    // ── Blockquote interruption ──────────────────────────────────────────
+    // This test covers blockquote interruption of other block-level elements,
+    // which requires tracking whether a blockquote lazily continues or starts
+    // a new context. Our blockquote handler doesn't distinguish these cases.
+    (
+        "markdown/blockquote",
+        "interrupt-others.md - {\"proseWrap\":\"preserve\"} format 1",
+        "blockquote lazy continuation",
+    ),
+    // ── Setext headings ──────────────────────────────────────────────────
+    // These tests involve link reference definitions (`[foo]: url`) which comrak
+    // resolves and removes from the AST. We can't reproduce them in output
+    // because the definitions aren't preserved as AST nodes.
+    (
+        "markdown/heading/setext",
+        "definition-before.md format 1",
+        "link reference definitions not in AST",
+    ),
+    (
+        "markdown/heading/setext",
+        "snippet: #1 format 1",
+        "link reference definitions not in AST",
+    ),
+    // ── Link escaping ────────────────────────────────────────────────────
+    // These tests cover backslash escaping of special characters inside link
+    // URLs and titles. Our link formatter doesn't replicate prettier's exact
+    // escaping strategy for characters like `(`, `)`, and `"` in URLs.
+    (
+        "markdown/link",
+        "escape-in-link.md - {\"proseWrap\":\"always\",\"singleQuote\":true} format 1",
+        "link escape differences",
+    ),
+    (
+        "markdown/link",
+        "escape-in-link.md - {\"proseWrap\":\"always\"} format 1",
+        "link escape differences",
+    ),
+    // ── Image alt text wrapping ──────────────────────────────────────────
+    // This test expects image alt text to be wrapped at print_width. Our
+    // formatter treats image alt text as atomic (not wrappable).
+    (
+        "markdown/image",
+        "alt.md - {\"proseWrap\":\"always\"} format 1",
+        "image alt text wrapping",
+    ),
+    // ── Hard break wrapping ──────────────────────────────────────────────
+    // This test expects hard breaks (trailing `\` or `  `) to interact with
+    // prose wrapping in a specific way. Our formatter doesn't re-wrap text
+    // around hard breaks.
+    (
+        "markdown/break",
+        "wrap.md - {\"proseWrap\":\"always\"} format 1",
+        "hard break + prose wrap interaction",
+    ),
+];
 
 fn run_fixture_dir(dir: &str) {
     let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
@@ -15,52 +261,63 @@ fn run_fixture_dir(dir: &str) {
     let cases = snapshot_parser::parse_snapshot(&content);
     assert!(!cases.is_empty(), "No test cases found in {dir}");
 
-    let strict = std::env::var("PRETTIER_STRICT").is_ok();
-    let mut passed = 0;
-    let mut failed = 0;
-    let mut skipped = 0;
-    let mut failures: Vec<(String, String, String)> = Vec::new();
-    let mut all_failure_names: Vec<String> = Vec::new();
+    let known: HashSet<&str> = KNOWN_FAILURES
+        .iter()
+        .filter(|(d, _, _)| *d == dir)
+        .map(|(_, name, _)| *name)
+        .collect();
+
+    let mut counts = (0usize, 0usize, 0usize, 0usize); // passed, failed, skipped, expected
+    let mut unexpected: Vec<(String, String, String)> = Vec::new();
+    let mut stale: Vec<String> = Vec::new();
 
     for case in &cases {
         if case.parser.as_str() != "markdown" {
-            skipped += 1;
+            counts.2 += 1;
             continue;
         }
+        let is_known = known.contains(case.name.as_str());
+        let result = format_markdown(&case.input, &case.options);
+        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
 
-        match format_markdown(&case.input, &case.options) {
-            Ok(actual) => {
-                if actual == case.expected {
-                    passed += 1;
-                } else {
-                    failed += 1;
-                    all_failure_names.push(case.name.clone());
-                    if failures.len() < 50 {
-                        failures.push((case.name.clone(), case.expected.clone(), actual));
-                    }
-                }
+        if matches {
+            counts.0 += 1;
+            if is_known {
+                stale.push(case.name.clone());
             }
-            Err(e) => {
-                failed += 1;
-                all_failure_names.push(case.name.clone());
-                if failures.len() < 20 {
-                    failures.push((
-                        case.name.clone(),
-                        case.expected.clone(),
-                        format!("ERROR: {e}"),
-                    ));
-                }
+        } else if is_known {
+            counts.3 += 1;
+        } else {
+            counts.1 += 1;
+            if unexpected.len() < 20 {
+                let actual = result.unwrap_or_else(|e| format!("ERROR: {e}"));
+                unexpected.push((case.name.clone(), case.expected.clone(), actual));
             }
         }
     }
 
-    let total = passed + failed;
-    eprintln!("{dir}: {passed}/{total} passed ({failed} failed, {skipped} skipped)");
+    let (passed, failed, skipped, expected_failures) = counts;
+    let total = passed + failed + expected_failures;
+    eprintln!(
+        "{dir}: {passed}/{total} passed ({expected_failures} known, {failed} unexpected, {skipped} skipped)"
+    );
+    print_failures(dir, &unexpected, &stale);
 
-    if !failures.is_empty() {
-        let max_diffs = 50;
-        eprintln!("\n  First {max_diffs} failure(s) in {dir}:");
-        for (name, expected, actual) in failures.iter().take(max_diffs) {
+    assert!(
+        unexpected.is_empty(),
+        "{dir}: {failed} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter"
+    );
+    assert!(
+        stale.is_empty(),
+        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
+        stale.len()
+    );
+}
+
+fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
+    if !unexpected.is_empty() {
+        eprintln!("\n  Unexpected failures in {dir}:");
+        for (name, expected, actual) in unexpected {
             eprintln!("\n  --- {name} ---");
             if actual.starts_with("ERROR:") {
                 eprintln!("  {actual}");
@@ -70,17 +327,15 @@ fn run_fixture_dir(dir: &str) {
                 }
             }
         }
-        eprintln!("\n  All {dir} failure names ({}):", all_failure_names.len());
-        for name in &all_failure_names {
+        eprintln!();
+    }
+    if !stale.is_empty() {
+        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
+        for name in stale {
             eprintln!("  - {name}");
         }
         eprintln!();
     }
-
-    assert!(
-        !(strict && failed > 0),
-        "{dir}: {failed}/{total} tests failed (PRETTIER_STRICT=1)"
-    );
 }
 
 /// Simple line-by-line diff for readable failure output.
