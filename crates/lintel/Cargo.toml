@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
+ansi-term-styles = "0.1.0"
 lintel-annotate = { version = "0.0.9", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.10", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }

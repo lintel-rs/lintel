@@ -1,6 +1,6 @@
 #[cfg(test)]
-pub(crate) use ansi_term_codes::BLUE;
-pub(crate) use ansi_term_codes::{BOLD, CYAN, DIM, GREEN, MAGENTA, RED, RESET, YELLOW};
+pub(crate) use ansi_term_styles::BLUE;
+pub(crate) use ansi_term_styles::{BOLD, CYAN, DIM, GREEN, MAGENTA, RED, RESET, YELLOW};
 
 /// Formatting context passed through the rendering functions.
 pub(crate) struct Fmt<'a> {
@@ -70,6 +70,7 @@ impl Fmt<'_> {
         markdown_to_ansi::Options {
             syntax_highlight: self.syntax_highlight,
             width,
+            code_bg: true,
         }
     }
 }
