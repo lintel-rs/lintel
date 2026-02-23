@@ -34,14 +34,12 @@ JSON Schema uses ECMA 262 regular expressions. The `jsonschema` crate validates 
 ## Usage
 
 ```rust
-use serde_json;
-
-// Migrate an entire schema to 2020-12
-let mut schema: serde_json::Value = serde_json::from_str(r#"{
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let mut schema: serde_json::Value = serde_json::from_str(r##"{
   "$schema": "http://json-schema.org/draft-04/schema#",
   "definitions": { "name": { "type": "string" } },
   "$ref": "#/definitions/name"
-}"#)?;
+}"##)?;
 
 jsonschema_migrate::migrate_to_2020_12(&mut schema);
 // schema now uses $defs, $ref points to #/$defs/name, $schema is 2020-12
@@ -52,6 +50,8 @@ assert_eq!(pattern, r"^[A-Z]{2,4}$"); // valid quantifier, unchanged
 
 let pattern = jsonschema_migrate::normalize_ecma_regex(r"^foo{bar}$");
 assert_eq!(pattern, r"^foo\{bar\}$"); // bare braces escaped
+# Ok(())
+# }
 ```
 
 Part of [Lintel](https://github.com/lintel-rs/lintel), a JSON Schema toolkit.
