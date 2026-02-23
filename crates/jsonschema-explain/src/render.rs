@@ -148,6 +148,20 @@ fn render_property_details(
         );
     }
 
+    if let Some(examples) = prop_schema.get("examples").and_then(Value::as_array)
+        && !examples.is_empty()
+    {
+        let joined: String = examples
+            .iter()
+            .map(|v| {
+                let display = format_value(v);
+                format!("{}{display}{}", f.magenta, f.reset)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        write_label(out, desc_indent, "Examples", &joined);
+    }
+
     for keyword in COMPOSITION_KEYWORDS {
         if let Some(variants) = prop_schema.get(*keyword).and_then(Value::as_array) {
             let label = match *keyword {
@@ -170,16 +184,6 @@ fn render_property_details(
         let nested_required = required_set(prop_schema);
         out.push('\n');
         render_properties(out, nested_props, &nested_required, root, f, depth + 1);
-    }
-
-    if prop_schema.get("type").and_then(Value::as_str) == Some("array")
-        && let Some(items) = prop_schema.get("items")
-    {
-        let items = resolve_ref(items, root);
-        let item_ty = schema_type_str(items).unwrap_or_default();
-        if !item_ty.is_empty() {
-            write_label(out, desc_indent, "Items", &format_type(&item_ty, f));
-        }
     }
 }
 

@@ -101,7 +101,7 @@ pub(crate) fn schema_type_str(schema: &Value) -> Option<String> {
         return match ty {
             Value::String(s) if s == "array" => match schema.get("items").and_then(schema_type_str)
             {
-                Some(item_ty) => Some(format!("array of {item_ty}")),
+                Some(item_ty) => Some(format!("{item_ty}[]")),
                 None => Some("array".to_string()),
             },
             Value::String(s) => Some(s.clone()),

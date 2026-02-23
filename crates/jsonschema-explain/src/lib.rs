@@ -9,7 +9,9 @@ use core::fmt::Write;
 
 use serde_json::Value;
 
-use fmt::{COMPOSITION_KEYWORDS, Fmt, format_header, format_type, format_type_suffix};
+use fmt::{
+    COMPOSITION_KEYWORDS, Fmt, format_header, format_type, format_type_suffix, format_value,
+};
 use man::{write_description, write_section};
 use render::{render_properties, render_subschema, render_variant_block};
 use schema::{get_description, required_set, resolve_ref, schema_type_str};
@@ -97,6 +99,7 @@ pub fn explain(schema: &Value, name: &str, opts: &ExplainOptions) -> String {
         out.push('\n');
     }
 
+    render_examples_section(&mut out, schema, &f);
     render_variants_section(&mut out, schema, &f);
     render_definitions_section(&mut out, schema, &f);
 
@@ -139,6 +142,33 @@ fn render_variants_section(out: &mut String, schema: &Value, f: &Fmt<'_>) {
             out.push('\n');
         }
     }
+}
+
+/// Render an EXAMPLES section when the schema has top-level `examples`.
+fn render_examples_section(out: &mut String, schema: &Value, f: &Fmt<'_>) {
+    let examples = match schema.get("examples").and_then(Value::as_array) {
+        Some(arr) if !arr.is_empty() => arr,
+        _ => return,
+    };
+
+    write_section(out, "EXAMPLES", f);
+    for (i, example) in examples.iter().enumerate() {
+        if examples.len() > 1 {
+            let _ = writeln!(out, "    {}({}){}:", f.dim, i + 1, f.reset);
+        }
+        match example {
+            Value::Object(_) | Value::Array(_) => {
+                let json = serde_json::to_string_pretty(example).unwrap_or_default();
+                let lang_hint = if f.syntax_highlight { "json" } else { "" };
+                let block = format!("```{lang_hint}\n{json}\n```");
+                write_description(out, &block, f, "    ");
+            }
+            _ => {
+                let _ = writeln!(out, "    {}{}{}", f.magenta, format_value(example), f.reset);
+            }
+        }
+    }
+    out.push('\n');
 }
 
 /// Render the DEFINITIONS section (`$defs`/`definitions`).
@@ -617,6 +647,55 @@ mod tests {
         let err = explain_at_path(&schema, "/nonexistent/path", "test", &plain());
         assert!(err.is_err());
         assert!(err.unwrap_err().contains("nonexistent"));
+    }
+
+    #[test]
+    fn property_examples_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "examples": ["TAG-ID", "DUNS"]
+                }
+            }
+        });
+
+        let output = explain(&schema, "examples-test", &plain());
+        assert!(output.contains("Examples: \"TAG-ID\", \"DUNS\""));
+    }
+
+    #[test]
+    fn top_level_examples_section() {
+        let schema = json!({
+            "type": "object",
+            "examples": [
+                { "name": "test", "value": 42 }
+            ]
+        });
+
+        let output = explain(&schema, "examples-test", &plain());
+        assert!(output.contains("EXAMPLES"));
+        assert!(output.contains("\"name\": \"test\""));
+        assert!(output.contains("\"value\": 42"));
+    }
+
+    #[test]
+    fn empty_examples_not_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "examples": []
+                }
+            },
+            "examples": []
+        });
+
+        let output = explain(&schema, "empty-test", &plain());
+        assert!(!output.contains("Examples"));
+        assert!(!output.contains("EXAMPLES"));
     }
 
     #[test]

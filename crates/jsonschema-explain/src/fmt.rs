@@ -77,7 +77,7 @@ impl Fmt<'_> {
 /// Format a type string with color.
 ///
 /// Splits on ` | ` to colorize each alternative, and handles
-/// compound types like `array of string`.
+/// compound types like `string[]`.
 pub(crate) fn format_type(ty: &str, f: &Fmt<'_>) -> String {
     if ty.is_empty() {
         return String::new();
@@ -88,15 +88,8 @@ pub(crate) fn format_type(ty: &str, f: &Fmt<'_>) -> String {
             .map(|p| format!("{}{p}{}", f.cyan, f.reset))
             .collect::<Vec<_>>()
             .join(&separator)
-    } else if let Some(rest) = ty.strip_prefix("array of ") {
-        format!(
-            "{}array{} {}of{} {}",
-            f.cyan,
-            f.reset,
-            f.dim,
-            f.reset,
-            format_type(rest, f)
-        )
+    } else if let Some(rest) = ty.strip_suffix("[]") {
+        format!("{}{}[]{}", format_type(rest, f), f.cyan, f.reset)
     } else {
         format!("{}{ty}{}", f.cyan, f.reset)
     }
