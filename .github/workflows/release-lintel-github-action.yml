@@ -58,6 +58,6 @@ jobs:
           MAJOR="v$(echo "${{ inputs.version }}" | cut -d. -f1)"
           SHA=$(gh api repos/lintel-rs/action/git/ref/tags/lintel-github-action-v${{ inputs.version }} --jq .object.sha)
           gh api repos/lintel-rs/action/git/refs/tags/${MAJOR} \
-            -X PATCH -f sha="$SHA" -f force=true 2>/dev/null \
+            -X PATCH -f sha="$SHA" -F force=true 2>/dev/null \
           || gh api repos/lintel-rs/action/git/refs \
             -X POST -f ref="refs/tags/${MAJOR}" -f sha="$SHA"
