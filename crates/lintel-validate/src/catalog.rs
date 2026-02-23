@@ -1,6 +1,5 @@
-pub use schemastore::{CATALOG_URL, Catalog, CompiledCatalog};
-
-use crate::retriever::SchemaCache;
+use lintel_schema_cache::SchemaCache;
+use schemastore::Catalog;
 
 /// Fetch the `SchemaStore` catalog via the schema cache.
 ///
@@ -10,7 +9,7 @@ use crate::retriever::SchemaCache;
 pub async fn fetch_catalog(
     cache: &SchemaCache,
 ) -> Result<Catalog, Box<dyn core::error::Error + Send + Sync>> {
-    let (value, _status) = cache.fetch(CATALOG_URL).await?;
+    let (value, _status) = cache.fetch(schemastore::CATALOG_URL).await?;
     let catalog = schemastore::parse_catalog(value)?;
     Ok(catalog)
 }

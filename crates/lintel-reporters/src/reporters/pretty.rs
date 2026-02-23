@@ -4,10 +4,9 @@ use std::io::IsTerminal;
 use ansi_term_codes::{BOLD, DIM, RESET};
 use miette::Report;
 
-use lintel_check::validate::{CheckedFile, ValidateResult};
-
-use crate::format_checked_verbose;
-use crate::reporter::Reporter;
+use lintel_validate::format_checked_verbose;
+use lintel_validate::reporter::Reporter;
+use lintel_validate::validate::{CheckedFile, ValidateResult};
 
 /// Pretty reporter: fancy miette output with colors and timing.
 pub struct PrettyReporter {

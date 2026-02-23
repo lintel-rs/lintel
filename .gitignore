@@ -14,3 +14,7 @@ devenv.local.yaml
 
 # npm-release-binaries output
 /npm-publish/
+
+# Nix artifact
+/result
+

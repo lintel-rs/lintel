@@ -8,10 +8,9 @@ use anyhow::{Context, Result};
 use bpaf::Bpaf;
 use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 
-use lintel_check::config;
-use lintel_check::parsers;
-use lintel_check::retriever::SchemaCache;
-use lintel_check::validate;
+use lintel_schema_cache::SchemaCache;
+use lintel_validate::parsers;
+use lintel_validate::validate;
 use schemastore::SchemaMatch;
 
 // ---------------------------------------------------------------------------
@@ -351,8 +350,8 @@ fn resolve_schema<'a>(
     instance: &serde_json::Value,
     path_str: &str,
     file_name: &'a str,
-    cfg: &'a config::Config,
-    catalogs: &'a [lintel_check::catalog::CompiledCatalog],
+    cfg: &'a lintel_config::Config,
+    catalogs: &'a [schemastore::CompiledCatalog],
 ) -> Option<ResolvedSchema<'a>> {
     if let Some(uri) = parser.extract_schema_uri(content, instance) {
         return Some(ResolvedSchema {
@@ -370,8 +369,8 @@ fn resolve_schema<'a>(
 fn resolve_schema_path_only<'a>(
     path_str: &str,
     file_name: &'a str,
-    cfg: &'a config::Config,
-    catalogs: &'a [lintel_check::catalog::CompiledCatalog],
+    cfg: &'a lintel_config::Config,
+    catalogs: &'a [schemastore::CompiledCatalog],
 ) -> Option<ResolvedSchema<'a>> {
     if let Some((pattern, url)) = cfg
         .schemas
@@ -408,8 +407,8 @@ fn finalize_uri(
     config_dir: &Path,
     file_path: &Path,
 ) -> (String, bool) {
-    let schema_uri = config::apply_rewrites(raw_uri, rewrites);
-    let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
+    let schema_uri = lintel_config::apply_rewrites(raw_uri, rewrites);
+    let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
 
     let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
     let schema_uri = if is_remote {

@@ -54,24 +54,6 @@ pub enum LintError {
         schema_path: String,
     },
 
-    /// Validation error for `lintel.toml` against its built-in schema.
-    ///
-    /// Uses `#[error("{path}: {message}")]` so the path appears even when
-    /// rendered as a plain string (e.g. via `to_string()`). The `path` field
-    /// mirrors `Validation` for consistency; `src` carries the same value via
-    /// `NamedSource` for miette's source-code rendering.
-    #[error("{path}: {message}")]
-    #[diagnostic(code(lintel::config))]
-    Config {
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("{instance_path}")]
-        span: SourceSpan,
-        path: String,
-        instance_path: String,
-        message: String,
-    },
-
     #[error("{path}: {message}")]
     #[diagnostic(code(lintel::io))]
     Io { path: String, message: String },
@@ -101,7 +83,6 @@ impl LintError {
         match self {
             LintError::Parse { src, .. } => src.name(),
             LintError::Validation { path, .. }
-            | LintError::Config { path, .. }
             | LintError::Io { path, .. }
             | LintError::SchemaFetch { path, .. }
             | LintError::SchemaCompile { path, .. } => path,
@@ -113,7 +94,6 @@ impl LintError {
         match self {
             LintError::Parse { message, .. }
             | LintError::Validation { message, .. }
-            | LintError::Config { message, .. }
             | LintError::Io { message, .. }
             | LintError::SchemaFetch { message, .. }
             | LintError::SchemaCompile { message, .. } => message,
@@ -123,9 +103,7 @@ impl LintError {
     /// Byte offset in the source file (for sorting).
     pub fn offset(&self) -> usize {
         match self {
-            LintError::Parse { span, .. }
-            | LintError::Validation { span, .. }
-            | LintError::Config { span, .. } => span.offset(),
+            LintError::Parse { span, .. } | LintError::Validation { span, .. } => span.offset(),
             LintError::Io { .. }
             | LintError::SchemaFetch { .. }
             | LintError::SchemaCompile { .. } => 0,
@@ -356,16 +334,6 @@ mod tests {
                     schema_path: String::new(),
                 },
                 "lintel::validation",
-            ),
-            (
-                LintError::Config {
-                    src: NamedSource::new("f", String::new()),
-                    span: 0.into(),
-                    path: String::new(),
-                    instance_path: String::new(),
-                    message: String::new(),
-                },
-                "lintel::config",
             ),
             (
                 LintError::Io {

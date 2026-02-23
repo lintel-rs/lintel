@@ -34,49 +34,24 @@
               (craneLib.filterCargoSources path type) || (testdataFilter path type) || (readmeFilter path type);
           };
 
-        packages' = import ./nix/packages.nix { inherit craneLib pkgs src; };
-        inherit (packages')
-          lintel
-          lintel-schemastore-catalog
-          lintel-catalog-builder
-          lintel-github-action
-          cargo-furnish
-          npm-release-binaries
-          ;
+        packages = import ./nix/packages.nix { inherit craneLib pkgs src; };
       in
       {
         checks = {
-          inherit lintel lintel-github-action;
+          inherit (packages) lintel lintel-github-action;
         };
 
-        packages = {
-          inherit
-            lintel
-            lintel-schemastore-catalog
-            lintel-catalog-builder
-            lintel-github-action
-            cargo-furnish
-            npm-release-binaries
-            ;
-          default = lintel;
-          all = pkgs.symlinkJoin {
-            name = "lintel-all";
-            paths = [
-              lintel
-              lintel-schemastore-catalog
-              lintel-catalog-builder
-              lintel-github-action
-              cargo-furnish
-              npm-release-binaries
-            ];
+        packages =
+          packages
+          // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            docker = import ./nix/docker.nix {
+              inherit pkgs;
+              lintel = packages.lintel;
+            };
           };
-        }
-        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          docker = import ./nix/docker.nix { inherit pkgs lintel; };
-        };
 
         apps.default = flake-utils.lib.mkApp {
-          drv = lintel;
+          drv = packages.default;
         };
 
         devShells.default = craneLib.devShell {
