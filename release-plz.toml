@@ -1,7 +1,3 @@
 [[package]]
 name = "lintel"
 git_tag_name = "v{{ version }}"
-
-[[package]]
-name = "lintel-config-schema-generator"
-cargo_package_args = ["--no-verify"]
