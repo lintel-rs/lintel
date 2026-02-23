@@ -13,7 +13,6 @@ pub use prettier_config::{self, PrettierConfig};
 pub enum Format {
     Json,
     Jsonc,
-    Json5,
     Yaml,
     Markdown,
 }
@@ -26,24 +25,11 @@ pub enum Format {
 pub fn format_str(content: &str, format: Format, options: &PrettierConfig) -> Result<String> {
     match format {
         Format::Json => {
-            // Use JSONC parser first; fall back to JSON5 parser for edge cases
-            // like +123 or Infinity that JSONC doesn't handle.
-            if let Ok(result) =
-                prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
-            {
-                Ok(result)
-            } else {
-                let mut j5_options = options.clone();
-                j5_options.trailing_comma = prettier_config::TrailingComma::None;
-                j5_options.single_quote = false;
-                j5_options.quote_props = prettier_config::QuoteProps::Consistent;
-                prettier_json5::format_json5(content, &j5_options)
-            }
+            prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Json, options)
         }
         Format::Jsonc => {
             prettier_jsonc::format_str(content, prettier_jsonc::JsonFormat::Jsonc, options)
         }
-        Format::Json5 => prettier_json5::format_json5(content, options),
         Format::Yaml => prettier_yaml::format_yaml(content, options),
         Format::Markdown => prettier_markdown::format_markdown(content, options),
     }
@@ -86,7 +72,6 @@ pub fn detect_format(path: &Path) -> Option<Format> {
     match ext {
         "json" => Some(Format::Json),
         "jsonc" => Some(Format::Jsonc),
-        "json5" => Some(Format::Json5),
         "yaml" | "yml" => Some(Format::Yaml),
         "md" | "markdown" => Some(Format::Markdown),
         _ => None,

@@ -2432,18 +2432,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prettier-json5"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "insta",
- "prettier-config",
- "prettier-test-harness",
- "pretty_assertions",
- "wadler-lindig",
-]
-
-[[package]]
 name = "prettier-jsonc"
 version = "0.1.0"
 dependencies = [
@@ -2469,7 +2457,6 @@ dependencies = [
  "comrak",
  "insta",
  "prettier-config",
- "prettier-json5",
  "prettier-jsonc",
  "prettier-test-harness",
  "prettier-yaml",
@@ -2485,7 +2472,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "prettier-config",
- "prettier-json5",
  "prettier-jsonc",
  "prettier-markdown",
  "prettier-yaml",

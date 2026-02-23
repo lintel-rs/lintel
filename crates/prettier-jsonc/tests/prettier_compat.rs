@@ -9,50 +9,6 @@ use std::path::Path;
 /// passing, the test harness will flag it as a stale exclusion so we can
 /// remove it.
 const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
-    // ── JSON5/JSON6 syntax in json/json fixtures ─────────────────────────
-    // These fixtures contain JSON5-only syntax (unquoted keys, hex numbers,
-    // positive number prefix `+`, etc.) that is not valid JSONC. The JSONC
-    // parser correctly rejects them. They are tested by prettier-json5 instead.
-    (
-        "json/json",
-        "json5.json - {\"trailingComma\":\"all\"} format 1",
-        "JSON5 syntax not valid JSONC",
-    ),
-    (
-        "json/json",
-        "json5.json - {\"trailingComma\":\"es5\"} format 1",
-        "JSON5 syntax not valid JSONC",
-    ),
-    (
-        "json/json",
-        "json6.json - {\"trailingComma\":\"all\"} format 1",
-        "JSON6 syntax not valid JSONC",
-    ),
-    (
-        "json/json",
-        "json6.json - {\"trailingComma\":\"es5\"} format 1",
-        "JSON6 syntax not valid JSONC",
-    ),
-    (
-        "json/json",
-        "positive-number.json - {\"trailingComma\":\"all\"} format 1",
-        "positive number prefix (+) not valid JSONC",
-    ),
-    (
-        "json/json",
-        "positive-number.json - {\"trailingComma\":\"es5\"} format 1",
-        "positive number prefix (+) not valid JSONC",
-    ),
-    (
-        "json/json",
-        "propertyKey.json - {\"trailingComma\":\"all\"} format 1",
-        "unquoted property keys not valid JSONC",
-    ),
-    (
-        "json/json",
-        "propertyKey.json - {\"trailingComma\":\"es5\"} format 1",
-        "unquoted property keys not valid JSONC",
-    ),
     // ── Blank line preservation in arrays ────────────────────────────────
     // The `pass1.json` fixture contains an array with a blank line in the
     // middle. Prettier keeps this as a multi-line array because of the blank
@@ -164,10 +120,6 @@ fn run(dir: &str) {
 #[test]
 fn json_json() {
     run("json/json");
-}
-#[test]
-fn json_json5_trailing_commas() {
-    run("json/json5-trailing-commas");
 }
 #[test]
 fn json_jsonc_quote_props() {

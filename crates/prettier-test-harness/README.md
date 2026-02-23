@@ -9,7 +9,7 @@ Test harness for prettier-compatible formatter crates
 
 Test harness for prettier-compatible formatter crates.
 
-Parses Jest snapshot files from the upstream prettier test suite into individual test cases with parser name, options, input, and expected output. Used by prettier-json5, prettier-jsonc, prettier-yaml, and prettier-markdown for conformance testing.
+Parses Jest snapshot files from the upstream prettier test suite into individual test cases with parser name, options, input, and expected output. Used by prettier-jsonc, prettier-yaml, and prettier-markdown for conformance testing.
 
 ## License
 

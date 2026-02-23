@@ -855,7 +855,6 @@ fn format_embedded_code(code: &str, lang: &str, options: &PrettierConfig) -> Opt
         "jsonc" => {
             prettier_jsonc::format_str(code, prettier_jsonc::JsonFormat::Jsonc, options).ok()
         }
-        "json5" => prettier_json5::format_json5(code, options).ok(),
         "yaml" | "yml" => prettier_yaml::format_yaml(code, options).ok(),
         "toml" => Some(taplo::formatter::format(
             code,

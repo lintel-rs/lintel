@@ -28,7 +28,6 @@ pub struct FormatArgs {
 enum FormatKind {
     Json,
     Jsonc,
-    Json5,
     Yaml,
     Markdown,
     Toml,
@@ -40,7 +39,6 @@ fn detect_format(path: &Path) -> Option<FormatKind> {
     match ext {
         "json" => Some(FormatKind::Json),
         "jsonc" => Some(FormatKind::Jsonc),
-        "json5" => Some(FormatKind::Json5),
         "yaml" | "yml" => Some(FormatKind::Yaml),
         "md" | "markdown" => Some(FormatKind::Markdown),
         "toml" => Some(FormatKind::Toml),
@@ -64,7 +62,6 @@ fn format_single_file(path: &Path, content: &str, kind: FormatKind) -> Result<St
     let format = match kind {
         FormatKind::Json => prettier_rs::Format::Json,
         FormatKind::Jsonc => prettier_rs::Format::Jsonc,
-        FormatKind::Json5 => prettier_rs::Format::Json5,
         FormatKind::Yaml => prettier_rs::Format::Yaml,
         FormatKind::Markdown => prettier_rs::Format::Markdown,
         FormatKind::Toml => unreachable!(),
@@ -140,11 +137,9 @@ fn walk_directory(dir: &Path, _excludes: &[String], files: &mut Vec<PathBuf>) ->
 
 fn tool_name(kind: FormatKind) -> &'static str {
     match kind {
-        FormatKind::Json
-        | FormatKind::Jsonc
-        | FormatKind::Json5
-        | FormatKind::Yaml
-        | FormatKind::Markdown => "prettier",
+        FormatKind::Json | FormatKind::Jsonc | FormatKind::Yaml | FormatKind::Markdown => {
+            "prettier"
+        }
         FormatKind::Toml => "taplo",
     }
 }
