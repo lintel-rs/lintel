@@ -185,6 +185,10 @@ pub struct SchemaDefinition {
     #[schemars(title = "File Match", example = &["**/.github/workflows/*.yml"], example = &["devenv.yaml"])]
     #[serde(default)]
     pub file_match: Vec<String>,
+    /// Alternate versions of this schema, keyed by version identifier.
+    /// Values are URLs to the versioned schema.
+    #[serde(default)]
+    pub versions: BTreeMap<String, String>,
 }
 
 /// An external schema catalog to import schemas from.
