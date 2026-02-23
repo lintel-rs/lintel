@@ -15,8 +15,15 @@ workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
-wadler-lindig = { version = "0.1.0", path = "../wadler-lindig" }
-jsonc-parser = { version = "0.24", features = ["serde"] }
+biome_json_parser = "0.5.7"
+biome_json_formatter = "0.5.7"
+biome_formatter = "0.5.7"
+# Pin transitive biome deps — 0.5.7 crates are mutually incompatible
+# with newer patch releases of biome_rowan, biome_parser, etc.
+biome_rowan = "=0.5.7"
+biome_parser = "=0.5.7"
+biome_diagnostics = "=0.5.7"
+biome_unicode_table = "=0.5.7"
 anyhow = "1"
 
 [dev-dependencies]

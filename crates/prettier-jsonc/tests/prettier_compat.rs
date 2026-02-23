@@ -56,8 +56,7 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
     // ── Blank line preservation in arrays ────────────────────────────────
     // The `pass1.json` fixture contains an array with a blank line in the
     // middle. Prettier keeps this as a multi-line array because of the blank
-    // line separator. Our formatter collapses it, producing different (but
-    // valid) output.
+    // line separator. Biome collapses it, producing different (but valid) output.
     (
         "json/json",
         "pass1.json - {\"trailingComma\":\"all\"} format 1",
@@ -68,128 +67,58 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
         "pass1.json - {\"trailingComma\":\"es5\"} format 1",
         "blank line preservation in arrays",
     ),
-    // ── Exponent leading zeros ───────────────────────────────────────────
-    // Our number parser preserves leading zeros in huge exponents
-    // (e.g. `0.4e00669...`) while prettier strips them (`0.4e669...`).
-    // This is implementation-defined for numbers outside IEEE 754 range.
+    // ── Single-quoted strings ───────────────────────────────────────────
+    // Biome's JSON parser rejects single-quoted strings as invalid JSON/JSONC.
+    // Our old custom parser accepted and re-quoted them.
     (
-        "json/json-test-suite",
-        "snippet: i_number_huge_exp.json format 1",
-        "leading zeros in huge exponent preserved",
+        "json/json",
+        "array.json - {\"trailingComma\":\"all\"} format 1",
+        "biome: no single-quote string support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_number_huge_exp.json format 2",
-        "leading zeros in huge exponent preserved",
-    ),
-    // ── Lone/invalid surrogate pairs ─────────────────────────────────────
-    // Our JSONC parser rejects lone surrogates (U+D800–U+DFFF) as invalid
-    // Unicode, while prettier's parser accepts them and passes them through.
-    // These are implementation-defined ("i_" prefix) in the JSON test suite
-    // — both behaviors are valid.
-    (
-        "json/json-test-suite",
-        "snippet: i_object_key_lone_2nd_surrogate.json format 1",
-        "lone surrogate rejected by parser",
+        "json/json",
+        "array.json - {\"trailingComma\":\"es5\"} format 1",
+        "biome: no single-quote string support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_object_key_lone_2nd_surrogate.json format 2",
-        "lone surrogate rejected by parser",
+        "json/json",
+        "single-quote.json - {\"trailingComma\":\"all\"} format 1",
+        "biome: no single-quote string support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_string_1st_surrogate_but_2nd_missing.json format 1",
-        "lone surrogate rejected by parser",
+        "json/json",
+        "single-quote.json - {\"trailingComma\":\"es5\"} format 1",
+        "biome: no single-quote string support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_string_1st_surrogate_but_2nd_missing.json format 2",
-        "lone surrogate rejected by parser",
+        "json/jsonc/single-quote",
+        "test.jsonc - {\"singleQuote\":false} format 1",
+        "biome: no single-quote string support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_string_1st_valid_surrogate_2nd_invalid.json format 1",
-        "lone surrogate rejected by parser",
+        "json/jsonc/single-quote",
+        "test.jsonc - {\"singleQuote\":true} format 1",
+        "biome: no single-quote string support",
+    ),
+    // ── Unquoted property keys ──────────────────────────────────────────
+    // Biome's JSON parser requires double-quoted property keys; it does not
+    // support the unquoted keys used in the quote-props test fixtures.
+    (
+        "json/jsonc/quote-props",
+        "test.jsonc - {\"quoteProps\":\"as-needed\"} format 1",
+        "biome: no unquoted property key support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_string_1st_valid_surrogate_2nd_invalid.json format 2",
-        "lone surrogate rejected by parser",
+        "json/jsonc/quote-props",
+        "test.jsonc - {\"quoteProps\":\"consistent\"} format 1",
+        "biome: no unquoted property key support",
     ),
     (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogate_and_escape_valid.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogate_and_escape_valid.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogate_pair.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogate_pair.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogates_escape_valid.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_incomplete_surrogates_escape_valid.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_invalid_lonely_surrogate.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_invalid_lonely_surrogate.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_invalid_surrogate.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_invalid_surrogate.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_inverted_surrogates_U+1D11E.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_inverted_surrogates_U+1D11E.json format 2",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_lone_second_surrogate.json format 1",
-        "lone surrogate rejected by parser",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: i_string_lone_second_surrogate.json format 2",
-        "lone surrogate rejected by parser",
+        "json/jsonc/quote-props",
+        "test.jsonc - {\"quoteProps\":\"preserve\"} format 1",
+        "biome: no unquoted property key support",
     ),
     // ── UTF-8 BOM handling ───────────────────────────────────────────────
-    // Our JSONC parser does not strip the UTF-8 byte order mark (U+FEFF)
-    // before parsing, causing a parse error on BOM-prefixed input.
     (
         "json/json-test-suite",
         "snippet: i_structure_UTF-8_BOM_empty_object.json format 1",
@@ -200,146 +129,18 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
         "snippet: i_structure_UTF-8_BOM_empty_object.json format 2",
         "UTF-8 BOM not handled",
     ),
-    // ── Trailing decimal zero stripped ────────────────────────────────────
-    // Our number formatter normalizes `1.0` to `1` and `1.0e28` to `1e28`,
-    // stripping the trailing `.0` when it has no fractional significance.
-    // Prettier preserves the original notation.
+    // ── Escaped solidus ─────────────────────────────────────────────────
+    // Biome strips the escaped solidus (\/) to plain (/), while prettier
+    // preserves it. Both are valid JSON representations.
     (
         "json/json-test-suite",
-        "snippet: number_1.0.json format 1",
-        "trailing .0 stripped from numbers",
+        "snippet: y_string_allowed_escapes.json format 1",
+        "biome: does not preserve \\/ escape",
     ),
     (
         "json/json-test-suite",
-        "snippet: number_1.0.json format 2",
-        "trailing .0 stripped from numbers",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_object_extreme_numbers.json format 1",
-        "trailing .0 stripped from numbers",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_object_extreme_numbers.json format 2",
-        "trailing .0 stripped from numbers",
-    ),
-    // ── Invalid Unicode codepoints ───────────────────────────────────────
-    // These fixtures contain escaped codepoints (e.g. \uFDD0) that are valid
-    // JSON but are Unicode noncharacters. Our parser rejects them while
-    // prettier passes them through.
-    (
-        "json/json-test-suite",
-        "snippet: string_1_escaped_invalid_codepoint.json format 1",
-        "invalid Unicode codepoint rejected",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: string_1_escaped_invalid_codepoint.json format 2",
-        "invalid Unicode codepoint rejected",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: string_2_escaped_invalid_codepoints.json format 1",
-        "invalid Unicode codepoint rejected",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: string_2_escaped_invalid_codepoints.json format 2",
-        "invalid Unicode codepoint rejected",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: string_3_escaped_invalid_codepoints.json format 1",
-        "invalid Unicode codepoint rejected",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: string_3_escaped_invalid_codepoints.json format 2",
-        "invalid Unicode codepoint rejected",
-    ),
-    // ── Single-entry object collapsing ───────────────────────────────────
-    // Our formatter collapses single-entry objects to one line
-    // (`{ "a": "b" }`) while prettier keeps them expanded when the input
-    // has newlines between the braces.
-    (
-        "json/json-test-suite",
-        "snippet: y_object_with_newlines.json format 1",
-        "single-entry object collapsing",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_object_with_newlines.json format 2",
-        "single-entry object collapsing",
-    ),
-    // ── Surrogate pair decoding ──────────────────────────────────────────
-    // These fixtures contain valid surrogate pairs (e.g. \uD834\uDD1E for
-    // U+1D11E) that prettier preserves as escape sequences. Our parser
-    // decodes them into the actual Unicode character, which is valid but
-    // produces different output.
-    (
-        "json/json-test-suite",
-        "snippet: y_string_accepted_surrogate_pair.json format 1",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_accepted_surrogate_pair.json format 2",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_accepted_surrogate_pairs.json format 1",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_accepted_surrogate_pairs.json format 2",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_last_surrogates_1_and_2.json format 1",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_last_surrogates_1_and_2.json format 2",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_surrogates_U+1D11E_MUSICAL_SYMBOL_G_CLEF.json format 1",
-        "surrogate pair decoded to literal character",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_surrogates_U+1D11E_MUSICAL_SYMBOL_G_CLEF.json format 2",
-        "surrogate pair decoded to literal character",
-    ),
-    // ── Non-BMP character encoding ───────────────────────────────────────
-    // These fixtures contain non-BMP Unicode characters encoded as surrogate
-    // pairs in JSON. Our parser decodes them to literal UTF-8 characters
-    // while prettier preserves the \uXXXX escape sequences.
-    (
-        "json/json-test-suite",
-        "snippet: y_string_unicode_U+1FFFE_nonchar.json format 1",
-        "non-BMP character decoded to literal UTF-8",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_unicode_U+1FFFE_nonchar.json format 2",
-        "non-BMP character decoded to literal UTF-8",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_unicode_U+10FFFE_nonchar.json format 1",
-        "non-BMP character decoded to literal UTF-8",
-    ),
-    (
-        "json/json-test-suite",
-        "snippet: y_string_unicode_U+10FFFE_nonchar.json format 2",
-        "non-BMP character decoded to literal UTF-8",
+        "snippet: y_string_allowed_escapes.json format 2",
+        "biome: does not preserve \\/ escape",
     ),
 ];
 
