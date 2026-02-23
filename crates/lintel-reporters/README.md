@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-reporters.svg)](https://crates.io/crates/lintel-reporters)
 [![docs.rs](https://docs.rs/lintel-reporters/badge.svg)](https://docs.rs/lintel-reporters)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-reporters.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Reporter implementations for [Lintel](https://github.com/lintel-rs/lintel). Provides pluggable output formatting for validation results.

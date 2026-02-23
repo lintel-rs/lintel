@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-schemastore-catalog.svg)](https://crates.io/crates/lintel-schemastore-catalog)
 [![docs.rs](https://docs.rs/lintel-schemastore-catalog/badge.svg)](https://docs.rs/lintel-schemastore-catalog)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-schemastore-catalog.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 CLI tool that mirrors the entire [SchemaStore](https://www.schemastore.org/) catalog (catalog index + all schema files) into a git repo, keeping it up to date via CI.

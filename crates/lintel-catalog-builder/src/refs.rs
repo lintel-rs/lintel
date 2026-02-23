@@ -311,6 +311,8 @@ pub async fn resolve_and_rewrite(
             serde_json::Value::String(schema_url.to_string()),
         );
 
+    jsonschema_migrate::migrate_to_2020_12(&mut value);
+
     let external_refs = find_external_refs(&value);
     let resolved_relative = resolve_all_relative_refs(&value, ctx.source_url.as_deref());
 
