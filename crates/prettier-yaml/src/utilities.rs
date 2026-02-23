@@ -1,6 +1,4 @@
-use alloc::borrow::Cow;
-
-use saphyr_parser::{ScalarStyle, Tag};
+use saphyr_parser::ScalarStyle;
 
 use crate::ast::Node;
 
@@ -62,21 +60,4 @@ pub(crate) fn is_block_collection(node: &Node) -> bool {
 /// YAML spec: any character except flow indicators ([]{},) and whitespace.
 pub(crate) fn is_anchor_char(c: char) -> bool {
     !c.is_whitespace() && !matches!(c, '[' | ']' | '{' | '}' | ',')
-}
-
-#[allow(dead_code, clippy::ptr_arg)]
-pub(crate) fn format_tag(tag: &Cow<'_, Tag>) -> String {
-    if tag.handle.is_empty() && tag.suffix == "!" {
-        // Non-specific tag: just "!"
-        "!".to_string()
-    } else if tag.handle.is_empty() {
-        // Verbatim tag: !<suffix> (saphyr strips the angle brackets)
-        format!("!<{}>", tag.suffix)
-    } else if tag.handle == "!" {
-        format!("!{}", tag.suffix)
-    } else if tag.handle == "!!" || tag.handle == "tag:yaml.org,2002:" {
-        format!("!!{}", tag.suffix)
-    } else {
-        format!("{}!{}", tag.handle, tag.suffix)
-    }
 }

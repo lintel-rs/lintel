@@ -246,10 +246,7 @@ async fn main() -> ExitCode {
         }
         Commands::Format(global, args) => {
             setup_tracing(&global);
-            match lintel_format::run(&args, &global) {
-                Ok(had_unformatted) => Ok(had_unformatted),
-                Err(e) => Err(e),
-            }
+            lintel_format::run(&args, &global)
         }
         Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,

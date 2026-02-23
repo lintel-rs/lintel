@@ -167,14 +167,14 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
                         output.push_str(eol);
                         let indent_text = indent.to_string(&indent_str);
                         output.push_str(&indent_text);
-                        pos = indent_text.len();
+                        pos = indent.level * options.tab_width + indent.align;
                     }
                 },
                 Doc::Hardline => {
                     output.push_str(eol);
                     let indent_text = indent.to_string(&indent_str);
                     output.push_str(&indent_text);
-                    pos = indent_text.len();
+                    pos = indent.level * options.tab_width + indent.align;
                 }
                 Doc::Softline => match mode {
                     Mode::Flat => {
@@ -184,7 +184,7 @@ pub fn print(doc: &Doc, options: &PrettierConfig) -> String {
                         output.push_str(eol);
                         let indent_text = indent.to_string(&indent_str);
                         output.push_str(&indent_text);
-                        pos = indent_text.len();
+                        pos = indent.level * options.tab_width + indent.align;
                     }
                 },
                 Doc::IfBreak { flat, broken } => match mode {

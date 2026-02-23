@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// serialize/deserialize as camelCase to match prettier's config format.
 ///
 /// Defaults match prettier 3.x behavior.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 #[allow(clippy::struct_excessive_bools)]
 pub struct PrettierConfig {

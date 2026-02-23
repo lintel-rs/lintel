@@ -1548,7 +1548,6 @@ dependencies = [
  "lintel-cli-common",
  "prettier-rs",
  "taplo",
- "tracing",
 ]
 
 [[package]]

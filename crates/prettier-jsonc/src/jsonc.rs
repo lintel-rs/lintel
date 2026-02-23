@@ -12,6 +12,8 @@ use wadler_lindig::{Doc, force_group_break, trim_trailing_whitespace};
 ///
 /// Returns an error if the content is not valid JSONC.
 pub fn format_jsonc(content: &str, options: &PrettierConfig) -> Result<String> {
+    // Strip UTF-8 BOM if present
+    let content = content.strip_prefix('\u{FEFF}').unwrap_or(content);
     let parsed = jsonc_parser::parse_to_ast(
         content,
         &jsonc_parser::CollectOptions {

@@ -71,13 +71,7 @@ pub fn resolve_config(file_path: &Path) -> Result<PrettierConfig> {
     let mut config = config_file.config;
 
     // Apply overrides
-    apply_overrides(
-        &file_path,
-        &config_dir,
-        &config_file.overrides,
-        &mut config,
-        &config_value,
-    )?;
+    apply_overrides(&file_path, &config_dir, &config_file.overrides, &mut config)?;
 
     Ok(config)
 }
@@ -127,14 +121,23 @@ fn try_parse_config(path: &Path, name: &str) -> Result<Option<serde_json::Value>
             }
         }
         ".prettierrc" => {
+            // Empty file is valid — means "use all defaults"
+            if content.trim().is_empty() {
+                return Ok(Some(serde_json::Value::Object(serde_json::Map::default())));
+            }
             // Try JSON first, then YAML
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                 return Ok(Some(val));
             }
             let yaml_val: serde_yaml::Value = serde_yaml::from_str(&content)
                 .with_context(|| format!("parsing {} (tried JSON and YAML)", path.display()))?;
-            let json_val =
-                serde_json::to_value(yaml_val).with_context(|| "converting YAML config to JSON")?;
+            let json_val = match serde_json::to_value(yaml_val)
+                .with_context(|| "converting YAML config to JSON")?
+            {
+                // YAML parses empty/whitespace-only as Null — treat as empty object
+                serde_json::Value::Null => serde_json::Value::Object(serde_json::Map::default()),
+                v => v,
+            };
             Ok(Some(json_val))
         }
         ".prettierrc.json" => {
@@ -168,14 +171,12 @@ fn try_parse_config(path: &Path, name: &str) -> Result<Option<serde_json::Value>
 /// Apply overrides based on file path glob matching.
 ///
 /// Override merging works by serializing the base config to a JSON Value,
-/// deep-merging the override options on top, then deserializing back.
-#[allow(clippy::too_many_arguments)]
+/// shallow-merging the override options on top, then deserializing back.
 fn apply_overrides(
     file_path: &Path,
     config_dir: &Path,
     overrides: &[Override],
     config: &mut PrettierConfig,
-    _base_value: &serde_json::Value,
 ) -> Result<()> {
     let relative = file_path.strip_prefix(config_dir).unwrap_or(file_path);
     let relative_str = relative.to_string_lossy();
@@ -204,7 +205,7 @@ fn apply_overrides(
     Ok(())
 }
 
-/// Deep-merge `overlay` into `base`. Overlay values overwrite base values.
+/// Shallow-merge `overlay` into `base`. Overlay values overwrite base values.
 fn json_merge(base: &mut serde_json::Value, overlay: &serde_json::Value) {
     if let (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) =
         (base, overlay)

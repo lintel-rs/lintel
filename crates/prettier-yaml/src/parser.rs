@@ -6,7 +6,7 @@ use crate::ast::{
     YamlDoc, YamlStream,
 };
 use crate::comments::SourceComment;
-use crate::utilities::is_anchor_char;
+use crate::utilities::{has_node_props, is_anchor_char};
 
 pub(crate) fn collect_events(content: &str) -> Result<Vec<(Event<'_>, Span)>> {
     let parser = Parser::new_from_str(content);
@@ -1342,12 +1342,28 @@ impl<'a> AstBuilder<'a> {
         let mut depth = 0;
         let mut in_single = false;
         let mut in_double = false;
+        let mut prev_ch = '\0';
         let mut end = start;
 
         for (i, ch) in self.source[start..].char_indices() {
             match ch {
+                // In YAML, single-quoted strings escape ' as '' (doubled).
+                // Toggle state on every ', which correctly handles '' pairs
+                // (they toggle off then on, staying inside the string).
                 '\'' if !in_double => in_single = !in_single,
-                '"' if !in_single => in_double = !in_double,
+                // In YAML double-quoted strings, \" is an escaped quote.
+                // Also handle \\", where the backslash itself is escaped.
+                '"' if !in_single => {
+                    let escaped = prev_ch == '\\' && {
+                        // Count consecutive backslashes before this quote
+                        let prefix = &self.source[start..start + i];
+                        let n_backslashes = prefix.chars().rev().take_while(|&c| c == '\\').count();
+                        n_backslashes % 2 == 1
+                    };
+                    if !escaped {
+                        in_double = !in_double;
+                    }
+                }
                 c if c == open_char && !in_single && !in_double => depth += 1,
                 c if c == close_char && !in_single && !in_double => {
                     depth -= 1;
@@ -1358,6 +1374,7 @@ impl<'a> AstBuilder<'a> {
                 }
                 _ => {}
             }
+            prev_ch = ch;
         }
 
         Some(self.source[start..end].to_string())
@@ -1743,27 +1760,6 @@ impl<'a> AstBuilder<'a> {
         self.source_lines[idx].trim().is_empty()
     }
 
-    #[allow(dead_code)]
-    fn line_preceded_by_blank(&self, line: usize) -> bool {
-        let mut check = line.saturating_sub(1);
-        while check >= 1 {
-            let idx = check - 1;
-            if idx >= self.source_lines.len() {
-                break;
-            }
-            let src = self.source_lines[idx];
-            if src.trim().is_empty() {
-                return true;
-            }
-            if src.trim_start().starts_with('#') {
-                check -= 1;
-                continue;
-            }
-            break;
-        }
-        false
-    }
-
     fn has_blank_line_between(&self, start_line: usize, end_line: usize) -> bool {
         if end_line <= start_line + 1 {
             return false;
@@ -2029,16 +2025,5 @@ impl<'a> AstBuilder<'a> {
             }
         }
         None
-    }
-}
-
-/// Check if a node has properties (anchor, tag).
-/// Duplicated here to avoid circular dependency with utilities module during AST construction.
-fn has_node_props(node: &Node) -> bool {
-    match node {
-        Node::Mapping(m) => m.anchor.is_some() || m.tag.is_some(),
-        Node::Sequence(s) => s.anchor.is_some() || s.tag.is_some(),
-        Node::Scalar(s) => s.anchor.is_some() || s.tag.is_some(),
-        Node::Alias(_) => false,
     }
 }
