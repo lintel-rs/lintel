@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use prettier_config::EndOfLine;
 use prettier_config::PrettierConfig;
 

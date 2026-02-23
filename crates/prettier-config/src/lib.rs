@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod resolve;
 
 use serde::{Deserialize, Serialize};

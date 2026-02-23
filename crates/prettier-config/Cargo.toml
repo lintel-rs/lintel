@@ -2,11 +2,16 @@
 name = "prettier-config"
 version = "0.1.0"
 edition.workspace = true
-description = "Prettier configuration resolution and types"
 authors.workspace = true
+description = "Prettier configuration resolution and types"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+keywords = ["prettier", "formatting", "configuration"]
+categories = ["config", "development-tools"]
+
+[lints]
+workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -16,6 +21,3 @@ json5 = "0.4"
 toml = "1.0"
 glob-match = "0.2"
 anyhow = "1"
-
-[lints]
-workspace = true

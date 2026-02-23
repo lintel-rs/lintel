@@ -2,6 +2,16 @@
 name = "lintel-format"
 version = "0.0.1"
 edition.workspace = true
+authors.workspace = true
+description = "Format command for Lintel. Formats JSON, JSONC, JSON5, YAML, Markdown, and TOML files using prettier-compatible rules."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "formatting", "prettier", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lints]
+workspace = true
 
 [dependencies]
 prettier-rs = { version = "0.1.0", path = "../prettier-rs" }
@@ -12,6 +22,3 @@ anyhow = "1"
 ignore = "0.4"
 glob = "0.3"
 glob-match = "0.2"
-
-[lints]
-workspace = true

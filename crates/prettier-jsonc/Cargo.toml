@@ -2,20 +2,22 @@
 name = "prettier-jsonc"
 version = "0.1.0"
 edition.workspace = true
-description = "Prettier-compatible JSON/JSONC formatter"
 authors.workspace = true
+description = "Prettier-compatible JSON/JSONC formatter"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+keywords = ["json", "jsonc", "formatting", "prettier"]
+categories = ["text-processing", "development-tools"]
+
+[lints]
+workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
 wadler-lindig = { version = "0.1.0", path = "../wadler-lindig" }
 jsonc-parser = { version = "0.24", features = ["serde"] }
 anyhow = "1"
-
-[lints]
-workspace = true
 
 [dev-dependencies]
 prettier-test-harness = { version = "0.1.0", path = "../prettier-test-harness" }

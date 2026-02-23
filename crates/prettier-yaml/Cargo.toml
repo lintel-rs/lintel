@@ -2,11 +2,16 @@
 name = "prettier-yaml"
 version = "0.1.0"
 edition.workspace = true
-description = "Prettier-compatible YAML formatter"
 authors.workspace = true
+description = "Prettier-compatible YAML formatter"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+keywords = ["yaml", "formatting", "prettier"]
+categories = ["text-processing", "development-tools"]
+
+[lints]
+workspace = true
 
 [dependencies]
 prettier-config = { version = "0.1.0", path = "../prettier-config" }
@@ -17,6 +22,3 @@ anyhow = "1"
 prettier-test-harness = { version = "0.1.0", path = "../prettier-test-harness" }
 insta = "1"
 pretty_assertions = "1"
-
-[lints]
-workspace = true

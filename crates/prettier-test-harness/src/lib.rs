@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use core::fmt::Display;
 use prettier_config::{PrettierConfig, ProseWrap, QuoteProps, TrailingComma};
 use std::collections::HashSet;

@@ -2,14 +2,16 @@
 name = "wadler-lindig"
 version = "0.1.0"
 edition.workspace = true
-description = "Wadler-Lindig pretty-printing algorithm"
 authors.workspace = true
+description = "Wadler-Lindig pretty-printing algorithm"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-
-[dependencies]
-prettier-config = { version = "0.1.0", path = "../prettier-config" }
+keywords = ["pretty-printing", "formatting", "wadler-lindig"]
+categories = ["text-processing", "algorithms"]
 
 [lints]
 workspace = true
+
+[dependencies]
+prettier-config = { version = "0.1.0", path = "../prettier-config" }
