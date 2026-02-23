@@ -11,6 +11,7 @@ use tracing_subscriber::prelude::*;
 mod catalog;
 mod commands;
 mod download;
+mod generate;
 mod refs;
 mod targets;
 
