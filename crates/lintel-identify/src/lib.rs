@@ -136,13 +136,102 @@ pub async fn resolve_schema_for_file(
     cache: &CliCacheOptions,
 ) -> Result<Option<ResolvedFileSchema>> {
     let path_str = file_path.display().to_string();
+    let content =
+        std::fs::read_to_string(file_path).with_context(|| format!("failed to read {path_str}"))?;
+
+    resolve_schema_for_content(&content, file_path, None, cache).await
+}
+
+/// Resolve a schema from in-memory content and a virtual file path.
+///
+/// Uses `file_path` for extension detection and catalog matching, and
+/// `config_search_dir` for locating `lintel.toml` (falls back to
+/// `file_path.parent()` when `None`).
+///
+/// Resolution order: inline `$schema` > config > catalogs.
+///
+/// # Errors
+///
+/// Returns an error if catalogs cannot be fetched.
+#[allow(clippy::missing_panics_doc)]
+pub async fn resolve_schema_for_content(
+    content: &str,
+    file_path: &Path,
+    config_search_dir: Option<&Path>,
+    cache: &CliCacheOptions,
+) -> Result<Option<ResolvedFileSchema>> {
+    let path_str = file_path.display().to_string();
     let file_name = file_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(&path_str);
 
-    let content =
-        std::fs::read_to_string(file_path).with_context(|| format!("failed to read {path_str}"))?;
+    let retriever = build_retriever(cache);
+
+    let search_dir = config_search_dir
+        .map(Path::to_path_buf)
+        .or_else(|| file_path.parent().map(Path::to_path_buf));
+    let (cfg, config_dir, _config_path) = validate::load_config(search_dir.as_deref());
+
+    let compiled_catalogs =
+        validate::fetch_compiled_catalogs(&retriever, &cfg, cache.no_catalog).await;
+
+    let detected_format = parsers::detect_format(file_path);
+    let (parser, instance) = parse_file(detected_format, content, &path_str);
+
+    let Some(resolved) = resolve_schema(
+        parser.as_ref(),
+        content,
+        &instance,
+        &path_str,
+        file_name,
+        &cfg,
+        &compiled_catalogs,
+    ) else {
+        return Ok(None);
+    };
+
+    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
+
+    let display_name = resolved
+        .catalog_match
+        .as_ref()
+        .map(|m| m.name.to_string())
+        .or_else(|| {
+            compiled_catalogs
+                .iter()
+                .find_map(|cat| cat.schema_name(&schema_uri))
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| schema_uri.clone());
+
+    Ok(Some(ResolvedFileSchema {
+        schema_uri,
+        display_name,
+        is_remote,
+    }))
+}
+
+/// Resolve the schema URI for a file path using only path-based matching:
+/// 1. Custom schema mappings from `lintel.toml [schemas]`
+/// 2. Catalog matching
+///
+/// Unlike [`resolve_schema_for_file`], this does NOT read the file or check
+/// for inline `$schema` directives. The file does not need to exist.
+///
+/// # Errors
+///
+/// Returns an error if the catalogs cannot be fetched.
+#[allow(clippy::missing_panics_doc)]
+pub async fn resolve_schema_for_path(
+    file_path: &Path,
+    cache: &CliCacheOptions,
+) -> Result<Option<ResolvedFileSchema>> {
+    let path_str = file_path.display().to_string();
+    let file_name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&path_str);
 
     let retriever = build_retriever(cache);
 
@@ -152,18 +241,8 @@ pub async fn resolve_schema_for_file(
     let compiled_catalogs =
         validate::fetch_compiled_catalogs(&retriever, &cfg, cache.no_catalog).await;
 
-    let detected_format = parsers::detect_format(file_path);
-    let (parser, instance) = parse_file(detected_format, &content, &path_str);
-
-    let Some(resolved) = resolve_schema(
-        parser.as_ref(),
-        &content,
-        &instance,
-        &path_str,
-        file_name,
-        &cfg,
-        &compiled_catalogs,
-    ) else {
+    let Some(resolved) = resolve_schema_path_only(&path_str, file_name, &cfg, &compiled_catalogs)
+    else {
         return Ok(None);
     };
 
@@ -283,6 +362,16 @@ fn resolve_schema<'a>(
         });
     }
 
+    resolve_schema_path_only(path_str, file_name, cfg, catalogs)
+}
+
+/// Try config mappings and catalog matching only (no inline `$schema`).
+fn resolve_schema_path_only<'a>(
+    path_str: &str,
+    file_name: &'a str,
+    cfg: &'a lintel_config::Config,
+    catalogs: &'a [schemastore::CompiledCatalog],
+) -> Option<ResolvedSchema<'a>> {
     if let Some((pattern, url)) = cfg
         .schemas
         .iter()
