@@ -14,7 +14,9 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-check = { version = "0.0.8", path = "../lintel-check" }
+lintel-config = { version = "0.0.4", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
+lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
 lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
 schemastore = { version = "0.0.6", path = "../schemastore" }
 jsonschema-explain = { version = "0.2.0", path = "../jsonschema-explain" }

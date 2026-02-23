@@ -6,12 +6,11 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use bpaf::Bpaf;
 
-use lintel_check::catalog::CompiledCatalog;
-use lintel_check::config;
-use lintel_check::parsers;
-use lintel_check::retriever::SchemaCache;
-use lintel_check::validate;
 use lintel_cli_common::CliCacheOptions;
+use lintel_schema_cache::SchemaCache;
+use lintel_validate::parsers;
+use lintel_validate::validate;
+use schemastore::CompiledCatalog;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -68,7 +67,7 @@ enum FileOutcome {
 
 fn process_file(
     file_path: &Path,
-    config: &config::Config,
+    config: &lintel_config::Config,
     catalogs: &[CompiledCatalog],
     update: bool,
 ) -> FileOutcome {
@@ -202,7 +201,7 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
 
 #[cfg(test)]
 mod tests {
-    use lintel_check::parsers::{
+    use lintel_validate::parsers::{
         Json5Parser, JsonParser, JsoncParser, Parser, TomlParser, YamlParser,
     };
 

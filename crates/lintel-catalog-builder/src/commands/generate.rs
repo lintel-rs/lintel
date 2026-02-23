@@ -9,10 +9,10 @@ use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
 use crate::catalog::build_output_catalog;
-use crate::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 use crate::download::{DownloadItem, download_batch, download_one};
 use crate::refs::{RefRewriteContext, resolve_and_rewrite};
 use crate::targets::{AnyTarget, OutputContext, Target};
+use lintel_catalog_builder::config::{CatalogConfig, OrganizeEntry, SourceConfig, load_config};
 
 /// Cross-cutting state shared across the entire generation run.
 struct GenerateContext<'a> {

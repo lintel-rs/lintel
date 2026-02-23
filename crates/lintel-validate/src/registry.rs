@@ -1,4 +1,4 @@
-use crate::retriever::SchemaCache;
+use lintel_schema_cache::SchemaCache;
 use schemastore::Catalog;
 
 /// The default Lintel catalog registry (always fetched unless `--no-catalog`).

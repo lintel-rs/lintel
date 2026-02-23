@@ -10,7 +10,6 @@ use tracing_subscriber::prelude::*;
 
 mod catalog;
 mod commands;
-mod config;
 mod download;
 mod refs;
 mod targets;

@@ -9,7 +9,7 @@ use schema_catalog::{Catalog, SchemaEntry};
 use tracing::debug;
 
 use crate::catalog::write_catalog_json;
-use crate::config::TargetConfig;
+use lintel_catalog_builder::config::TargetConfig;
 
 pub use self::dir::DirTarget;
 pub use self::github_pages::GitHubPagesTarget;

@@ -15,8 +15,5 @@ workspace = true
 
 [dependencies]
 ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
-lintel-check = { version = "0.0.8", path = "../lintel-check" }
-lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
-bpaf = { version = "0.9", features = ["derive"] }
+lintel-validate = { version = "0.0.1", path = "../lintel-validate" }
 miette = { version = "7", features = ["fancy"] }
-anyhow = "1"

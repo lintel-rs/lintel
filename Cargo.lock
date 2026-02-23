@@ -1290,9 +1290,13 @@ dependencies = [
  "lintel-annotate",
  "lintel-check",
  "lintel-cli-common",
+ "lintel-config",
  "lintel-explain",
  "lintel-identify",
  "lintel-reporters",
+ "lintel-schema-cache",
+ "lintel-validate",
+ "lintel-validation-cache",
  "miette",
  "schemastore",
  "serde_json",
@@ -1310,8 +1314,11 @@ version = "0.0.7"
 dependencies = [
  "anyhow",
  "bpaf",
- "lintel-check",
  "lintel-cli-common",
+ "lintel-config",
+ "lintel-schema-cache",
+ "lintel-validate",
+ "schemastore",
  "tokio",
  "tracing",
 ]
@@ -1339,6 +1346,7 @@ dependencies = [
  "percent-encoding",
  "reqwest",
  "schema-catalog",
+ "schemars",
  "serde",
  "serde_json",
  "tempfile",
@@ -1355,25 +1363,8 @@ name = "lintel-check"
 version = "0.0.8"
 dependencies = [
  "anyhow",
- "glob",
- "glob-match",
- "ignore",
- "insta",
- "json5",
- "jsonc-parser",
- "jsonschema",
- "lintel-config",
- "lintel-schema-cache",
- "lintel-validation-cache",
- "miette",
- "schemastore",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
+ "bpaf",
+ "lintel-validate",
 ]
 
 [[package]]
@@ -1398,15 +1389,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-config-schema-generator"
+version = "0.0.1"
+dependencies = [
+ "bpaf",
+ "lintel-catalog-builder",
+ "lintel-config",
+ "serde_json",
+]
+
+[[package]]
 name = "lintel-explain"
 version = "0.0.1"
 dependencies = [
  "anyhow",
  "bpaf",
  "jsonschema-explain",
- "lintel-check",
  "lintel-cli-common",
  "lintel-identify",
+ "lintel-validate",
  "serde_json",
  "terminal_size",
  "tracing",
@@ -1418,8 +1419,7 @@ version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
- "lintel-check",
- "lintel-reporters",
+ "lintel-validate",
  "reqwest",
  "serde",
  "serde_json",
@@ -1434,8 +1434,10 @@ dependencies = [
  "bpaf",
  "glob-match",
  "jsonschema-explain",
- "lintel-check",
  "lintel-cli-common",
+ "lintel-config",
+ "lintel-schema-cache",
+ "lintel-validate",
  "schemastore",
  "serde_json",
  "terminal_size",
@@ -1447,10 +1449,7 @@ name = "lintel-reporters"
 version = "0.0.6"
 dependencies = [
  "ansi-term-codes",
- "anyhow",
- "bpaf",
- "lintel-check",
- "lintel-cli-common",
+ "lintel-validate",
  "miette",
 ]
 
@@ -1486,6 +1485,34 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-tree",
+]
+
+[[package]]
+name = "lintel-validate"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "glob",
+ "glob-match",
+ "ignore",
+ "insta",
+ "json5",
+ "jsonc-parser",
+ "jsonschema",
+ "lintel-cli-common",
+ "lintel-config",
+ "lintel-schema-cache",
+ "lintel-validation-cache",
+ "miette",
+ "schemastore",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]
