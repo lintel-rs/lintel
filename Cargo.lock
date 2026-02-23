@@ -1395,6 +1395,7 @@ dependencies = [
  "bpaf",
  "lintel-catalog-builder",
  "lintel-config",
+ "schema-catalog",
  "serde_json",
 ]
 
@@ -2317,6 +2318,7 @@ dependencies = [
 name = "schema-catalog"
 version = "0.0.2"
 dependencies = [
+ "schemars",
  "serde",
  "serde_json",
 ]
