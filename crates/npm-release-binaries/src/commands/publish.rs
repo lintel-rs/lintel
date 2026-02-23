@@ -43,39 +43,72 @@ fn package_dir(output_dir: &Path, package_name: &str) -> PathBuf {
 }
 
 fn npm_publish(pkg_dir: &Path, package_name: &str, opts: &Options<'_>) -> miette::Result<()> {
-    let mut cmd = Command::new("npm");
-    cmd.arg("publish");
-    cmd.arg("--access").arg(opts.access);
-    if opts.provenance {
-        cmd.arg("--provenance");
-    }
-    if opts.dry_run {
-        cmd.arg("--dry-run");
-    }
-    cmd.current_dir(pkg_dir);
+    const MAX_RETRIES: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 10;
 
-    eprintln!(
-        "{} {package_name} from {}",
+    for attempt in 1..=MAX_RETRIES {
+        let mut cmd = Command::new("npm");
+        cmd.arg("publish");
+        cmd.arg("--access").arg(opts.access);
+        if opts.provenance {
+            cmd.arg("--provenance");
+        }
         if opts.dry_run {
-            "Dry-run publishing"
-        } else {
-            "Publishing"
-        },
-        pkg_dir.display()
-    );
+            cmd.arg("--dry-run");
+        }
+        cmd.current_dir(pkg_dir);
 
-    let status = cmd
-        .status()
-        .map_err(|e| miette::miette!("failed to run npm publish: {e}"))?;
+        eprintln!(
+            "{} {package_name} from {}{}",
+            if opts.dry_run {
+                "Dry-run publishing"
+            } else {
+                "Publishing"
+            },
+            pkg_dir.display(),
+            if attempt > 1 {
+                format!(" (attempt {attempt}/{MAX_RETRIES})")
+            } else {
+                String::new()
+            }
+        );
 
-    if !status.success() {
+        let output = cmd
+            .output()
+            .map_err(|e| miette::miette!("failed to run npm publish: {e}"))?;
+
+        if output.status.success() {
+            // Forward stdout/stderr so publish details are visible in CI logs
+            std::io::Write::write_all(&mut std::io::stdout(), &output.stdout).ok();
+            std::io::Write::write_all(&mut std::io::stderr(), &output.stderr).ok();
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Forward output so the error is visible in CI logs
+        std::io::Write::write_all(&mut std::io::stdout(), &output.stdout).ok();
+        std::io::Write::write_all(&mut std::io::stderr(), &output.stderr).ok();
+
+        // Retry on transient Sigstore transparency log errors
+        let is_retryable = stderr.contains("TLOG_CREATE_ENTRY_ERROR");
+
+        if is_retryable && attempt < MAX_RETRIES {
+            eprintln!(
+                "Transient publish error for {package_name}, retrying in {RETRY_DELAY_SECS}s..."
+            );
+            std::thread::sleep(core::time::Duration::from_secs(RETRY_DELAY_SECS));
+            continue;
+        }
+
         return Err(miette::miette!(
             "npm publish failed for {package_name} (exit code: {})",
-            status
+            output
+                .status
                 .code()
                 .map_or("signal".to_string(), |c| c.to_string())
         ));
     }
 
-    Ok(())
+    unreachable!()
 }
