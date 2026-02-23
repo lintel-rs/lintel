@@ -11,6 +11,9 @@ struct DownloadedDep {
     text: String,
     filename: String,
     url: String,
+    /// The absolute source URL this dependency was downloaded from, used to
+    /// resolve any relative `$ref` values within the dependency itself.
+    source_url: Option<String>,
 }
 
 /// Shared context for [`resolve_and_rewrite`], grouping cross-cutting state
@@ -20,6 +23,9 @@ pub struct RefRewriteContext<'a> {
     pub shared_dir: &'a Path,
     pub base_url_for_shared: &'a str,
     pub already_downloaded: &'a mut HashMap<String, String>,
+    /// Original source URL of the schema being processed. Used to resolve
+    /// relative `$ref` values (e.g. `./rule.json`) against the schema's origin.
+    pub source_url: Option<String>,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -50,6 +56,15 @@ pub fn find_external_refs(value: &serde_json::Value) -> HashSet<String> {
     refs
 }
 
+/// Recursively scan a JSON value for `$ref` strings that are relative file
+/// references (e.g. `./rule.json`, `../other.json`).  Returns the set of
+/// relative paths (fragments stripped).  Internal `#/…` refs are excluded.
+pub fn find_relative_refs(value: &serde_json::Value) -> HashSet<String> {
+    let mut refs = HashSet::new();
+    collect_relative_refs(value, &mut refs);
+    refs
+}
+
 fn collect_refs(value: &serde_json::Value, refs: &mut HashSet<String>) {
     match value {
         serde_json::Value::Object(map) => {
@@ -73,6 +88,44 @@ fn collect_refs(value: &serde_json::Value, refs: &mut HashSet<String>) {
         }
         _ => {}
     }
+}
+
+fn collect_relative_refs(value: &serde_json::Value, refs: &mut HashSet<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(serde_json::Value::String(ref_str)) = map.get("$ref") {
+                let base = ref_str.split('#').next().unwrap_or(ref_str);
+                // Relative ref: not empty, not a fragment-only ref, not an absolute URL
+                if !base.is_empty() && !base.starts_with("http://") && !base.starts_with("https://")
+                {
+                    refs.insert(base.to_string());
+                }
+            }
+            for v in map.values() {
+                collect_relative_refs(v, refs);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr {
+                collect_relative_refs(v, refs);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Resolve a relative path against a base URL.
+///
+/// For example, resolving `./rule.json` against
+/// `https://example.com/schemas/project.json` yields
+/// `https://example.com/schemas/rule.json`.
+fn resolve_relative_url(relative: &str, base_url: &str) -> Result<String> {
+    let base =
+        url::Url::parse(base_url).with_context(|| format!("invalid base URL: {base_url}"))?;
+    let resolved = base
+        .join(relative)
+        .with_context(|| format!("failed to resolve '{relative}' against '{base_url}'"))?;
+    Ok(resolved.to_string())
 }
 
 /// Extract a filename from a URL's last path segment.
@@ -197,6 +250,38 @@ fn encode_ref_fragment(ref_str: &str) -> Option<String> {
     Some(format!("{base}#{encoded_fragment}"))
 }
 
+/// Resolve all relative `$ref` paths in a schema against a source URL.
+///
+/// Returns a map from relative path → absolute URL for each successfully resolved
+/// ref.  When `source_url` is `None` or resolution fails for a particular ref,
+/// that ref is skipped with a debug/warning log.
+fn resolve_all_relative_refs(
+    value: &serde_json::Value,
+    source_url: Option<&str>,
+) -> HashMap<String, String> {
+    let relative_refs = find_relative_refs(value);
+    let mut resolved: HashMap<String, String> = HashMap::new();
+    if let Some(source_url) = source_url {
+        for rel_ref in &relative_refs {
+            match resolve_relative_url(rel_ref, source_url) {
+                Ok(abs_url) => {
+                    debug!(relative = %rel_ref, resolved = %abs_url, "resolved relative $ref");
+                    resolved.insert(rel_ref.clone(), abs_url);
+                }
+                Err(e) => {
+                    warn!(relative = %rel_ref, error = %e, "failed to resolve relative $ref");
+                }
+            }
+        }
+    } else if !relative_refs.is_empty() {
+        debug!(
+            count = relative_refs.len(),
+            "skipping relative $ref resolution (no source URL)"
+        );
+    }
+    resolved
+}
+
 /// Download all `$ref` dependencies for a schema, rewrite URLs to local paths,
 /// and write the updated schema. Handles transitive dependencies recursively.
 ///
@@ -227,7 +312,9 @@ pub async fn resolve_and_rewrite(
         );
 
     let external_refs = find_external_refs(&value);
-    if external_refs.is_empty() {
+    let resolved_relative = resolve_all_relative_refs(&value, ctx.source_url.as_deref());
+
+    if external_refs.is_empty() && resolved_relative.is_empty() {
         // No external refs — still fix invalid URI references
         fix_ref_uris(&mut value);
         let fixed = serde_json::to_string_pretty(&value)?;
@@ -236,27 +323,42 @@ pub async fn resolve_and_rewrite(
     }
 
     debug!(
-        refs = external_refs.len(),
-        "found external $ref dependencies"
+        external = external_refs.len(),
+        relative = resolved_relative.len(),
+        "found $ref dependencies"
     );
 
-    // Build URL → local path mapping and download deps
+    // Build ref → local path mapping and download deps.
+    // The url_map keys are the original $ref base strings (absolute URLs or
+    // relative paths), and the values are the new local URLs.
     let mut url_map: HashMap<String, String> = HashMap::new();
     let mut to_process: Vec<DownloadedDep> = Vec::new();
 
-    for ref_url in &external_refs {
-        if let Some(existing_filename) = ctx.already_downloaded.get(ref_url) {
+    // Combine absolute external refs and resolved relative refs into a single
+    // list so the download logic is shared.
+    let all_refs: Vec<(String, String)> = external_refs
+        .iter()
+        .map(|url| (url.clone(), url.clone()))
+        .chain(
+            resolved_relative
+                .iter()
+                .map(|(rel, abs)| (rel.clone(), abs.clone())),
+        )
+        .collect();
+
+    for (ref_key, download_url) in &all_refs {
+        if let Some(existing_filename) = ctx.already_downloaded.get(download_url) {
             // Already downloaded, just build the mapping using the stored filename
             let local_url = format!(
                 "{}/{}",
                 ctx.base_url_for_shared.trim_end_matches('/'),
                 existing_filename,
             );
-            url_map.insert(ref_url.clone(), local_url);
+            url_map.insert(ref_key.clone(), local_url);
             continue;
         }
 
-        let dep_basename = filename_from_url(ref_url)?;
+        let dep_basename = filename_from_url(download_url)?;
         let parent_stem = schema_dest
             .file_stem()
             .unwrap_or_default()
@@ -267,24 +369,25 @@ pub async fn resolve_and_rewrite(
         let filename = unique_filename_in(ctx.shared_dir, &base_filename);
         let dest_path = ctx.shared_dir.join(&filename);
 
-        match crate::download::download_one(ctx.cache, ref_url, &dest_path).await {
+        match crate::download::download_one(ctx.cache, download_url, &dest_path).await {
             Ok((dep_text, status)) => {
-                info!(url = %ref_url, status = %status, "downloaded $ref dependency");
+                info!(url = %download_url, status = %status, "downloaded $ref dependency");
                 ctx.already_downloaded
-                    .insert(ref_url.clone(), filename.clone());
+                    .insert(download_url.clone(), filename.clone());
                 let local_url = format!(
                     "{}/{filename}",
                     ctx.base_url_for_shared.trim_end_matches('/')
                 );
-                url_map.insert(ref_url.clone(), local_url.clone());
+                url_map.insert(ref_key.clone(), local_url.clone());
                 to_process.push(DownloadedDep {
                     text: dep_text,
                     filename,
                     url: local_url,
+                    source_url: Some(download_url.clone()),
                 });
             }
             Err(e) => {
-                warn!(url = %ref_url, error = %e, "failed to download $ref dependency, keeping original URL");
+                warn!(url = %download_url, error = %e, "failed to download $ref dependency, keeping original URL");
             }
         }
     }
@@ -295,10 +398,13 @@ pub async fn resolve_and_rewrite(
     let rewritten = serde_json::to_string_pretty(&value)?;
     tokio::fs::write(schema_dest, format!("{rewritten}\n")).await?;
 
-    // Recursively process transitive deps
+    // Recursively process transitive deps (they may also have relative refs)
     for dep in to_process {
         let dep_dest = ctx.shared_dir.join(&dep.filename);
+        let prev_source_url = ctx.source_url.take();
+        ctx.source_url = dep.source_url;
         Box::pin(resolve_and_rewrite(ctx, &dep.text, &dep_dest, &dep.url)).await?;
+        ctx.source_url = prev_source_url;
     }
 
     Ok(())
@@ -464,5 +570,112 @@ mod tests {
             schema["$ref"],
             "#/definitions/core::option::Option%3Cvector::template::Template%3E"
         );
+    }
+
+    // --- find_relative_refs ---
+
+    #[test]
+    fn find_relative_refs_dot_slash() {
+        let schema = serde_json::json!({
+            "properties": {
+                "rule": { "$ref": "./rule.json#/$defs/SerializableRule" }
+            }
+        });
+        let refs = find_relative_refs(&schema);
+        assert_eq!(refs.len(), 1);
+        assert!(refs.contains("./rule.json"));
+    }
+
+    #[test]
+    fn find_relative_refs_ignores_fragment_only() {
+        let schema = serde_json::json!({
+            "$ref": "#/definitions/Foo",
+            "items": { "$ref": "#/$defs/Bar" }
+        });
+        let refs = find_relative_refs(&schema);
+        assert!(refs.is_empty());
+    }
+
+    #[test]
+    fn find_relative_refs_ignores_http() {
+        let schema = serde_json::json!({
+            "$ref": "https://example.com/schema.json"
+        });
+        let refs = find_relative_refs(&schema);
+        assert!(refs.is_empty());
+    }
+
+    #[test]
+    fn find_relative_refs_various_patterns() {
+        let schema = serde_json::json!({
+            "oneOf": [
+                { "$ref": "./a.json" },
+                { "$ref": "../b.json#/defs/X" },
+                { "$ref": "subdir/c.json" }
+            ]
+        });
+        let refs = find_relative_refs(&schema);
+        assert_eq!(refs.len(), 3);
+        assert!(refs.contains("./a.json"));
+        assert!(refs.contains("../b.json"));
+        assert!(refs.contains("subdir/c.json"));
+    }
+
+    // --- resolve_relative_url ---
+
+    #[test]
+    fn resolve_relative_dot_slash() {
+        let result = resolve_relative_url(
+            "./rule.json",
+            "https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/project.json",
+        )
+        .expect("ok");
+        assert_eq!(
+            result,
+            "https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json"
+        );
+    }
+
+    #[test]
+    fn resolve_relative_parent_dir() {
+        let result = resolve_relative_url(
+            "../other/schema.json",
+            "https://example.com/schemas/sub/main.json",
+        )
+        .expect("ok");
+        assert_eq!(result, "https://example.com/schemas/other/schema.json");
+    }
+
+    #[test]
+    fn resolve_relative_bare_filename() {
+        let result = resolve_relative_url("types.json", "https://example.com/schemas/main.json")
+            .expect("ok");
+        assert_eq!(result, "https://example.com/schemas/types.json");
+    }
+
+    // --- rewrite_refs with relative refs ---
+
+    #[test]
+    fn rewrite_refs_replaces_relative_refs() {
+        let mut schema = serde_json::json!({
+            "properties": {
+                "rule": { "$ref": "./rule.json#/$defs/SerializableRule" },
+                "local": { "$ref": "#/definitions/Local" }
+            }
+        });
+        let url_map: HashMap<String, String> = [(
+            "./rule.json".to_string(),
+            "_shared/project--rule.json".to_string(),
+        )]
+        .into_iter()
+        .collect();
+
+        rewrite_refs(&mut schema, &url_map);
+
+        assert_eq!(
+            schema["properties"]["rule"]["$ref"],
+            "_shared/project--rule.json#/$defs/SerializableRule"
+        );
+        assert_eq!(schema["properties"]["local"]["$ref"], "#/definitions/Local");
     }
 }
