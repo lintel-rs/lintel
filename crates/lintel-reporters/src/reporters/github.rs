@@ -34,9 +34,7 @@ impl Reporter for GithubReporter {
             let message = escape_workflow(error.message());
 
             let (line, col) = match error {
-                LintError::Parse { src, span, .. }
-                | LintError::Validation { src, span, .. }
-                | LintError::Config { src, span, .. } => {
+                LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
                     offset_to_line_col(src.inner(), span.offset())
                 }
                 LintError::Io { .. }
@@ -50,7 +48,6 @@ impl Reporter for GithubReporter {
                     instance_path
                 }
                 LintError::Validation { .. } => "validation error",
-                LintError::Config { .. } => "config error",
                 LintError::Io { .. } => "io error",
                 LintError::SchemaFetch { .. } => "schema fetch error",
                 LintError::SchemaCompile { .. } => "schema compile error",

@@ -5,13 +5,17 @@
 [![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/lintel-validate.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-Schema validation command for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC against JSON Schema
+Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC files against JSON Schema.
 
 ## Features
 
-Runs schema validation against files, combining the core validation engine (`lintel-check`) with reporter output (`lintel-reporters`).
-
-Provides the `lintel validate` subcommand and its bpaf CLI argument struct.
+- File discovery via glob patterns and `.gitignore`-aware walking
+- Multi-format parsing (JSON, YAML, TOML, JSON5, JSONC, Markdown frontmatter)
+- Schema resolution from inline annotations, config mappings, and catalog matching
+- Schema fetching with disk-based caching
+- Validation with rich diagnostics (source spans, labels)
+- Validation result caching for incremental re-checks
+- `Reporter` trait for pluggable output formatting
 
 Part of the [Lintel](https://github.com/lintel-rs/lintel) project.
 

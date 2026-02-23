@@ -15,14 +15,11 @@ use lintel_cli_common::CliCacheOptions;
 // -----------------------------------------------------------------------
 
 pub mod catalog;
-pub use lintel_config as config;
-pub use lintel_validation_cache as validation_cache;
 pub mod diagnostics;
 pub mod discover;
 pub mod parsers;
 pub mod registry;
 pub mod reporter;
-pub mod retriever;
 pub mod validate;
 
 pub use reporter::Reporter;
@@ -72,8 +69,8 @@ impl From<&ValidateArgs> for validate::ValidateArgs {
 
 /// Format a verbose line for a checked file, including cache status tags.
 pub fn format_checked_verbose(file: &validate::CheckedFile) -> String {
-    use retriever::CacheStatus;
-    use validation_cache::ValidationCacheStatus;
+    use lintel_schema_cache::CacheStatus;
+    use lintel_validation_cache::ValidationCacheStatus;
 
     let schema_tag = match file.cache_status {
         Some(CacheStatus::Hit) => " [cached]",
@@ -104,8 +101,8 @@ pub fn merge_config(args: &mut ValidateArgs) {
         .map(std::path::PathBuf::from);
 
     let cfg_result = match &search_dir {
-        Some(dir) => config::find_and_load(dir).map(Option::unwrap_or_default),
-        None => config::load(),
+        Some(dir) => lintel_config::find_and_load(dir).map(Option::unwrap_or_default),
+        None => lintel_config::load(),
     };
 
     match cfg_result {

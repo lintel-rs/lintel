@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use tracing::debug;
 
-use crate::config::GitHubPagesConfig;
+use lintel_catalog_builder::config::GitHubPagesConfig;
 
 use super::{OutputContext, Target, write_common_files};
 

@@ -1,9 +1,11 @@
 use alloc::collections::BTreeMap;
 
+use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
+use serde_json::Value;
 
 /// Top-level configuration loaded from `lintel-catalog.toml`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CatalogConfig {
     #[allow(dead_code)]
@@ -17,7 +19,7 @@ pub struct CatalogConfig {
 }
 
 /// Metadata about the catalog being built.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CatalogMeta {
     /// Optional title for the catalog, included in the output `catalog.json`.
@@ -26,7 +28,7 @@ pub struct CatalogMeta {
 }
 
 /// GitHub Pages hosting options (`.nojekyll`, `CNAME`).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct GitHubPagesConfig {
     #[serde(default)]
@@ -34,7 +36,7 @@ pub struct GitHubPagesConfig {
 }
 
 /// Target output configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(tag = "type", deny_unknown_fields)]
 pub enum TargetConfig {
     /// Write output to a local directory.
@@ -59,7 +61,7 @@ pub enum TargetConfig {
 }
 
 /// A named group of schema definitions.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct GroupConfig {
     pub name: String,
@@ -69,7 +71,7 @@ pub struct GroupConfig {
 }
 
 /// A single schema definition within a group.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SchemaDefinition {
     /// URL to download the schema from. If absent, the schema is expected to
@@ -82,7 +84,7 @@ pub struct SchemaDefinition {
 }
 
 /// An external catalog source (e.g. `SchemaStore`).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SourceConfig {
     /// URL to the external catalog JSON.
@@ -96,11 +98,20 @@ pub struct SourceConfig {
 ///
 /// Group metadata (name, description) is owned by the corresponding `[groups.*]`
 /// entry; the organize section only handles schema routing via match patterns.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct OrganizeEntry {
     #[serde(rename = "match")]
     pub match_patterns: Vec<String>,
+}
+
+/// Generate the JSON Schema for `lintel-catalog.toml` as a `serde_json::Value`.
+///
+/// # Panics
+///
+/// Panics if the schema cannot be serialized to JSON (should never happen).
+pub fn schema() -> Value {
+    serde_json::to_value(schema_for!(CatalogConfig)).expect("schema serialization cannot fail")
 }
 
 /// Load a `CatalogConfig` from a TOML string.

@@ -7,14 +7,15 @@ use anyhow::{Context, Result};
 use glob::glob;
 use serde_json::Value;
 
-use crate::catalog::{self, CompiledCatalog};
-use crate::config;
+use crate::catalog;
+use lintel_schema_cache::{CacheStatus, SchemaCache};
+use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
+use schemastore::CompiledCatalog;
+
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
 use crate::parsers::{self, FileFormat, JsoncParser, Parser};
 use crate::registry;
-use crate::retriever::{CacheStatus, SchemaCache};
-use crate::validation_cache::{self, ValidationCacheStatus, ValidationError};
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
@@ -98,21 +99,21 @@ struct ParsedFile {
 /// Returns `(config, config_dir, config_path)`.  When no config is found or
 /// cwd is unavailable the config is default and `config_path` is `None`.
 #[tracing::instrument(skip_all)]
-pub fn load_config(search_dir: Option<&Path>) -> (config::Config, PathBuf, Option<PathBuf>) {
+pub fn load_config(search_dir: Option<&Path>) -> (lintel_config::Config, PathBuf, Option<PathBuf>) {
     let start_dir = match search_dir {
         Some(d) => d.to_path_buf(),
         None => match std::env::current_dir() {
             Ok(d) => d,
-            Err(_) => return (config::Config::default(), PathBuf::from("."), None),
+            Err(_) => return (lintel_config::Config::default(), PathBuf::from("."), None),
         },
     };
 
-    let Some(config_path) = config::find_config_path(&start_dir) else {
-        return (config::Config::default(), start_dir, None);
+    let Some(config_path) = lintel_config::find_config_path(&start_dir) else {
+        return (lintel_config::Config::default(), start_dir, None);
     };
 
     let dir = config_path.parent().unwrap_or(&start_dir).to_path_buf();
-    let cfg = config::find_and_load(&start_dir)
+    let cfg = lintel_config::find_and_load(&start_dir)
         .ok()
         .flatten()
         .unwrap_or_default();
@@ -162,54 +163,6 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// lintel.toml self-validation
-// ---------------------------------------------------------------------------
-
-/// Validate `lintel.toml` against its built-in schema.
-async fn validate_config(
-    config_path: &Path,
-    errors: &mut Vec<LintError>,
-    checked: &mut Vec<CheckedFile>,
-    on_check: &mut impl FnMut(&CheckedFile),
-) -> Result<()> {
-    let content = tokio::fs::read_to_string(config_path).await?;
-    let config_value: Value = toml::from_str(&content)
-        .map_err(|e| anyhow::anyhow!("failed to parse {}: {e}", config_path.display()))?;
-    let schema_value: Value = serde_json::from_str(include_str!(concat!(
-        env!("OUT_DIR"),
-        "/lintel-config.schema.json"
-    )))
-    .context("failed to parse embedded lintel config schema")?;
-    if let Ok(validator) = jsonschema::options().build(&schema_value) {
-        let path_str = config_path.display().to_string();
-        for error in validator.iter_errors(&config_value) {
-            let ip = error.instance_path().to_string();
-            let span = find_instance_path_span(&content, &ip);
-            errors.push(LintError::Config {
-                src: miette::NamedSource::new(&path_str, content.clone()),
-                span: span.into(),
-                path: path_str.clone(),
-                instance_path: if ip.is_empty() {
-                    DEFAULT_LABEL.to_string()
-                } else {
-                    ip
-                },
-                message: clean_error_message(error.to_string()),
-            });
-        }
-        let cf = CheckedFile {
-            path: path_str,
-            schema: "(builtin)".to_string(),
-            cache_status: None,
-            validation_cache_status: None,
-        };
-        on_check(&cf);
-        checked.push(cf);
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // Phase 1: Parse files and resolve schema URIs
 // ---------------------------------------------------------------------------
 
@@ -246,7 +199,7 @@ enum FileResult {
 fn process_one_file(
     path: &Path,
     content: String,
-    config: &config::Config,
+    config: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
 ) -> FileResult {
@@ -328,8 +281,8 @@ fn process_one_file(
     let original_schema_uri = schema_uri.clone();
 
     // Apply rewrite rules, then resolve // paths relative to lintel.toml
-    let schema_uri = config::apply_rewrites(&schema_uri, &config.rewrite);
-    let schema_uri = config::resolve_double_slash(&schema_uri, config_dir);
+    let schema_uri = lintel_config::apply_rewrites(&schema_uri, &config.rewrite);
+    let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
 
     // Resolve relative local paths against the file's parent directory.
     let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
@@ -358,7 +311,7 @@ fn process_one_file(
 #[allow(clippy::too_many_arguments)]
 async fn parse_and_group_files(
     files: &[PathBuf],
-    config: &config::Config,
+    config: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
     errors: &mut Vec<LintError>,
@@ -579,7 +532,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validate_formats: bool,
     cache_status: Option<CacheStatus>,
     group: &[P],
-    vcache: &validation_cache::ValidationCache,
+    vcache: &lintel_validation_cache::ValidationCache,
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
@@ -597,7 +550,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
 
         vcache
             .store(
-                &validation_cache::CacheKey {
+                &lintel_validation_cache::CacheKey {
                     file_content: &pf.content,
                     schema_hash,
                     validate_formats,
@@ -627,7 +580,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
 /// Returns a list of compiled catalogs, printing warnings for any that fail to fetch.
 pub async fn fetch_compiled_catalogs(
     retriever: &SchemaCache,
-    config: &config::Config,
+    config: &lintel_config::Config,
     no_catalog: bool,
 ) -> Vec<CompiledCatalog> {
     let mut compiled_catalogs = Vec::new();
@@ -734,7 +687,7 @@ pub async fn run_with(
         builder.build()
     };
 
-    let (config, config_dir, config_path) = load_config(args.config_dir.as_deref());
+    let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
@@ -742,11 +695,6 @@ pub async fn run_with(
 
     let mut errors: Vec<LintError> = Vec::new();
     let mut checked: Vec<CheckedFile> = Vec::new();
-
-    // Validate lintel.toml against its own schema
-    if let Some(config_path) = config_path {
-        validate_config(&config_path, &mut errors, &mut checked, &mut on_check).await?;
-    }
 
     // Phase 1: Parse files and resolve schema URIs
     let schema_groups = parse_and_group_files(
@@ -764,8 +712,8 @@ pub async fn run_with(
     );
 
     // Create validation cache
-    let vcache = validation_cache::ValidationCache::new(
-        validation_cache::ensure_cache_dir(),
+    let vcache = lintel_validation_cache::ValidationCache::new(
+        lintel_validation_cache::ensure_cache_dir(),
         args.force_validation,
     );
 
@@ -846,7 +794,7 @@ pub async fn run_with(
 
         // Pre-compute schema hash once for the entire group.
         let t = std::time::Instant::now();
-        let schema_hash = validation_cache::schema_hash(&schema_value);
+        let schema_hash = lintel_validation_cache::schema_hash(&schema_value);
         hash_time += t.elapsed();
 
         // Split the group into validation cache hits and misses.
@@ -855,7 +803,7 @@ pub async fn run_with(
         let t = std::time::Instant::now();
         for pf in group {
             let (cached, vcache_status) = vcache
-                .lookup(&validation_cache::CacheKey {
+                .lookup(&lintel_validation_cache::CacheKey {
                     file_content: &pf.content,
                     schema_hash: &schema_hash,
                     validate_formats,
@@ -976,7 +924,7 @@ pub async fn run_with(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::retriever::SchemaCache;
+    use lintel_schema_cache::SchemaCache;
     use std::path::Path;
 
     fn mock(entries: &[(&str, &str)]) -> SchemaCache {
@@ -1602,7 +1550,7 @@ mod tests {
 
         let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
-        assert_eq!(result.files_checked(), 2); // lintel.toml + config.json
+        assert_eq!(result.files_checked(), 1);
         Ok(())
     }
 

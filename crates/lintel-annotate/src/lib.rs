@@ -7,11 +7,10 @@ use anyhow::Result;
 use bpaf::Bpaf;
 
 use lintel_cli_common::CliCacheOptions;
-use lintel_validate::catalog::CompiledCatalog;
-use lintel_validate::config;
+use lintel_schema_cache::SchemaCache;
 use lintel_validate::parsers;
-use lintel_validate::retriever::SchemaCache;
 use lintel_validate::validate;
+use schemastore::CompiledCatalog;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -68,7 +67,7 @@ enum FileOutcome {
 
 fn process_file(
     file_path: &Path,
-    config: &config::Config,
+    config: &lintel_config::Config,
     catalogs: &[CompiledCatalog],
     update: bool,
 ) -> FileOutcome {

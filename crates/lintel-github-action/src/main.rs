@@ -87,9 +87,9 @@ async fn main() -> ExitCode {
 fn error_to_annotation(error: &LintError) -> Annotation {
     let path = error.path().replace('\\', "/");
     let (line, _col) = match error {
-        LintError::Parse { src, span, .. }
-        | LintError::Validation { src, span, .. }
-        | LintError::Config { src, span, .. } => offset_to_line_col(src.inner(), span.offset()),
+        LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
+            offset_to_line_col(src.inner(), span.offset())
+        }
         LintError::Io { .. } | LintError::SchemaFetch { .. } | LintError::SchemaCompile { .. } => {
             (1, 1)
         }
@@ -101,7 +101,6 @@ fn error_to_annotation(error: &LintError) -> Annotation {
             Some(instance_path.clone())
         }
         LintError::Validation { .. } => Some("validation error".to_string()),
-        LintError::Config { .. } => Some("config error".to_string()),
         LintError::Io { .. } => Some("io error".to_string()),
         LintError::SchemaFetch { .. } => Some("schema fetch error".to_string()),
         LintError::SchemaCompile { .. } => Some("schema compile error".to_string()),

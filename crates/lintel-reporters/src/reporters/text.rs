@@ -16,10 +16,7 @@ impl Reporter for TextReporter {
         for error in &result.errors {
             let path = error.path();
             match error {
-                LintError::Validation { instance_path, .. }
-                | LintError::Config { instance_path, .. }
-                    if instance_path != DEFAULT_LABEL =>
-                {
+                LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
                     eprintln!("error: {path}: {} (at {instance_path})", error.message(),);
                 }
                 _ => {
