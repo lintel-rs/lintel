@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.6...lintel-github-action-v0.0.7) - 2026-02-23
+
+### Other
+
+- Remove re-exports, add lintel-config-schema-generator, simplify flake
+- Extract lintel-validate crate from lintel-check
+
 ## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.5...lintel-github-action-v0.0.6) - 2026-02-22
 
 ### Other

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.4...lintel-config-v0.0.5) - 2026-02-23
+
+### Other
+
+- Add rich titles, descriptions, and examples to generated JSON schemas
+- Remove re-exports, add lintel-config-schema-generator, simplify flake
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.3...lintel-config-v0.0.4) - 2026-02-21
 
 ### Fixed

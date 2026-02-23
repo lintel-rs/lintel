@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-schemastore-catalog-v0.0.8...lintel-schemastore-catalog-v0.0.9) - 2026-02-23
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-schemastore-catalog-v0.0.7...lintel-schemastore-catalog-v0.0.8) - 2026-02-22
 
 ### Added
