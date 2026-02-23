@@ -226,6 +226,8 @@ pub async fn resolve_and_rewrite(
             serde_json::Value::String(schema_url.to_string()),
         );
 
+    jsonschema_migrate::migrate_to_2020_12(&mut value);
+
     let external_refs = find_external_refs(&value);
     if external_refs.is_empty() {
         // No external refs — still fix invalid URI references

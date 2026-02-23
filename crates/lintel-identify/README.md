@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-identify.svg)](https://crates.io/crates/lintel-identify)
 [![docs.rs](https://docs.rs/lintel-identify/badge.svg)](https://docs.rs/lintel-identify)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-identify.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Schema identification for JSON and YAML files using JSON Schema

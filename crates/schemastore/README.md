@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/schemastore.svg)](https://crates.io/crates/schemastore)
 [![docs.rs](https://docs.rs/schemastore/badge.svg)](https://docs.rs/schemastore)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/schemastore.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Parse and match files against the [SchemaStore](https://www.schemastore.org/) catalog.

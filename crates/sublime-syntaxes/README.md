@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/sublime-syntaxes.svg)](https://crates.io/crates/sublime-syntaxes)
 [![docs.rs](https://docs.rs/sublime-syntaxes/badge.svg)](https://docs.rs/sublime-syntaxes)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/sublime-syntaxes.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Precompiled [Sublime Text syntax definitions](https://www.sublimetext.com/docs/syntax.html) for languages not included in [syntect](https://github.com/trishume/syntect)'s default set.

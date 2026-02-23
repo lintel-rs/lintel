@@ -421,6 +421,7 @@ async fn process_source(
             local_url,
             file_match: schema.file_match.clone(),
             versions: schema.versions.clone(),
+            target_dir: target_dir.clone(),
         });
     }
 
@@ -444,7 +445,7 @@ async fn process_source(
         info: &entry_info,
         downloaded: &downloaded,
     };
-    resolve_source_refs(ctx, &result, source_name).await?;
+    resolve_source_refs(ctx, &result).await?;
 
     // Build catalog entries
     let entries = entry_info
@@ -481,37 +482,52 @@ async fn process_source(
 }
 
 /// Resolve `$ref` dependencies for all downloaded source schemas.
+///
+/// Schemas are grouped by their target directory (organize group or source
+/// default) so that each group's `$ref` dependencies land in its own `_shared/`
+/// subdirectory.
 async fn resolve_source_refs(
     ctx: &SourceContext<'_>,
     result: &SourceDownloadResult<'_>,
-    source_name: &str,
 ) -> Result<()> {
     let base_url = ctx.base_url.trim_end_matches('/');
-    let shared_dir = ctx.schemas_dir.join(source_name).join("_shared");
-    let shared_base_url = format!("{base_url}/schemas/{source_name}/_shared");
-    let mut already_downloaded: HashMap<String, String> = HashMap::new();
 
-    for (item, info) in result.items.iter().zip(result.info.iter()) {
-        if !result.downloaded.contains(&item.url) {
-            continue;
+    // Group schema indices by target directory so each group gets its own
+    // _shared/ directory and dedup map.
+    let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (i, info) in result.info.iter().enumerate() {
+        groups.entry(&info.target_dir).or_default().push(i);
+    }
+
+    for (target_dir, indices) in &groups {
+        let shared_dir = ctx.schemas_dir.join(target_dir).join("_shared");
+        let shared_base_url = format!("{base_url}/schemas/{target_dir}/_shared");
+        let mut already_downloaded: HashMap<String, String> = HashMap::new();
+
+        for &i in indices {
+            let item = &result.items[i];
+            let info = &result.info[i];
+            if !result.downloaded.contains(&item.url) {
+                continue;
+            }
+            let text = tokio::fs::read_to_string(&item.dest).await?;
+            // Always run resolve_and_rewrite: it handles both external $ref
+            // resolution and fixing invalid URI references (spaces, brackets, etc.)
+            debug!(schema = %info.name, "processing schema refs");
+            resolve_and_rewrite(
+                &mut RefRewriteContext {
+                    cache: ctx.cache,
+                    shared_dir: &shared_dir,
+                    base_url_for_shared: &shared_base_url,
+                    already_downloaded: &mut already_downloaded,
+                },
+                &text,
+                &item.dest,
+                &info.local_url,
+            )
+            .await
+            .with_context(|| format!("failed to process refs for {}", info.name))?;
         }
-        let text = tokio::fs::read_to_string(&item.dest).await?;
-        // Always run resolve_and_rewrite: it handles both external $ref
-        // resolution and fixing invalid URI references (spaces, brackets, etc.)
-        debug!(schema = %info.name, "processing schema refs");
-        resolve_and_rewrite(
-            &mut RefRewriteContext {
-                cache: ctx.cache,
-                shared_dir: &shared_dir,
-                base_url_for_shared: &shared_base_url,
-                already_downloaded: &mut already_downloaded,
-            },
-            &text,
-            &item.dest,
-            &info.local_url,
-        )
-        .await
-        .with_context(|| format!("failed to process refs for {}", info.name))?;
     }
 
     Ok(())
@@ -525,6 +541,8 @@ struct SourceSchemaInfo {
     local_url: String,
     file_match: Vec<String>,
     versions: BTreeMap<String, String>,
+    /// Directory name relative to `schemas/` (organize group or source default).
+    target_dir: String,
 }
 
 /// Classify a schema into an organize directory or the source default.

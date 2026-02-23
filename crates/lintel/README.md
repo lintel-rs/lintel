@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel.svg)](https://crates.io/crates/lintel)
 [![docs.rs](https://docs.rs/lintel/badge.svg)](https://docs.rs/lintel)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Fast, multi-format JSON Schema linter CLI. Validates JSON, YAML, TOML, JSON5, and JSONC files against [JSON Schema](https://json-schema.org/) in a single command.

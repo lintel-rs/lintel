@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/markdown-to-ansi.svg)](https://crates.io/crates/markdown-to-ansi)
 [![docs.rs](https://docs.rs/markdown-to-ansi/badge.svg)](https://docs.rs/markdown-to-ansi)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/markdown-to-ansi.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Render Markdown as ANSI-formatted terminal text

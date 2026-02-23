@@ -1,6 +1,11 @@
 # lintel-config-schema-generator
 
-Generate JSON Schemas for Lintel configuration files.
+[![Crates.io](https://img.shields.io/crates/v/lintel-config-schema-generator.svg)](https://crates.io/crates/lintel-config-schema-generator)
+[![docs.rs](https://docs.rs/lintel-config-schema-generator/badge.svg)](https://docs.rs/lintel-config-schema-generator)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
+[![License](https://img.shields.io/crates/l/lintel-config-schema-generator.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
+
+Generate JSON Schemas for Lintel configuration files (lintel.toml, lintel-catalog.toml)
 
 Produces schemas for:
 
@@ -16,3 +21,9 @@ lintel-config-schema-generator
 # Write schemas to a specific directory
 lintel-config-schema-generator path/to/output/
 ```
+
+Part of [Lintel](https://github.com/lintel-rs/lintel), a JSON Schema toolkit.
+
+## License
+
+Apache-2.0
