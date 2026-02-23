@@ -724,4 +724,102 @@ mod tests {
         assert!(output.contains("c (string)"));
         assert!(output.contains("Deeply nested"));
     }
+
+    #[test]
+    fn numeric_constraints_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                }
+            }
+        });
+
+        let output = explain(&schema, "constraints", &plain());
+        assert!(output.contains("Constraints:"));
+        assert!(output.contains("min=1"));
+        assert!(output.contains("max=65535"));
+    }
+
+    #[test]
+    fn string_constraints_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "minLength": 5,
+                    "maxLength": 255,
+                    "pattern": "^[^@]+@[^@]+$"
+                }
+            }
+        });
+
+        let output = explain(&schema, "constraints", &plain());
+        assert!(output.contains("format=email"));
+        assert!(output.contains("minLength=5"));
+        assert!(output.contains("maxLength=255"));
+        assert!(output.contains("pattern=^[^@]+@[^@]+$"));
+    }
+
+    #[test]
+    fn array_constraints_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "uniqueItems": true
+                }
+            }
+        });
+
+        let output = explain(&schema, "constraints", &plain());
+        assert!(output.contains("minItems=1"));
+        assert!(output.contains("maxItems=10"));
+        assert!(output.contains("unique"));
+    }
+
+    #[test]
+    fn exclusive_bounds_and_multiple_of_shown() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "score": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "exclusiveMaximum": 100,
+                    "multipleOf": 0.5
+                }
+            }
+        });
+
+        let output = explain(&schema, "constraints", &plain());
+        assert!(output.contains("exclusiveMin=0"));
+        assert!(output.contains("exclusiveMax=100"));
+        assert!(output.contains("multipleOf=0.5"));
+    }
+
+    #[test]
+    fn no_constraints_line_when_none() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Just a name"
+                }
+            }
+        });
+
+        let output = explain(&schema, "no-constraints", &plain());
+        assert!(!output.contains("Constraints:"));
+    }
 }
