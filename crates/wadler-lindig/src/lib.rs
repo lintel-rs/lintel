@@ -314,11 +314,14 @@ fn fits_with_stack(mut stack: Vec<(IndentState, &Doc)>, remaining: usize) -> boo
             Doc::Line => {
                 rem -= 1; // space in flat mode
             }
-            Doc::Hardline | Doc::BreakParent => {
-                // A hard break or break-parent means the line ends here.
-                // In prettier's `fits`, this returns true — the content up to
-                // this point fits on the current line.
+            Doc::Hardline => {
+                // A hardline ends the current line — content up to this
+                // point fits, so return true (no need to check further).
                 return true;
+            }
+            Doc::BreakParent => {
+                // Force the enclosing group to break (print in break mode).
+                return false;
             }
             Doc::Softline => {
                 // empty in flat mode

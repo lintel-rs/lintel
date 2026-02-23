@@ -40,8 +40,194 @@ fn comrak_options() -> Options<'static> {
     opts
 }
 
+// ─── prettier-ignore helpers ──────────────────────────────────────────────
+
+/// Check if a node is a `<!-- prettier-ignore -->` HTML comment.
+fn is_prettier_ignore(node: &Node<RefCell<Ast>>) -> bool {
+    let data = node.data.borrow();
+    matches!(&data.value, NodeValue::HtmlBlock(html)
+        if html.literal.trim() == "<!-- prettier-ignore -->")
+}
+
+/// Check if a node is a `<!-- prettier-ignore-start -->` HTML comment.
+fn is_prettier_ignore_start(node: &Node<RefCell<Ast>>) -> bool {
+    let data = node.data.borrow();
+    matches!(&data.value, NodeValue::HtmlBlock(html)
+        if html.literal.trim() == "<!-- prettier-ignore-start -->")
+}
+
+/// Check if a node is a `<!-- prettier-ignore-end -->` HTML comment.
+fn is_prettier_ignore_end(node: &Node<RefCell<Ast>>) -> bool {
+    let data = node.data.borrow();
+    matches!(&data.value, NodeValue::HtmlBlock(html)
+        if html.literal.trim() == "<!-- prettier-ignore-end -->")
+}
+
+/// Check if a node is at the document top level (parent is the Document root).
+fn is_at_document_top_level(node: &Node<RefCell<Ast>>) -> bool {
+    node.parent()
+        .is_some_and(|p| matches!(&p.data.borrow().value, NodeValue::Document))
+}
+
+/// Find the index of the matching `<!-- prettier-ignore-end -->` in children.
+fn find_prettier_ignore_end<'a>(
+    children: &[&'a Node<'a, RefCell<Ast>>],
+    start_idx: usize,
+) -> Option<usize> {
+    (start_idx..children.len()).find(|&idx| is_prettier_ignore_end(children[idx]))
+}
+
+/// Compute the last source line of a node.
+///
+/// comrak's `sourcepos.end` is unreliable for `HtmlBlock` nodes (end.line can
+/// be less than start.line). This function computes the end from the literal
+/// line count when the end position is invalid.
+fn node_end_line(node: &Node<RefCell<Ast>>) -> usize {
+    let data = node.data.borrow();
+    let sp = data.sourcepos;
+
+    if sp.end.line >= sp.start.line {
+        return sp.end.line;
+    }
+
+    // HtmlBlock: compute from literal line count
+    if let NodeValue::HtmlBlock(html) = &data.value {
+        let line_count = html.literal.lines().count().max(1);
+        return sp.start.line + line_count - 1;
+    }
+
+    sp.start.line
+}
+
+/// Extract raw source lines for a node, stripping context prefix (blockquote/indent).
+fn extract_raw_node_source(node: &Node<RefCell<Ast>>, source: &str) -> Doc {
+    let sp = node.data.borrow().sourcepos;
+    let end_line = node_end_line(node);
+    extract_raw_lines(sp.start.line, end_line, sp.start.column, source)
+}
+
+/// Extract raw source lines spanning from `start_node` to `end_node` (inclusive).
+fn extract_raw_range_source(
+    start_node: &Node<RefCell<Ast>>,
+    end_node: &Node<RefCell<Ast>>,
+    source: &str,
+) -> Doc {
+    let start_sp = start_node.data.borrow().sourcepos;
+    let end_line = node_end_line(end_node);
+    extract_raw_lines(start_sp.start.line, end_line, start_sp.start.column, source)
+}
+
+/// Extract source lines from `start_line` to `end_line` (1-indexed, inclusive),
+/// stripping `start_column - 1` characters of context prefix from each line.
+fn extract_raw_lines(start_line: usize, end_line: usize, start_column: usize, source: &str) -> Doc {
+    if start_line == 0 || end_line == 0 {
+        return Doc::text("");
+    }
+
+    let source_lines: Vec<&str> = source.lines().collect();
+    let prefix_width = start_column.saturating_sub(1);
+
+    let mut parts = Vec::new();
+    for line_idx in start_line..=end_line {
+        if line_idx > source_lines.len() {
+            break;
+        }
+        let line = source_lines[line_idx - 1];
+        let stripped = if line.len() > prefix_width {
+            &line[prefix_width..]
+        } else if line.trim().is_empty() {
+            ""
+        } else {
+            line
+        };
+
+        if line_idx > start_line {
+            parts.push(Doc::Hardline);
+        }
+        parts.push(Doc::text(stripped.to_string()));
+    }
+
+    // Trim trailing empty lines (comrak may include trailing newline in sourcepos)
+    while parts
+        .last()
+        .is_some_and(|d| matches!(d, Doc::Text(s) if s.is_empty()))
+    {
+        parts.pop();
+        if parts.last().is_some_and(|d| matches!(d, Doc::Hardline)) {
+            parts.pop();
+        }
+    }
+
+    Doc::concat(parts)
+}
+
+// ─── Block sequence rendering ─────────────────────────────────────────────
+
+/// Handle `<!-- prettier-ignore-start -->` / `<!-- prettier-ignore-end -->`
+/// range at the top level: output the entire range as raw source.
+///
+/// Returns `Some(new_index)` if a range was handled, `None` otherwise.
+#[allow(clippy::too_many_arguments)]
+fn handle_ignore_range<'a>(
+    children: &[&'a Node<'a, RefCell<Ast>>],
+    i: usize,
+    source: &str,
+    docs: &mut Vec<Doc>,
+    blank_line_between: bool,
+) -> Option<usize> {
+    let child = children[i];
+    if !is_prettier_ignore_start(child) || !is_at_document_top_level(child) {
+        return None;
+    }
+    let end_idx = find_prettier_ignore_end(children, i + 1)?;
+    if !docs.is_empty() {
+        docs.push(Doc::Hardline);
+        if blank_line_between {
+            docs.push(Doc::Hardline);
+        }
+    }
+    docs.push(extract_raw_range_source(child, children[end_idx], source));
+    Some(end_idx + 1)
+}
+
+/// Handle `<!-- prettier-ignore -->`: output the comment and the next node
+/// as raw source.
+///
+/// Returns `Some(new_index)` if handled, `None` otherwise.
+#[allow(clippy::too_many_arguments)]
+fn handle_ignore_next<'a>(
+    children: &[&'a Node<'a, RefCell<Ast>>],
+    i: usize,
+    source: &str,
+    docs: &mut Vec<Doc>,
+    blank_line_between: bool,
+) -> Option<usize> {
+    let child = children[i];
+    if !is_prettier_ignore(child) || i + 1 >= children.len() {
+        return None;
+    }
+    // Output the comment
+    if !docs.is_empty() {
+        docs.push(Doc::Hardline);
+        if blank_line_between {
+            docs.push(Doc::Hardline);
+        }
+    }
+    let data = child.data.borrow();
+    if let NodeValue::HtmlBlock(html) = &data.value {
+        docs.push(html_block_to_doc(html));
+    }
+    drop(data);
+
+    // Output the next node as raw source (no blank line separator)
+    docs.push(Doc::Hardline);
+    docs.push(extract_raw_node_source(children[i + 1], source));
+    Some(i + 2)
+}
+
 /// Render a sequence of block-level children, managing consecutive unordered list
 /// bullet alternation to prevent merging (prettier's list separation behavior).
+#[allow(clippy::too_many_lines)]
 fn render_block_sequence<'a>(
     children: &[&'a Node<'a, RefCell<Ast>>],
     options: &PrettierConfig,
@@ -50,9 +236,28 @@ fn render_block_sequence<'a>(
 ) -> Vec<Doc> {
     let mut docs = Vec::new();
     let mut consecutive_bullet_lists = 0usize;
+    let mut i = 0;
 
-    for (i, child) in children.iter().enumerate() {
-        // Check if previous child was a list followed by this unfenced code block
+    while i < children.len() {
+        let child = children[i];
+
+        // ── prettier-ignore-start/end range (top-level only) ──────────
+        if let Some(new_i) = handle_ignore_range(children, i, source, &mut docs, blank_line_between)
+        {
+            consecutive_bullet_lists = 0;
+            i = new_i;
+            continue;
+        }
+
+        // ── prettier-ignore (skip formatting next node) ───────────────
+        if let Some(new_i) = handle_ignore_next(children, i, source, &mut docs, blank_line_between)
+        {
+            consecutive_bullet_lists = 0;
+            i = new_i;
+            continue;
+        }
+
+        // ── Normal rendering ──────────────────────────────────────────
         let prev_was_list_before_code = i > 0 && {
             let prev_is_list = {
                 let d = children[i - 1].data.borrow();
@@ -65,9 +270,20 @@ fn render_block_sequence<'a>(
             prev_is_list && this_is_unfenced_code
         };
 
-        if i > 0 {
+        if !docs.is_empty() {
+            // Suppress blank line between consecutive HTML blocks (prettier
+            // doesn't add blank lines between adjacent HTML comments/blocks).
+            let prev_is_html = i > 0 && {
+                let d = children[i - 1].data.borrow();
+                matches!(&d.value, NodeValue::HtmlBlock(_))
+            };
+            let this_is_html = {
+                let d = child.data.borrow();
+                matches!(&d.value, NodeValue::HtmlBlock(_))
+            };
+
             docs.push(Doc::Hardline);
-            if blank_line_between {
+            if blank_line_between && !(prev_is_html && this_is_html) {
                 docs.push(Doc::Hardline);
             }
             // Extra blank line between list and following unfenced code block
@@ -137,6 +353,8 @@ fn render_block_sequence<'a>(
                 docs.push(block_to_doc(child, options, source));
             }
         }
+
+        i += 1;
     }
 
     docs
@@ -927,9 +1145,25 @@ fn list_to_doc<'a>(
         // Subsequent children get tabWidth-based indentation
         // Use per-child alignment: unfenced code blocks use marker_prefix_len,
         // other content uses nest_indent (includes tabWidth extra alignment).
+        let mut ignore_next = false;
         #[allow(clippy::needless_range_loop)]
         for j in 1..children.len() {
             let child = children[j];
+
+            // prettier-ignore: output this child as raw source
+            if ignore_next {
+                ignore_next = false;
+                let child_parts = vec![Doc::Hardline, extract_raw_node_source(child, source)];
+                item_parts.push(Doc::align(nest_indent, Doc::concat(child_parts)));
+                continue;
+            }
+
+            // Check if this child is a prettier-ignore comment
+            if is_prettier_ignore(child) && j + 1 < children.len() {
+                ignore_next = true;
+                // Fall through to render the comment normally
+            }
+
             let child_is_list = {
                 let d = child.data.borrow();
                 matches!(&d.value, NodeValue::List(_))

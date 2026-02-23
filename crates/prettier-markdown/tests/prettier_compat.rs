@@ -175,23 +175,24 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
         "JSON object collapsing differs from prettier",
     ),
     // ── prettier-ignore in blockquotes ───────────────────────────────────
-    // These tests exercise `<!-- prettier-ignore -->` comments inside blockquotes
-    // and embedded JS formatting with `// prettier-ignore`. We don't implement
-    // prettier-ignore semantics or JS formatting.
+    // These tests exercise `<!-- prettier-ignore -->` inside blockquotes combined
+    // with `// prettier-ignore` inside JS code blocks. We support the markdown-level
+    // prettier-ignore but the JS code block test expects prettier's JS formatter to
+    // honor `// prettier-ignore` and add a semicolon — we don't have a JS formatter.
     (
         "markdown/blockquote",
         "ignore-code.md - {\"proseWrap\":\"always\"} format 1",
-        "no prettier-ignore or JS formatter",
+        "no JS formatter for // prettier-ignore",
     ),
     (
         "markdown/blockquote",
         "ignore-code.md - {\"proseWrap\":\"never\"} format 1",
-        "no prettier-ignore or JS formatter",
+        "no JS formatter for // prettier-ignore",
     ),
     (
         "markdown/blockquote",
         "ignore-code.md - {\"proseWrap\":\"preserve\"} format 1",
-        "no prettier-ignore or JS formatter",
+        "no JS formatter for // prettier-ignore",
     ),
     // ── Blockquote interruption ──────────────────────────────────────────
     // This test covers blockquote interruption of other block-level elements,
@@ -473,4 +474,9 @@ fn markdown_table() {
 #[test]
 fn markdown_table_empty() {
     run_fixture_dir("markdown/table/empty-table");
+}
+
+#[test]
+fn markdown_ignore() {
+    run_fixture_dir("markdown/ignore");
 }
