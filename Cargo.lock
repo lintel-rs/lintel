@@ -56,8 +56,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi-term-codes"
+name = "ansi-term-styles"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b119b153e819a07938cb791f098dc22c7d6fd37c057705e01b459fea8c35c27"
 
 [[package]]
 name = "anyhow"
@@ -248,7 +250,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "cargo-furnish"
 version = "0.0.7"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "anyhow",
  "bpaf",
  "glob",
@@ -1237,7 +1239,7 @@ dependencies = [
 name = "jsonschema-explain"
 version = "0.2.2"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "markdown-to-ansi",
  "serde_json",
 ]
@@ -1281,7 +1283,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 name = "lintel"
 version = "0.0.10"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "anyhow",
  "bpaf",
  "glob-match",
@@ -1452,7 +1454,7 @@ dependencies = [
 name = "lintel-reporters"
 version = "0.0.8"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "lintel-validate",
  "miette",
 ]
@@ -1567,9 +1569,11 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "markdown-to-ansi"
-version = "0.1.2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1df5368e0663ee64d121d758e6d4350a9d8bdab42fb29b057d9e5284bcb6a7d9"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "pulldown-cmark",
  "sublime-syntaxes",
  "syntect",
@@ -2549,7 +2553,9 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "sublime-syntaxes"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a844c25d301e35eb40346932b9ddafe0790a60e35ab587c42d98e9dc9da041fc"
 dependencies = [
  "syntect",
 ]

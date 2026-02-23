@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::{cargo_toml, doc_injection, readme, workspace};
 
-use ansi_term_codes::{BOLD, BOLD_GREEN as GREEN, BOLD_RED as RED, RESET};
+use ansi_term_styles::{BOLD, BOLD_GREEN as GREEN, BOLD_RED as RED, RESET};
 
 pub fn run(crate_dirs: &[PathBuf], ws: &workspace::WorkspaceInfo) {
     let start = Instant::now();
