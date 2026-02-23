@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use futures::stream::{self, StreamExt};
+use futures_util::stream::{self, StreamExt};
 use tracing::{debug, warn};
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this

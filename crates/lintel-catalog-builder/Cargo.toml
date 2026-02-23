@@ -24,7 +24,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 schemars = "1"
 toml = "1.0"
 anyhow = "1"
-futures = "0.3"
+futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = "0.4"
