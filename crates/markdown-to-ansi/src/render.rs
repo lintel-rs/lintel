@@ -71,10 +71,12 @@ pub(crate) fn render_events<'a>(
             }
 
             Event::Start(Tag::Heading { .. }) => {
-                out.push_str(BOLD);
+                flush_text(&mut out, &mut st, opts.width);
+                st.text_buf.push_str(BOLD);
             }
             Event::End(TagEnd::Heading(_)) => {
-                out.push_str(RESET);
+                st.text_buf.push_str(RESET);
+                flush_text(&mut out, &mut st, opts.width);
                 out.push('\n');
             }
 
