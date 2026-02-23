@@ -156,7 +156,7 @@ async fn generate_for_target(
 
             let schema_url = format!("{trimmed_base}/schemas/{group_key}/{filename}");
 
-            if let Some(url) = &schema_def.url {
+            let schema_text = if let Some(url) = &schema_def.url {
                 // Download external schema
                 let (text, status) = download_one(ctx.cache, url, &dest_path)
                     .await
@@ -176,6 +176,7 @@ async fn generate_for_target(
                     &schema_url,
                 )
                 .await?;
+                text
             } else {
                 // Local schema — should exist at schemas/<group>/<key>.json relative to config dir
                 let source_path = ctx
@@ -209,12 +210,27 @@ async fn generate_for_target(
                     &schema_url,
                 )
                 .await?;
-            }
+                text
+            };
 
-            group_schema_names.push(schema_def.name.clone());
+            // Auto-populate name and description from the JSON Schema if not
+            // explicitly provided in the config.
+            let (schema_title, schema_desc) = extract_schema_meta(&schema_text);
+            let name = schema_def
+                .name
+                .clone()
+                .or(schema_title)
+                .unwrap_or_else(|| key.clone());
+            let description = schema_def
+                .description
+                .clone()
+                .or(schema_desc)
+                .unwrap_or_default();
+
+            group_schema_names.push(name.clone());
             entries.push(SchemaEntry {
-                name: schema_def.name.clone(),
-                description: schema_def.description.clone(),
+                name,
+                description,
                 url: schema_url,
                 source_url: schema_def.url.clone(),
                 file_match: schema_def.file_match.clone(),
@@ -593,6 +609,25 @@ fn organize_glob_matches(pattern: &str, text: &str) -> bool {
     }
 
     true
+}
+
+/// Extract the `title` and `description` from a JSON Schema string.
+///
+/// Returns `(title, description)` — either or both may be `None` if the schema
+/// doesn't contain the corresponding top-level property or isn't valid JSON.
+fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return (None, None);
+    };
+    let title = value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let description = value
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    (title, description)
 }
 
 /// Convert a key like `"github"` to title case (`"Github"`).

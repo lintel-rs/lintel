@@ -153,6 +153,11 @@ pub struct GroupConfig {
 ///
 /// Defines where to obtain the schema, its display metadata, and which files it
 /// should match in the catalog.
+///
+/// The `name` and `description` fields are optional overrides. When omitted,
+/// they are auto-populated from the underlying JSON Schema's `title` and
+/// `description` properties. If the schema has no title, the entry key is used
+/// as a fallback name.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[schemars(title = "Schema Definition")]
@@ -163,10 +168,16 @@ pub struct SchemaDefinition {
     /// `schemas/<group>/<key>.json`.
     pub url: Option<String>,
     /// Human-readable display name for this schema.
+    ///
+    /// When omitted, defaults to the `title` property from the JSON Schema.
     #[schemars(example = &"GitHub Workflow", example = &"devenv.yaml")]
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
     /// Short description of what this schema validates.
-    pub description: String,
+    ///
+    /// When omitted, defaults to the `description` property from the JSON Schema.
+    #[serde(default)]
+    pub description: Option<String>,
     /// Glob patterns for files this schema should be auto-associated with.
     ///
     /// Editors and tools use these patterns to automatically apply the schema
@@ -322,7 +333,10 @@ match = ["**.github**"]
         let claude_code = &config.groups["claude-code"];
         assert_eq!(claude_code.name, "Claude Code");
         assert_eq!(claude_code.schemas.len(), 2);
-        assert_eq!(claude_code.schemas["agent"].name, "Claude Code Agent");
+        assert_eq!(
+            claude_code.schemas["agent"].name.as_deref(),
+            Some("Claude Code Agent")
+        );
         assert!(claude_code.schemas["agent"].url.is_none());
         assert_eq!(
             claude_code.schemas["agent"].file_match,

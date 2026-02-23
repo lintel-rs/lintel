@@ -17,11 +17,12 @@ fn main() {
     std::fs::create_dir_all(&cli.output_dir).expect("failed to create output directory");
 
     let configs: &[(&str, serde_json::Value)] = &[
-        ("lintel.json", lintel_config::schema()),
+        ("lintel-toml.json", lintel_config::schema()),
         (
-            "lintel-catalog.json",
+            "lintel-catalog-toml.json",
             lintel_catalog_builder::config::schema(),
         ),
+        ("catalog.json", schema_catalog::schema()),
     ];
 
     for (filename, schema) in configs {
