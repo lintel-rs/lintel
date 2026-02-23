@@ -190,8 +190,23 @@ pub fn resolve(pkg_key: &str, pkg_config: &PackageConfig) -> miette::Result<Reso
         bin,
         description,
         license,
-        repository,
+        repository: normalize_git_url(&repository),
         homepage,
         keywords,
     })
+}
+
+/// Normalize a repository URL to the format npm expects (`git+https://...git`).
+fn normalize_git_url(url: &str) -> String {
+    let mut url = url.to_string();
+    if !url.starts_with("git+") {
+        url = format!("git+{url}");
+    }
+    if !std::path::Path::new(&url)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+    {
+        url.push_str(".git");
+    }
+    url
 }
