@@ -14,7 +14,8 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-config = { version = "0.0.4", path = "../lintel-config" }
-lintel-catalog-builder = { version = "0.0.5", path = "../lintel-catalog-builder" }
+lintel-config = { version = "0.0.5", path = "../lintel-config" }
+lintel-catalog-builder = { version = "0.0.6", path = "../lintel-catalog-builder" }
+schema-catalog = { version = "0.0.3", path = "../schema-catalog" }
 bpaf = { version = "0.9", features = ["derive"] }
 serde_json = "1"

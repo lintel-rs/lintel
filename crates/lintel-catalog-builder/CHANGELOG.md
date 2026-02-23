@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.5...lintel-catalog-builder-v0.0.6) - 2026-02-23
+
+### Other
+
+- Add catalog.json schema, rename outputs, and auto-populate entry metadata
+- Add rich titles, descriptions, and examples to generated JSON schemas
+- Remove re-exports, add lintel-config-schema-generator, simplify flake
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.4...lintel-catalog-builder-v0.0.5) - 2026-02-22
 
 ### Added

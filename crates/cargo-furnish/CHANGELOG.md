@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.5...cargo-furnish-v0.0.6) - 2026-02-23
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.4...cargo-furnish-v0.0.5) - 2026-02-22
 
 ### Added
