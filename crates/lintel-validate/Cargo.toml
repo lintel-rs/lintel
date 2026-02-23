@@ -35,7 +35,6 @@ schemastore = { version = "0.0.6", path = "../schemastore" }
 tracing = "0.1"
 bpaf = { version = "0.9", features = ["derive"] }
 
-
 [dev-dependencies]
 insta = { version = "1", features = ["filters"] }
 tempfile = "3"
