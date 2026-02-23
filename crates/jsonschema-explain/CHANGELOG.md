@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.0...jsonschema-explain-v0.2.1) - 2026-02-23
+
+### Other
+
+- Add examples rendering and use compact array type syntax in explain
+
 ## [0.2.0](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.1.0...jsonschema-explain-v0.2.0) - 2026-02-22
 
 ### Added
