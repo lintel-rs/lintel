@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-config.svg)](https://crates.io/crates/lintel-config)
 [![docs.rs](https://docs.rs/lintel-config/badge.svg)](https://docs.rs/lintel-config)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-config.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Configuration types and loader for [Lintel](https://github.com/lintel-rs/lintel). Defines the `lintel.toml` schema, parses config files, and provides utilities for schema URI rewriting and path resolution.

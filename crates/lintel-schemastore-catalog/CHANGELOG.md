@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-schemastore-catalog-v0.0.9...lintel-schemastore-catalog-v0.0.10) - 2026-02-23
+
+### Other
+
+- Make schema-catalog no_std and replace futures with futures-util
+
 ## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-schemastore-catalog-v0.0.8...lintel-schemastore-catalog-v0.0.9) - 2026-02-23
 
 ### Other

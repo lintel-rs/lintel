@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-schema-cache.svg)](https://crates.io/crates/lintel-schema-cache)
 [![docs.rs](https://docs.rs/lintel-schema-cache/badge.svg)](https://docs.rs/lintel-schema-cache)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-schema-cache.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Disk-backed schema cache with HTTP fetching and JSON parsing. Part of the [Lintel](https://github.com/lintel-rs/lintel) project. Fetches JSON schemas over HTTP and stores results locally for fast subsequent lookups.

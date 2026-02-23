@@ -30,7 +30,7 @@ pub async fn write_catalog_json(output_dir: &Path, catalog: &Catalog) -> Result<
         ordered.insert(
             "$schema".to_string(),
             serde_json::Value::String(
-                "https://json.schemastore.org/schema-catalog.json".to_string(),
+                "https://catalog.lintel.tools/schemas/lintel/catalog.json".to_string(),
             ),
         );
         let priority_keys = ["version", "title"];
@@ -89,7 +89,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&content)?;
         assert_eq!(
             value["$schema"],
-            "https://json.schemastore.org/schema-catalog.json"
+            "https://catalog.lintel.tools/schemas/lintel/catalog.json"
         );
         assert_eq!(value["version"], 1);
         assert_eq!(value["schemas"][0]["name"], "Test");

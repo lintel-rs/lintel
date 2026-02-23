@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/jsonschema-explain.svg)](https://crates.io/crates/jsonschema-explain)
 [![docs.rs](https://docs.rs/jsonschema-explain/badge.svg)](https://docs.rs/jsonschema-explain)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/jsonschema-explain.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Render JSON Schema as human-readable terminal documentation

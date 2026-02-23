@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lintel-rs/lintel/compare/lintel-config-schema-generator-v0.0.1...lintel-config-schema-generator-v0.0.2) - 2026-02-23
+
+### Other
+
+- updated the following local packages: schema-catalog, lintel-catalog-builder
+
 ## [0.0.1](https://github.com/lintel-rs/lintel/releases/tag/lintel-config-schema-generator-v0.0.1) - 2026-02-23
 
 ### Other

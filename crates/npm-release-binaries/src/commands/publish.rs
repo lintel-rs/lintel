@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{PackageConfig, TargetEntry};
+use crate::config::PackageConfig;
 
 pub struct Options<'a> {
     pub access: &'a str,
@@ -15,10 +15,7 @@ pub fn run(
     opts: &Options<'_>,
 ) -> miette::Result<()> {
     // Publish target packages first
-    for (target_key, entry) in &pkg_config.targets {
-        if matches!(entry, TargetEntry::Enabled(false)) {
-            continue;
-        }
+    for target_key in pkg_config.targets.keys() {
         let package_name = pkg_config
             .target_package_name
             .replace("{{target}}", target_key);

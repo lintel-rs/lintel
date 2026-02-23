@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-validate.svg)](https://crates.io/crates/lintel-validate)
 [![docs.rs](https://docs.rs/lintel-validate/badge.svg)](https://docs.rs/lintel-validate)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-validate.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC files against JSON Schema.

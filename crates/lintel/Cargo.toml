@@ -1,6 +1,6 @@
 [package]
 name = "lintel"
-version = "0.0.9"
+version = "0.0.10"
 edition.workspace = true
 authors.workspace = true
 description = "Validate JSON and YAML files against JSON Schema"
@@ -14,18 +14,18 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
-lintel-annotate = { version = "0.0.8", path = "../lintel-annotate" }
-lintel-check = { version = "0.0.9", path = "../lintel-check" }
+ansi-term-styles = "0.1.0"
+lintel-annotate = { version = "0.0.9", path = "../lintel-annotate" }
+lintel-check = { version = "0.0.10", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.5", path = "../lintel-config" }
-lintel-explain = { version = "0.0.2", path = "../lintel-explain" }
-lintel-identify = { version = "0.0.5", path = "../lintel-identify" }
-lintel-reporters = { version = "0.0.7", path = "../lintel-reporters" }
+lintel-explain = { version = "0.0.3", path = "../lintel-explain" }
+lintel-identify = { version = "0.0.6", path = "../lintel-identify" }
+lintel-reporters = { version = "0.0.8", path = "../lintel-reporters" }
 lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.2", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.6", path = "../lintel-validation-cache" }
-schemastore = { version = "0.0.7", path = "../schemastore" }
+schemastore = { version = "0.0.8", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 glob-match = "0.2"
 humantime = "2"

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/schemastore-v0.0.7...schemastore-v0.0.8) - 2026-02-23
+
+### Other
+
+- updated the following local packages: schema-catalog
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/schemastore-v0.0.6...schemastore-v0.0.7) - 2026-02-23
 
 ### Other

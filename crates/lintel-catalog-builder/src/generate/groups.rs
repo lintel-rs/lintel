@@ -64,6 +64,7 @@ pub(super) async fn process_group_schema(
         shared_dir: &shared_dir,
         base_url_for_shared: &shared_base_url,
         already_downloaded: &mut already_downloaded,
+        source_url: schema_def.url.clone(),
     };
 
     // Fetch schema (remote or local)

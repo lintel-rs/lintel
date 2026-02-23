@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-annotate.svg)](https://crates.io/crates/lintel-annotate)
 [![docs.rs](https://docs.rs/lintel-annotate/badge.svg)](https://docs.rs/lintel-annotate)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-annotate.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Add schema annotations (`$schema`, YAML modelines, TOML schema comments) to JSON, YAML, and TOML files.

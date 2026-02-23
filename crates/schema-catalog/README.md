@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/schema-catalog.svg)](https://crates.io/crates/schema-catalog)
 [![docs.rs](https://docs.rs/schema-catalog/badge.svg)](https://docs.rs/schema-catalog)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/schema-catalog.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Types for the JSON Schema catalog format (`schema-catalog.json`), compatible with [SchemaStore](https://www.schemastore.org/).

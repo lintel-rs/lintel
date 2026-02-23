@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-ansi-term-codes = { version = "0.1.0", path = "../ansi-term-codes" }
+ansi-term-styles = "0.1.0"
 toml_edit = "0.25"
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 anyhow = "1"

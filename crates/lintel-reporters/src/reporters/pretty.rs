@@ -1,7 +1,7 @@
 use core::time::Duration;
 use std::io::IsTerminal;
 
-use ansi_term_codes::{BOLD, DIM, RESET};
+use ansi_term_styles::{BOLD, DIM, RESET};
 use miette::Report;
 
 use lintel_validate::format_checked_verbose;
