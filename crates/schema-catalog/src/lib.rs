@@ -1,8 +1,13 @@
 #![doc = include_str!("../README.md")]
+#![no_std]
 
 extern crate alloc;
 
+use alloc::borrow::ToOwned;
 use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
@@ -120,6 +125,8 @@ pub fn parse_catalog_value(value: serde_json::Value) -> Result<Catalog, serde_js
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+
     use super::*;
 
     #[test]

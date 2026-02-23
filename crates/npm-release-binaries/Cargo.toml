@@ -1,6 +1,6 @@
 [package]
 name = "npm-release-binaries"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 authors.workspace = true
 description = "Generate and publish platform-specific npm packages from Rust binaries"
@@ -9,7 +9,6 @@ repository.workspace = true
 homepage.workspace = true
 keywords = ["npm", "release", "binary", "cli"]
 categories = ["command-line-utilities"]
-publish = false
 
 [lints]
 workspace = true

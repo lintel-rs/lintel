@@ -45,10 +45,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
         run: |
-          gh release create "lintel-github-action-v${{ inputs.version }}" \
+          gh release create "v${{ inputs.version }}" \
             lintel-github-action-x86_64-unknown-linux-gnu.tar.gz \
             --repo lintel-rs/action \
-            --title "lintel-github-action-v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
             --generate-notes
 
       - name: Update major version tag
@@ -56,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
         run: |
           MAJOR="v$(echo "${{ inputs.version }}" | cut -d. -f1)"
-          SHA=$(gh api repos/lintel-rs/action/git/ref/tags/lintel-github-action-v${{ inputs.version }} --jq .object.sha)
+          SHA=$(gh api repos/lintel-rs/action/git/ref/tags/v${{ inputs.version }} --jq .object.sha)
           gh api repos/lintel-rs/action/git/refs/tags/${MAJOR} \
             -X PATCH -f sha="$SHA" -F force=true 2>/dev/null \
           || gh api repos/lintel-rs/action/git/refs \

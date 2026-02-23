@@ -22,7 +22,7 @@ lintel-config-schema-generator
 lintel-config-schema-generator path/to/output/
 ```
 
-Part of [Lintel](https://github.com/lintel-rs/lintel), a JSON Schema toolkit.
+Part of the [Lintel](https://github.com/lintel-rs/lintel) project.
 
 ## License
 
