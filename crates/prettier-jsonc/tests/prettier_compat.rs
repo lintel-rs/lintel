@@ -1,7 +1,5 @@
-mod snapshot_parser;
-
 use prettier_jsonc::{JsonFormat, format_str};
-use std::collections::HashSet;
+use prettier_test_harness::{FixtureConfig, run_fixture_dir};
 use std::path::Path;
 
 /// Known test failures with explanations.
@@ -345,165 +343,52 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-fn run_fixture_dir(dir: &str) {
-    let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let snap_path = fixtures_dir.join(dir).join("format.test.js.snap");
-
-    let content = std::fs::read_to_string(&snap_path)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", snap_path.display()));
-
-    let cases = snapshot_parser::parse_snapshot(&content);
-    assert!(!cases.is_empty(), "No test cases found in {dir}");
-
-    let known: HashSet<&str> = KNOWN_FAILURES
-        .iter()
-        .filter(|(d, _, _)| *d == dir)
-        .map(|(_, name, _)| *name)
-        .collect();
-
-    let mut counts = (0usize, 0usize, 0usize, 0usize); // passed, failed, skipped, expected
-    let mut unexpected: Vec<(String, String, String)> = Vec::new();
-    let mut stale: Vec<String> = Vec::new();
-
-    for case in &cases {
+fn run(dir: &str) {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let config = FixtureConfig {
+        fixtures_dir: &fixtures,
+        snap_subpath: "format.test.js.snap",
+        known_failures: KNOWN_FAILURES,
+    };
+    run_fixture_dir(&config, dir, |case| {
         let format = match case.parser.as_str() {
             "json" => JsonFormat::Json,
             "jsonc" => JsonFormat::Jsonc,
-            // json5 entries are tested in prettier-json5 crate
-            _ => {
-                counts.2 += 1;
-                continue;
-            }
+            _ => return None,
         };
-
-        let is_known = known.contains(case.name.as_str());
-        let result = format_str(&case.input, format, &case.options);
-        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
-
-        if matches {
-            counts.0 += 1;
-            if is_known {
-                stale.push(case.name.clone());
-            }
-        } else if is_known {
-            counts.3 += 1;
-        } else {
-            counts.1 += 1;
-            if unexpected.len() < 20 {
-                let actual = result.unwrap_or_else(|e| format!("ERROR: {e}"));
-                unexpected.push((case.name.clone(), case.expected.clone(), actual));
-            }
-        }
-    }
-
-    let (passed, failed, skipped, expected_failures) = counts;
-    let total = passed + failed + expected_failures;
-    eprintln!(
-        "{dir}: {passed}/{total} passed ({expected_failures} known, {failed} unexpected, {skipped} skipped)"
-    );
-    print_failures(dir, &unexpected, &stale);
-
-    assert!(
-        unexpected.is_empty(),
-        "{dir}: {failed} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter"
-    );
-    assert!(
-        stale.is_empty(),
-        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
-        stale.len()
-    );
+        Some(format_str(&case.input, format, &case.options).map_err(|e| e.to_string()))
+    });
 }
 
-fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
-    if !unexpected.is_empty() {
-        eprintln!("\n  Unexpected failures in {dir}:");
-        for (name, expected, actual) in unexpected {
-            eprintln!("\n  --- {name} ---");
-            if actual.starts_with("ERROR:") {
-                eprintln!("  {actual}");
-            } else {
-                for diff in diff_lines(expected, actual) {
-                    eprintln!("  {diff}");
-                }
-            }
-        }
-        eprintln!();
-    }
-    if !stale.is_empty() {
-        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
-        for name in stale {
-            eprintln!("  - {name}");
-        }
-        eprintln!();
-    }
-}
-
-/// Simple line-by-line diff for readable failure output.
-fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
-    let expected_lines: Vec<&str> = expected.lines().collect();
-    let actual_lines: Vec<&str> = actual.lines().collect();
-    let mut output = Vec::new();
-    let max = expected_lines.len().max(actual_lines.len());
-
-    for i in 0..max {
-        let exp = expected_lines.get(i).copied();
-        let act = actual_lines.get(i).copied();
-        match (exp, act) {
-            (Some(e), Some(a)) if e == a => {
-                output.push(format!(" {e}"));
-            }
-            (Some(e), Some(a)) => {
-                output.push(format!("-{e}"));
-                output.push(format!("+{a}"));
-            }
-            (Some(e), None) => {
-                output.push(format!("-{e}"));
-            }
-            (None, Some(a)) => {
-                output.push(format!("+{a}"));
-            }
-            (None, None) => {}
-        }
-    }
-
-    if output.len() > 30 {
-        output.truncate(30);
-        output.push("  ... (diff truncated)".to_string());
-    }
-
-    output
-}
-
-// JSON fixtures
 #[test]
 fn json_json() {
-    run_fixture_dir("json/json");
+    run("json/json");
 }
 #[test]
 fn json_json5_trailing_commas() {
-    run_fixture_dir("json/json5-trailing-commas");
+    run("json/json5-trailing-commas");
 }
 #[test]
 fn json_jsonc_quote_props() {
-    run_fixture_dir("json/jsonc/quote-props");
+    run("json/jsonc/quote-props");
 }
 #[test]
 fn json_jsonc_single_quote() {
-    run_fixture_dir("json/jsonc/single-quote");
+    run("json/jsonc/single-quote");
 }
 #[test]
 fn json_jsonc_trailing_comma() {
-    run_fixture_dir("json/jsonc/trailing-comma");
+    run("json/jsonc/trailing-comma");
 }
 #[test]
 fn json_jsonc_empty() {
-    run_fixture_dir("json/jsonc/empty");
+    run("json/jsonc/empty");
 }
 #[test]
 fn json_with_comment() {
-    run_fixture_dir("json/with-comment");
+    run("json/with-comment");
 }
 #[test]
 fn json_test_suite() {
-    run_fixture_dir("json/json-test-suite");
+    run("json/json-test-suite");
 }

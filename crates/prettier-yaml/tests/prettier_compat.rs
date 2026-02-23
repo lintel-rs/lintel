@@ -1,7 +1,5 @@
-mod snapshot_parser;
-
+use prettier_test_harness::{FixtureConfig, run_fixture_dir};
 use prettier_yaml::format_yaml;
-use std::collections::HashSet;
 use std::path::Path;
 
 /// Known test failures with explanations.
@@ -55,191 +53,86 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-fn run_fixture_dir(dir: &str) {
-    let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let snap_path = fixtures_dir.join(dir).join("format.test.js.snap");
-
-    let content = std::fs::read_to_string(&snap_path)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", snap_path.display()));
-
-    let cases = snapshot_parser::parse_snapshot(&content);
-    assert!(!cases.is_empty(), "No test cases found in {dir}");
-
-    let known: HashSet<&str> = KNOWN_FAILURES
-        .iter()
-        .filter(|(d, _, _)| *d == dir)
-        .map(|(_, name, _)| *name)
-        .collect();
-
-    let mut counts = (0usize, 0usize, 0usize, 0usize); // passed, failed, skipped, expected
-    let mut unexpected: Vec<(String, String, String)> = Vec::new();
-    let mut stale: Vec<String> = Vec::new();
-
-    for case in &cases {
-        let is_known = known.contains(case.name.as_str());
-        let result = format_yaml(&case.input, &case.options);
-        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
-
-        if matches {
-            counts.0 += 1;
-            if is_known {
-                stale.push(case.name.clone());
-            }
-        } else if is_known {
-            counts.3 += 1;
-        } else {
-            counts.1 += 1;
-            if unexpected.len() < 20 {
-                let actual = result.unwrap_or_else(|e| format!("ERROR: {e}"));
-                unexpected.push((case.name.clone(), case.expected.clone(), actual));
-            }
+fn run(dir: &str) {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let config = FixtureConfig {
+        fixtures_dir: &fixtures,
+        snap_subpath: "format.test.js.snap",
+        known_failures: KNOWN_FAILURES,
+    };
+    run_fixture_dir(&config, dir, |case| {
+        if case.parser != "yaml" {
+            return None;
         }
-    }
-
-    let (passed, failed, skipped, expected_failures) = counts;
-    let total = passed + failed + expected_failures;
-    eprintln!(
-        "{dir}: {passed}/{total} passed ({expected_failures} known, {failed} unexpected, {skipped} skipped)"
-    );
-    print_failures(dir, &unexpected, &stale);
-
-    assert!(
-        unexpected.is_empty(),
-        "{dir}: {failed} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter"
-    );
-    assert!(
-        stale.is_empty(),
-        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
-        stale.len()
-    );
+        Some(format_yaml(&case.input, &case.options).map_err(|e| e.to_string()))
+    });
 }
 
-fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
-    if !unexpected.is_empty() {
-        eprintln!("\n  Unexpected failures in {dir}:");
-        for (name, expected, actual) in unexpected {
-            eprintln!("\n  --- {name} ---");
-            if actual.starts_with("ERROR:") {
-                eprintln!("  {actual}");
-            } else {
-                for diff in diff_lines(expected, actual) {
-                    eprintln!("  {diff}");
-                }
-            }
-        }
-        eprintln!();
-    }
-    if !stale.is_empty() {
-        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
-        for name in stale {
-            eprintln!("  - {name}");
-        }
-        eprintln!();
-    }
-}
-
-/// Simple line-by-line diff for readable failure output.
-fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
-    let expected_lines: Vec<&str> = expected.lines().collect();
-    let actual_lines: Vec<&str> = actual.lines().collect();
-    let mut output = Vec::new();
-    let max = expected_lines.len().max(actual_lines.len());
-
-    for i in 0..max {
-        let exp = expected_lines.get(i).copied();
-        let act = actual_lines.get(i).copied();
-        match (exp, act) {
-            (Some(e), Some(a)) if e == a => {
-                output.push(format!(" {e}"));
-            }
-            (Some(e), Some(a)) => {
-                output.push(format!("-{e}"));
-                output.push(format!("+{a}"));
-            }
-            (Some(e), None) => {
-                output.push(format!("-{e}"));
-            }
-            (None, Some(a)) => {
-                output.push(format!("+{a}"));
-            }
-            (None, None) => {}
-        }
-    }
-
-    if output.len() > 30 {
-        output.truncate(30);
-        output.push("  ... (diff truncated)".to_string());
-    }
-
-    output
-}
-
-// YAML fixtures
 #[test]
 fn yaml_alias() {
-    run_fixture_dir("yaml/alias");
+    run("yaml/alias");
 }
 #[test]
 fn yaml_ansible() {
-    run_fixture_dir("yaml/ansible");
+    run("yaml/ansible");
 }
 #[test]
 fn yaml_block_folded() {
-    run_fixture_dir("yaml/block-folded");
+    run("yaml/block-folded");
 }
 #[test]
 fn yaml_block_literal() {
-    run_fixture_dir("yaml/block-literal");
+    run("yaml/block-literal");
 }
 #[test]
 fn yaml_comment() {
-    run_fixture_dir("yaml/comment");
+    run("yaml/comment");
 }
 #[test]
 fn yaml_directive() {
-    run_fixture_dir("yaml/directive");
+    run("yaml/directive");
 }
 #[test]
 fn yaml_document() {
-    run_fixture_dir("yaml/document");
+    run("yaml/document");
 }
 #[test]
 fn yaml_flow_mapping() {
-    run_fixture_dir("yaml/flow-mapping");
+    run("yaml/flow-mapping");
 }
 #[test]
 fn yaml_flow_sequence() {
-    run_fixture_dir("yaml/flow-sequence");
+    run("yaml/flow-sequence");
 }
 #[test]
 fn yaml_home_assistant() {
-    run_fixture_dir("yaml/home-assistant");
+    run("yaml/home-assistant");
 }
 #[test]
 fn yaml_mapping() {
-    run_fixture_dir("yaml/mapping");
+    run("yaml/mapping");
 }
 #[test]
 fn yaml_plain() {
-    run_fixture_dir("yaml/plain");
+    run("yaml/plain");
 }
 #[test]
 fn yaml_prettier_ignore() {
-    run_fixture_dir("yaml/prettier-ignore");
+    run("yaml/prettier-ignore");
 }
 #[test]
 fn yaml_quote() {
-    run_fixture_dir("yaml/quote");
+    run("yaml/quote");
 }
 #[test]
 fn yaml_root() {
-    run_fixture_dir("yaml/root");
+    run("yaml/root");
 }
 #[test]
 fn yaml_sequence() {
-    run_fixture_dir("yaml/sequence");
+    run("yaml/sequence");
 }
 #[test]
 fn yaml_spec() {
-    run_fixture_dir("yaml/spec");
+    run("yaml/spec");
 }

@@ -1,0 +1,10 @@
+[package]
+name = "prettier-test-harness"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+prettier-config = { version = "0.1.0", path = "../prettier-config" }
+
+[lints]
+workspace = true

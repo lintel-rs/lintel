@@ -15,6 +15,7 @@ unicode-width = "0.2"
 anyhow = "1"
 
 [dev-dependencies]
+prettier-test-harness = { version = "0.1.0", path = "../prettier-test-harness" }
 insta = "1"
 pretty_assertions = "1"
 

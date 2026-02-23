@@ -1,7 +1,5 @@
-mod snapshot_parser;
-
 use prettier_markdown::format_markdown;
-use std::collections::HashSet;
+use prettier_test_harness::{FixtureConfig, run_fixture_dir};
 use std::path::Path;
 
 /// Known test failures with explanations.
@@ -250,233 +248,123 @@ const KNOWN_FAILURES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-fn run_fixture_dir(dir: &str) {
-    let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let snap_path = fixtures_dir
-        .join(dir)
-        .join("__snapshots__/format.test.js.snap");
-
-    let content = std::fs::read_to_string(&snap_path)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", snap_path.display()));
-
-    let cases = snapshot_parser::parse_snapshot(&content);
-    assert!(!cases.is_empty(), "No test cases found in {dir}");
-
-    let known: HashSet<&str> = KNOWN_FAILURES
-        .iter()
-        .filter(|(d, _, _)| *d == dir)
-        .map(|(_, name, _)| *name)
-        .collect();
-
-    let mut counts = (0usize, 0usize, 0usize, 0usize); // passed, failed, skipped, expected
-    let mut unexpected: Vec<(String, String, String)> = Vec::new();
-    let mut stale: Vec<String> = Vec::new();
-
-    for case in &cases {
-        if case.parser.as_str() != "markdown" {
-            counts.2 += 1;
-            continue;
+fn run(dir: &str) {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let config = FixtureConfig {
+        fixtures_dir: &fixtures,
+        snap_subpath: "__snapshots__/format.test.js.snap",
+        known_failures: KNOWN_FAILURES,
+    };
+    run_fixture_dir(&config, dir, |case| {
+        if case.parser != "markdown" {
+            return None;
         }
-        let is_known = known.contains(case.name.as_str());
-        let result = format_markdown(&case.input, &case.options);
-        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
-
-        if matches {
-            counts.0 += 1;
-            if is_known {
-                stale.push(case.name.clone());
-            }
-        } else if is_known {
-            counts.3 += 1;
-        } else {
-            counts.1 += 1;
-            if unexpected.len() < 20 {
-                let actual = result.unwrap_or_else(|e| format!("ERROR: {e}"));
-                unexpected.push((case.name.clone(), case.expected.clone(), actual));
-            }
-        }
-    }
-
-    let (passed, failed, skipped, expected_failures) = counts;
-    let total = passed + failed + expected_failures;
-    eprintln!(
-        "{dir}: {passed}/{total} passed ({expected_failures} known, {failed} unexpected, {skipped} skipped)"
-    );
-    print_failures(dir, &unexpected, &stale);
-
-    assert!(
-        unexpected.is_empty(),
-        "{dir}: {failed} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter"
-    );
-    assert!(
-        stale.is_empty(),
-        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
-        stale.len()
-    );
-}
-
-fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
-    if !unexpected.is_empty() {
-        eprintln!("\n  Unexpected failures in {dir}:");
-        for (name, expected, actual) in unexpected {
-            eprintln!("\n  --- {name} ---");
-            if actual.starts_with("ERROR:") {
-                eprintln!("  {actual}");
-            } else {
-                for diff in diff_lines(expected, actual) {
-                    eprintln!("  {diff}");
-                }
-            }
-        }
-        eprintln!();
-    }
-    if !stale.is_empty() {
-        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
-        for name in stale {
-            eprintln!("  - {name}");
-        }
-        eprintln!();
-    }
-}
-
-/// Simple line-by-line diff for readable failure output.
-fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
-    let expected_lines: Vec<&str> = expected.lines().collect();
-    let actual_lines: Vec<&str> = actual.lines().collect();
-    let mut output = Vec::new();
-    let max = expected_lines.len().max(actual_lines.len());
-
-    for i in 0..max {
-        let exp = expected_lines.get(i).copied();
-        let act = actual_lines.get(i).copied();
-        match (exp, act) {
-            (Some(e), Some(a)) if e == a => {
-                output.push(format!(" {e}"));
-            }
-            (Some(e), Some(a)) => {
-                output.push(format!("-{e}"));
-                output.push(format!("+{a}"));
-            }
-            (Some(e), None) => {
-                output.push(format!("-{e}"));
-            }
-            (None, Some(a)) => {
-                output.push(format!("+{a}"));
-            }
-            (None, None) => {}
-        }
-    }
-
-    if output.len() > 30 {
-        output.truncate(30);
-        output.push("  ... (diff truncated)".to_string());
-    }
-
-    output
+        Some(format_markdown(&case.input, &case.options).map_err(|e| e.to_string()))
+    });
 }
 
 // Markdown fixtures
 #[test]
 fn markdown_heading() {
-    run_fixture_dir("markdown/heading");
+    run("markdown/heading");
 }
 
 #[test]
 fn markdown_heading_setext() {
-    run_fixture_dir("markdown/heading/setext");
+    run("markdown/heading/setext");
 }
 
 #[test]
 fn markdown_paragraph() {
-    run_fixture_dir("markdown/paragraph");
+    run("markdown/paragraph");
 }
 
 #[test]
 fn markdown_code() {
-    run_fixture_dir("markdown/code");
+    run("markdown/code");
 }
 
 #[test]
 fn markdown_code_angular() {
-    run_fixture_dir("markdown/code/angular");
+    run("markdown/code/angular");
 }
 
 #[test]
 fn markdown_fenced_code_block() {
-    run_fixture_dir("markdown/fenced-code-block");
+    run("markdown/fenced-code-block");
 }
 
 #[test]
 fn markdown_list() {
-    run_fixture_dir("markdown/list");
+    run("markdown/list");
 }
 
 #[test]
 fn markdown_list_task_list() {
-    run_fixture_dir("markdown/list/task-list");
+    run("markdown/list/task-list");
 }
 
 #[test]
 fn markdown_blockquote() {
-    run_fixture_dir("markdown/blockquote");
+    run("markdown/blockquote");
 }
 
 #[test]
 fn markdown_emphasis() {
-    run_fixture_dir("markdown/emphasis");
+    run("markdown/emphasis");
 }
 
 #[test]
 fn markdown_strong() {
-    run_fixture_dir("markdown/strong");
+    run("markdown/strong");
 }
 
 #[test]
 fn markdown_link() {
-    run_fixture_dir("markdown/link");
+    run("markdown/link");
 }
 
 #[test]
 fn markdown_image() {
-    run_fixture_dir("markdown/image");
+    run("markdown/image");
 }
 
 #[test]
 fn markdown_yaml() {
-    run_fixture_dir("markdown/yaml");
+    run("markdown/yaml");
 }
 
 #[test]
 fn markdown_front_matter() {
-    run_fixture_dir("markdown/front-matter");
+    run("markdown/front-matter");
 }
 
 #[test]
 fn markdown_thematic_break() {
-    run_fixture_dir("markdown/thematicBreak");
+    run("markdown/thematicBreak");
 }
 
 #[test]
 fn markdown_break() {
-    run_fixture_dir("markdown/break");
+    run("markdown/break");
 }
 
 #[test]
 fn markdown_break_list_item() {
-    run_fixture_dir("markdown/break/list-item");
+    run("markdown/break/list-item");
 }
 
 #[test]
 fn markdown_table() {
-    run_fixture_dir("markdown/table");
+    run("markdown/table");
 }
 
 #[test]
 fn markdown_table_empty() {
-    run_fixture_dir("markdown/table/empty-table");
+    run("markdown/table/empty-table");
 }
 
 #[test]
 fn markdown_ignore() {
-    run_fixture_dir("markdown/ignore");
+    run("markdown/ignore");
 }

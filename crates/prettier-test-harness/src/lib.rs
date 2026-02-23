@@ -1,5 +1,9 @@
+use core::fmt::Display;
 use prettier_config::{PrettierConfig, ProseWrap, QuoteProps, TrailingComma};
+use std::collections::HashSet;
+use std::path::Path;
 
+/// A single test case extracted from a Jest snapshot file.
 pub struct TestCase {
     pub name: String,
     pub parser: String,
@@ -10,7 +14,9 @@ pub struct TestCase {
 
 /// Parse a Jest snapshot file into individual test cases.
 ///
-/// Skips entries with unsupported parsers (`json-stringify`) or options (`objectWrap`).
+/// Returns all test cases with their parser name. Skips entries with the
+/// `objectWrap` option (not yet supported). Callers should filter by parser
+/// name as needed.
 pub fn parse_snapshot(content: &str) -> Vec<TestCase> {
     let mut cases = Vec::new();
     let mut pos = 0;
@@ -42,6 +48,168 @@ pub fn parse_snapshot(content: &str) -> Vec<TestCase> {
     cases
 }
 
+/// Configuration for running a fixture directory.
+pub struct FixtureConfig<'a> {
+    /// Root path to the test fixtures (typically
+    /// `Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")`).
+    pub fixtures_dir: &'a Path,
+    /// Relative path from `dir` to the snapshot file
+    /// (e.g. `"format.test.js.snap"` or `"__snapshots__/format.test.js.snap"`).
+    pub snap_subpath: &'a str,
+    /// Slice of `(dir, test_name, reason)` tuples for expected failures.
+    /// Only entries matching the current `dir` are used.
+    pub known_failures: &'a [(&'a str, &'a str, &'a str)],
+}
+
+/// Run a fixture directory against a formatter, tracking known failures.
+///
+/// The `format_fn` closure receives a `&TestCase` and returns:
+/// - `None` to skip the test (e.g. wrong parser)
+/// - `Some(Ok(output))` to compare against expected output
+/// - `Some(Err(e))` for a formatter error (counts as failure)
+///
+/// # Panics
+///
+/// Panics if there are unexpected failures (not in `known_failures`) or
+/// stale exclusions (in `known_failures` but now passing).
+pub fn run_fixture_dir<F, E>(config: &FixtureConfig<'_>, dir: &str, format_fn: F)
+where
+    F: Fn(&TestCase) -> Option<Result<String, E>>,
+    E: Display,
+{
+    let snap_path = config.fixtures_dir.join(dir).join(config.snap_subpath);
+
+    let content = std::fs::read_to_string(&snap_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", snap_path.display()));
+
+    let cases = parse_snapshot(&content);
+    assert!(!cases.is_empty(), "No test cases found in {dir}");
+
+    let known: HashSet<&str> = config
+        .known_failures
+        .iter()
+        .filter(|(d, _, _)| *d == dir)
+        .map(|(_, name, _)| *name)
+        .collect();
+
+    let mut counts = Counts::default();
+    let mut unexpected: Vec<(String, String, String)> = Vec::new();
+    let mut stale: Vec<String> = Vec::new();
+
+    for case in &cases {
+        let Some(result) = format_fn(case) else {
+            counts.skipped += 1;
+            continue;
+        };
+
+        let is_known = known.contains(case.name.as_str());
+        let matches = result.as_ref().is_ok_and(|a| *a == case.expected);
+
+        if matches {
+            counts.passed += 1;
+            if is_known {
+                stale.push(case.name.clone());
+            }
+        } else if is_known {
+            counts.expected += 1;
+        } else {
+            counts.failed += 1;
+            if unexpected.len() < 20 {
+                let actual = result
+                    .map_err(|e| format!("ERROR: {e}"))
+                    .unwrap_or_else(|e| e);
+                unexpected.push((case.name.clone(), case.expected.clone(), actual));
+            }
+        }
+    }
+
+    let total = counts.passed + counts.failed + counts.expected;
+    eprintln!(
+        "{dir}: {}/{total} passed ({} known, {} unexpected, {} skipped)",
+        counts.passed, counts.expected, counts.failed, counts.skipped
+    );
+    print_failures(dir, &unexpected, &stale);
+
+    assert!(
+        unexpected.is_empty(),
+        "{dir}: {} unexpected failure(s) — add to KNOWN_FAILURES or fix the formatter",
+        counts.failed
+    );
+    assert!(
+        stale.is_empty(),
+        "{dir}: {} stale exclusion(s) — remove from KNOWN_FAILURES",
+        stale.len()
+    );
+}
+
+#[derive(Default)]
+struct Counts {
+    passed: usize,
+    failed: usize,
+    skipped: usize,
+    expected: usize,
+}
+
+fn print_failures(dir: &str, unexpected: &[(String, String, String)], stale: &[String]) {
+    if !unexpected.is_empty() {
+        eprintln!("\n  Unexpected failures in {dir}:");
+        for (name, expected, actual) in unexpected {
+            eprintln!("\n  --- {name} ---");
+            if actual.starts_with("ERROR:") {
+                eprintln!("  {actual}");
+            } else {
+                for diff in diff_lines(expected, actual) {
+                    eprintln!("  {diff}");
+                }
+            }
+        }
+        eprintln!();
+    }
+    if !stale.is_empty() {
+        eprintln!("\n  Stale exclusions in {dir} (tests now pass, remove from KNOWN_FAILURES):");
+        for name in stale {
+            eprintln!("  - {name}");
+        }
+        eprintln!();
+    }
+}
+
+/// Simple line-by-line diff for readable failure output.
+fn diff_lines(expected: &str, actual: &str) -> Vec<String> {
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let actual_lines: Vec<&str> = actual.lines().collect();
+    let mut output = Vec::new();
+    let max = expected_lines.len().max(actual_lines.len());
+
+    for i in 0..max {
+        let exp = expected_lines.get(i).copied();
+        let act = actual_lines.get(i).copied();
+        match (exp, act) {
+            (Some(e), Some(a)) if e == a => {
+                output.push(format!(" {e}"));
+            }
+            (Some(e), Some(a)) => {
+                output.push(format!("-{e}"));
+                output.push(format!("+{a}"));
+            }
+            (Some(e), None) => {
+                output.push(format!("-{e}"));
+            }
+            (None, Some(a)) => {
+                output.push(format!("+{a}"));
+            }
+            (None, None) => {}
+        }
+    }
+
+    if output.len() > 30 {
+        output.truncate(30);
+        output.push("  ... (diff truncated)".to_string());
+    }
+
+    output
+}
+
 fn parse_entry(name: &str, body: &str) -> Option<TestCase> {
     let lines: Vec<&str> = body.lines().collect();
 
@@ -58,7 +226,7 @@ fn parse_entry(name: &str, body: &str) -> Option<TestCase> {
     let option_lines = &lines[options_idx + 1..input_idx];
     let (parser, options, skip) = parse_options(option_lines);
 
-    if skip || parser == "json-stringify" {
+    if skip {
         return None;
     }
 
@@ -119,7 +287,6 @@ fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
 
         match key {
             "parsers" => {
-                // parsers: ["json"] or parsers: ["json5"]
                 let inner = value
                     .trim_start_matches('[')
                     .trim_end_matches(']')
@@ -140,7 +307,6 @@ fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
                 options.trailing_comma = match value.trim_matches('"') {
                     "es5" => TrailingComma::Es5,
                     "none" => TrailingComma::None,
-                    // "all" | _
                     _ => TrailingComma::All,
                 };
             }
@@ -148,7 +314,6 @@ fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
                 options.quote_props = match value.trim_matches('"') {
                     "consistent" => QuoteProps::Consistent,
                     "preserve" => QuoteProps::Preserve,
-                    // "as-needed" | _
                     _ => QuoteProps::AsNeeded,
                 };
             }
@@ -165,7 +330,6 @@ fn parse_options(lines: &[&str]) -> (String, PrettierConfig, bool) {
                 options.prose_wrap = match value.trim_matches('"') {
                     "always" => ProseWrap::Always,
                     "never" => ProseWrap::Never,
-                    // "preserve" | _
                     _ => ProseWrap::Preserve,
                 };
             }
@@ -208,7 +372,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_simple_entry() {
+    fn test_parse_simple_entry() {
         let content = r#"// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`test.json format 1`] = `
@@ -233,7 +397,7 @@ parsers: ["json"]
     }
 
     #[test]
-    fn skip_object_wrap() {
+    fn test_skip_object_wrap() {
         let content = r#"// Jest Snapshot v1
 
 exports[`test.json - {"objectWrap":"collapse"} format 1`] = `
@@ -255,28 +419,7 @@ parsers: ["json"]
     }
 
     #[test]
-    fn skip_json_stringify() {
-        let content = r#"// Jest Snapshot v1
-
-exports[`test.json format 1`] = `
-====================================options=====================================
-parsers: ["json-stringify"]
-                                                      printWidth: 80 (default) |
-=====================================input======================================
-{}
-
-=====================================output=====================================
-{}
-
-================================================================================
-`;
-"#;
-        let cases = parse_snapshot(content);
-        assert_eq!(cases.len(), 0);
-    }
-
-    #[test]
-    fn parse_options() {
+    fn test_parse_options() {
         let content = r#"// Jest Snapshot v1
 
 exports[`test.jsonc - {"trailingComma":"es5"} format 1`] = `
@@ -300,7 +443,7 @@ trailingComma: "es5"
     }
 
     #[test]
-    fn unescape_backslash() {
+    fn test_unescape_backslash() {
         assert_eq!(unescape_template_literal(r"a\\b"), r"a\b");
         assert_eq!(unescape_template_literal(r"a\`b"), "a`b");
         assert_eq!(unescape_template_literal(r"a\${b}"), "a${b}");
