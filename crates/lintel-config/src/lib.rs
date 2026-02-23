@@ -9,6 +9,38 @@ use serde_json::Value;
 
 const CONFIG_FILENAME: &str = "lintel.toml";
 
+fn example_file_pattern() -> Vec<String> {
+    vec!["schemas/vector.json".into()]
+}
+
+fn example_file_glob() -> Vec<String> {
+    vec!["schemas/**/*.json".into()]
+}
+
+fn example_file_config() -> Vec<String> {
+    vec!["config/*.yaml".into()]
+}
+
+fn example_schema_url() -> Vec<String> {
+    vec!["https://json.schemastore.org/vector.json".into()]
+}
+
+fn example_schema_glob() -> Vec<String> {
+    vec!["https://json.schemastore.org/*.json".into()]
+}
+
+fn example_exclude() -> Vec<String> {
+    vec![
+        "vendor/**".into(),
+        "testdata/**".into(),
+        "*.generated.json".into(),
+    ]
+}
+
+fn example_registry() -> Vec<String> {
+    vec!["https://example.com/custom-catalog.json".into()]
+}
+
 /// Conditional settings applied to files or schemas matching specific patterns.
 ///
 /// Each `[[override]]` block targets files by path glob, schemas by URI glob,
@@ -30,9 +62,9 @@ pub struct Override {
     /// character.
     #[schemars(
         title = "File Patterns",
-        example = &["schemas/vector.json"],
-        example = &["schemas/**/*.json"],
-        example = &["config/*.yaml"],
+        example = example_file_pattern(),
+        example = example_file_glob(),
+        example = example_file_config(),
     )]
     #[serde(default)]
     pub files: Vec<String>,
@@ -44,8 +76,8 @@ pub struct Override {
     /// resolution), so you can match on either form.
     #[schemars(
         title = "Schema Patterns",
-        example = &["https://json.schemastore.org/vector.json"],
-        example = &["https://json.schemastore.org/*.json"],
+        example = example_schema_url(),
+        example = example_schema_glob(),
     )]
     #[serde(default)]
     pub schemas: Vec<String>,
@@ -90,7 +122,7 @@ pub struct Config {
     /// Matched against file paths relative to the working directory. Standard
     /// glob syntax is supported: `*` matches within a single directory, `**`
     /// matches across directory boundaries.
-    #[schemars(title = "Exclude Patterns", example = &["vendor/**", "testdata/**", "*.generated.json"])]
+    #[schemars(title = "Exclude Patterns", example = example_exclude())]
     #[serde(default)]
     pub exclude: Vec<String>,
 
@@ -128,7 +160,7 @@ pub struct Config {
     /// Registries from child configs appear first, followed by parent
     /// registries (duplicates are removed). This lets child directories add
     /// project-specific catalogs while inheriting organization-wide ones.
-    #[schemars(title = "Additional Registries", example = &["https://example.com/custom-catalog.json"])]
+    #[schemars(title = "Additional Registries", example = example_registry())]
     #[serde(default)]
     pub registries: Vec<String>,
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/v0.0.8...v0.0.9) - 2026-02-23
+
+### Added
+
+- make --schema non-exclusive, add URL support and positional file arg to explain
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into explain-path
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/v0.0.7...v0.0.8) - 2026-02-22
 
 ### Added
