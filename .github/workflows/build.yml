@@ -76,6 +76,9 @@ jobs:
       - name: Build
         run: nix build ${{ matrix.nix-package }}
 
+      - name: Smoke test
+        run: ./result/bin/${{ matrix.binary }} version
+
       - name: Package
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
 

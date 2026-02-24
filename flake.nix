@@ -20,7 +20,19 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         craneLib = crane.mkLib pkgs;
-        craneLibStatic = if pkgs.stdenv.isLinux then crane.mkLib pkgs.pkgsStatic else null;
+        craneLibStatic =
+          if pkgs.stdenv.isLinux then
+            let
+              muslPkgs =
+                {
+                  "x86_64-linux" = pkgs.pkgsCross.musl64;
+                  "aarch64-linux" = pkgs.pkgsCross.aarch64-multiplatform-musl;
+                }
+                .${system};
+            in
+            crane.mkLib muslPkgs
+          else
+            null;
 
         src =
           let
