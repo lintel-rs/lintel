@@ -56,23 +56,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi-term-codes"
+name = "ansi-term-styles"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b119b153e819a07938cb791f098dc22c7d6fd37c057705e01b459fea8c35c27"
 
 [[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
-
-[[package]]
-name = "arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
-]
 
 [[package]]
 name = "arc-swap"
@@ -508,7 +501,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "cargo-furnish"
 version = "0.0.7"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "anyhow",
  "bpaf",
  "glob",
@@ -558,9 +551,9 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
-version = "0.4.43"
+version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fac4744fb15ae8337dc853fee7fb3f4e48c0fbaa23d0afe49c447b4fab126118"
+checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -725,17 +718,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 dependencies = [
  "powerfmt",
-]
-
-[[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -906,6 +888,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -1638,10 +1621,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-explain"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "markdown-to-ansi",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonschema-migrate"
+version = "0.1.0"
+dependencies = [
+ "regex-syntax 0.8.9",
  "serde_json",
 ]
 
@@ -1682,9 +1673,9 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "anyhow",
  "bpaf",
  "glob-match",
@@ -1714,7 +1705,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1740,12 +1731,13 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "bpaf",
- "futures",
+ "futures-util",
  "glob-match",
+ "jsonschema-migrate",
  "lintel-schema-cache",
  "percent-encoding",
  "reqwest",
@@ -1764,7 +1756,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1794,7 +1786,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "bpaf",
  "lintel-catalog-builder",
@@ -1805,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1837,7 +1829,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1850,7 +1842,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1868,9 +1860,9 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "lintel-validate",
  "miette",
 ]
@@ -1894,12 +1886,13 @@ dependencies = [
 
 [[package]]
 name = "lintel-schemastore-catalog"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
- "futures",
+ "futures-util",
  "reqwest",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "tempfile",
@@ -1911,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1927,6 +1920,7 @@ dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "serde_yaml",
@@ -2008,9 +2002,11 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "markdown-to-ansi"
-version = "0.1.2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1df5368e0663ee64d121d758e6d4350a9d8bdab42fb29b057d9e5284bcb6a7d9"
 dependencies = [
- "ansi-term-codes",
+ "ansi-term-styles",
  "pulldown-cmark",
  "sublime-syntaxes",
  "syntect",
@@ -2103,7 +2099,7 @@ dependencies = [
 
 [[package]]
 name = "npm-release-binaries"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "bpaf",
  "flate2",
@@ -2550,9 +2546,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+checksum = "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6"
 dependencies = [
  "bitflags",
  "memchr",
@@ -2984,7 +2980,7 @@ dependencies = [
 
 [[package]]
 name = "schema-catalog"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "schemars 1.2.1",
  "serde",
@@ -3044,12 +3040,11 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "globset",
  "schema-catalog",
- "serde",
  "serde_json",
 ]
 
@@ -3263,7 +3258,9 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "sublime-syntaxes"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a844c25d301e35eb40346932b9ddafe0790a60e35ab587c42d98e9dc9da041fc"
 dependencies = [
  "syntect",
 ]
@@ -3775,6 +3772,12 @@ name = "typed-arena"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
+
+[[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
 name = "typenum"
@@ -4619,20 +4622,23 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "2.4.2"
+version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
+checksum = "6e499faf5c6b97a0d086f4a8733de6d47aee2252b8127962439d8d4311a73f72"
 dependencies = [
- "arbitrary",
  "crc32fast",
- "crossbeam-utils",
- "displaydoc",
  "flate2",
  "indexmap 2.13.0",
  "memchr",
- "thiserror 2.0.18",
+ "typed-path",
  "zopfli",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c745c48e1007337ed136dc99df34128b9faa6ed542d80a1c673cf55a6d7236c8"
 
 [[package]]
 name = "zmij"

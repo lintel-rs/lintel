@@ -1,6 +1,6 @@
 [package]
 name = "lintel-github-action"
-version = "0.0.7"
+version = "0.0.8"
 edition.workspace = true
 authors.workspace = true
 description = "GitHub Action binary for Lintel — creates Check Runs with inline annotations"
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-lintel-validate = { version = "0.0.2", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 bpaf = { version = "0.9", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"

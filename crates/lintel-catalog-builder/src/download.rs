@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Result;
-use futures::stream::{self, StreamExt};
+use futures_util::stream::{self, StreamExt};
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use tracing::{info, warn};
 

@@ -840,12 +840,19 @@ pub async fn run_with(
         // Compile the schema for cache misses.
         let t = std::time::Instant::now();
         let validator = {
-            match jsonschema::async_options()
+            // Set base URI for remote schemas so relative $ref values
+            // (e.g. "./rule.json") resolve correctly.
+            let is_remote_schema =
+                schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+            let opts = jsonschema::async_options()
                 .with_retriever(retriever.clone())
-                .should_validate_formats(validate_formats)
-                .build(&schema_value)
-                .await
-            {
+                .should_validate_formats(validate_formats);
+            let opts = if is_remote_schema {
+                opts.with_base_uri(schema_uri.clone())
+            } else {
+                opts
+            };
+            match opts.build(&schema_value).await {
                 Ok(v) => v,
                 Err(e) => {
                     compile_time += t.elapsed();
@@ -1356,8 +1363,9 @@ mod tests {
     }"#;
 
     fn gh_catalog_json() -> String {
-        r#"{"schemas":[{
+        r#"{"version":1,"schemas":[{
             "name": "GitHub Workflow",
+            "description": "GitHub Actions workflow",
             "url": "https://www.schemastore.org/github-workflow.json",
             "fileMatch": [
                 "**/.github/workflows/*.yml",
@@ -1707,8 +1715,9 @@ validate_formats = false
             r#"{"name":"hello","on":"push","jobs":{"build":{}}}"#,
         )?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;
@@ -1749,8 +1758,9 @@ validate_formats = false
             "{ pkgs, ... }: { packages = [ pkgs.git ]; }",
         )?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;
@@ -1783,8 +1793,9 @@ validate_formats = false
         // File has .cfg extension, content is valid JSON but fails schema validation
         fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#)?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;

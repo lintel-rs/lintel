@@ -5,30 +5,11 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde::Deserialize;
 
-/// Re-export canonical catalog types from `schema-catalog`.
-pub use schema_catalog;
+use schema_catalog::Catalog;
 
 /// The URL of the `SchemaStore` catalog.
 pub const CATALOG_URL: &str = "https://www.schemastore.org/api/json/catalog.json";
-
-/// The deserialized `SchemaStore` catalog.
-#[derive(Debug, Deserialize)]
-pub struct Catalog {
-    pub schemas: Vec<SchemaEntry>,
-}
-
-/// A single schema entry from the catalog.
-#[derive(Debug, Deserialize)]
-pub struct SchemaEntry {
-    pub name: String,
-    pub url: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default, rename = "fileMatch")]
-    pub file_match: Vec<String>,
-}
 
 /// Parse a `SchemaStore` catalog from a `serde_json::Value`.
 ///
@@ -36,7 +17,7 @@ pub struct SchemaEntry {
 ///
 /// Returns an error if the value does not match the expected catalog schema.
 pub fn parse_catalog(value: serde_json::Value) -> Result<Catalog, serde_json::Error> {
-    serde_json::from_value(value)
+    schema_catalog::parse_catalog_value(value)
 }
 
 /// A compiled `GlobSet` paired with the schema URL and original pattern for each index.
@@ -97,7 +78,7 @@ impl CompiledGlobSet {
 #[derive(Debug, Clone)]
 struct CatalogEntryInfo {
     name: String,
-    description: Option<String>,
+    description: String,
     file_match: Vec<String>,
 }
 
@@ -262,7 +243,11 @@ impl CompiledCatalog {
                 matched_pattern: file_name,
                 file_match: &entry.file_match,
                 name: &entry.name,
-                description: entry.description.as_deref(),
+                description: if entry.description.is_empty() {
+                    None
+                } else {
+                    Some(&entry.description)
+                },
             });
         }
 
@@ -278,7 +263,11 @@ impl CompiledCatalog {
                     matched_pattern: pattern,
                     file_match: &entry.file_match,
                     name: &entry.name,
-                    description: entry.description.as_deref(),
+                    description: if entry.description.is_empty() {
+                        None
+                    } else {
+                        Some(&entry.description)
+                    },
                 });
             }
         }
@@ -292,7 +281,11 @@ impl CompiledCatalog {
                 matched_pattern: pattern,
                 file_match: &entry.file_match,
                 name: &entry.name,
-                description: entry.description.as_deref(),
+                description: if entry.description.is_empty() {
+                    None
+                } else {
+                    Some(&entry.description)
+                },
             });
         }
 
@@ -307,30 +300,40 @@ impl CompiledCatalog {
 
 #[cfg(test)]
 mod tests {
+    use schema_catalog::SchemaEntry;
+
     use super::*;
 
     fn test_catalog() -> Catalog {
         Catalog {
+            version: 1,
             schemas: vec![
                 SchemaEntry {
                     name: "tsconfig".into(),
+                    description: String::new(),
                     url: "https://json.schemastore.org/tsconfig.json".into(),
-                    description: None,
+                    source_url: None,
                     file_match: vec!["tsconfig.json".into(), "tsconfig.*.json".into()],
+                    versions: BTreeMap::new(),
                 },
                 SchemaEntry {
                     name: "package.json".into(),
+                    description: String::new(),
                     url: "https://json.schemastore.org/package.json".into(),
-                    description: None,
+                    source_url: None,
                     file_match: vec!["package.json".into()],
+                    versions: BTreeMap::new(),
                 },
                 SchemaEntry {
                     name: "no-match".into(),
+                    description: String::new(),
                     url: "https://example.com/no-match.json".into(),
-                    description: None,
+                    source_url: None,
                     file_match: vec![],
+                    versions: BTreeMap::new(),
                 },
             ],
+            ..Catalog::default()
         }
     }
 
@@ -393,15 +396,19 @@ mod tests {
 
     fn github_workflow_catalog() -> Catalog {
         Catalog {
+            version: 1,
             schemas: vec![SchemaEntry {
                 name: "GitHub Workflow".into(),
+                description: String::new(),
                 url: "https://www.schemastore.org/github-workflow.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![
                     "**/.github/workflows/*.yml".into(),
                     "**/.github/workflows/*.yaml".into(),
                 ],
+                versions: BTreeMap::new(),
             }],
+            ..Catalog::default()
         }
     }
 
@@ -440,7 +447,7 @@ mod tests {
 
     #[test]
     fn parse_catalog_from_json() -> anyhow::Result<()> {
-        let json = r#"{"schemas":[{"name":"test","url":"https://example.com/s.json","fileMatch":["*.json"]}]}"#;
+        let json = r#"{"version":1,"schemas":[{"name":"test","description":"desc","url":"https://example.com/s.json","fileMatch":["*.json"]}]}"#;
         let value: serde_json::Value = serde_json::from_str(json)?;
         let catalog = parse_catalog(value)?;
         assert_eq!(catalog.schemas.len(), 1);

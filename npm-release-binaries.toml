@@ -10,8 +10,10 @@ readme = "./README.md"
 access = "public"
 
 [packages.lintel.targets]
-darwin-arm64 = true
-darwin-x64 = true
-linux-arm64 = true
-linux-x64 = true
-win32-x64 = true
+darwin-arm64 = "lintel-aarch64-apple-darwin.tar.gz"
+darwin-x64 = "lintel-x86_64-apple-darwin.tar.gz"
+linux-arm64 = "lintel-aarch64-unknown-linux-gnu.tar.gz"
+linux-arm64-musl = "lintel-aarch64-unknown-linux-musl.tar.gz"
+linux-x64 = "lintel-x86_64-unknown-linux-gnu.tar.gz"
+linux-x64-musl = "lintel-x86_64-unknown-linux-musl.tar.gz"
+win32-x64 = "lintel-x86_64-pc-windows-msvc.zip"

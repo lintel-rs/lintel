@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 use std::time::Instant;
 
-use ansi_term_codes::{BOLD, DIM, RESET};
+use ansi_term_styles::{BOLD, DIM, RESET};
 use anyhow::Result;
 
 /// Run the `annotate` command: add schema annotations to files.

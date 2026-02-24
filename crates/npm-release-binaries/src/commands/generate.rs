@@ -151,8 +151,8 @@ fn generate_platform_package(
     pkg.insert("keywords".into(), json!(metadata.keywords));
     pkg.insert("os".into(), json!([target.os]));
     pkg.insert("cpu".into(), json!([target.cpu]));
-    if target.os == "linux" {
-        pkg.insert("libc".into(), json!(["glibc"]));
+    if let Some(ref libc) = target.libc {
+        pkg.insert("libc".into(), json!([libc]));
     }
     let package_json = serde_json::Value::Object(pkg);
 
@@ -323,13 +323,17 @@ fn generate_main_readme(metadata: &ResolvedMetadata, targets: &[ResolvedTarget])
     )
 }
 
+fn has_musl_targets(targets: &[ResolvedTarget]) -> bool {
+    targets.iter().any(|t| t.libc.as_deref() == Some("musl"))
+}
+
 fn generate_bin_wrapper(metadata: &ResolvedMetadata, targets: &[ResolvedTarget]) -> String {
     let mut platform_entries = String::new();
     for target in targets {
         let _ = writeln!(
             platform_entries,
-            "  \"{}-{}\": \"{}/{}\",",
-            target.os, target.cpu, target.package_name, target.binary_name
+            "  \"{}\": \"{}/{}\",",
+            target.key, target.package_name, target.binary_name
         );
     }
 
@@ -337,16 +341,41 @@ fn generate_bin_wrapper(metadata: &ResolvedMetadata, targets: &[ResolvedTarget])
     let name = &metadata.name;
     let repo = &metadata.repository;
 
+    let musl_detection = if has_musl_targets(targets) {
+        r#"
+function isMusl() {
+  let output;
+  try {
+    output = require("child_process").execSync("ldd --version", {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    output = err.stderr;
+  }
+  return output && output.indexOf("musl") > -1;
+}
+"#
+    } else {
+        ""
+    };
+
+    let key_expr = if has_musl_targets(targets) {
+        r#"let key = `${process.platform}-${process.arch}`;
+  if (process.platform === "linux" && isMusl()) {
+    key += "-musl";
+  }"#
+    } else {
+        "const key = `${process.platform}-${process.arch}`;"
+    };
+
     format!(
         r#"#!/usr/bin/env node
 
-const path = require("path");
-
 const PLATFORMS = {{
 {platform_entries}}};
-
+{musl_detection}
 function getBinaryPath() {{
-  const key = `${{process.platform}}-${{process.arch}}`;
+  {key_expr}
   const pkg = PLATFORMS[key];
   if (!pkg) {{
     throw new Error(

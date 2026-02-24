@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.1...npm-release-binaries-v0.0.2) - 2026-02-23
+
+### Other
+
+- Fix npm publish retry and action release tag naming
+- release
+
 ## [0.0.1](https://github.com/lintel-rs/lintel/releases/tag/npm-release-binaries-v0.0.1) - 2026-02-23
 
 ### Added

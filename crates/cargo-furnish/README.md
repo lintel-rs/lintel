@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/cargo-furnish.svg)](https://crates.io/crates/cargo-furnish)
 [![docs.rs](https://docs.rs/cargo-furnish/badge.svg)](https://docs.rs/cargo-furnish)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/cargo-furnish.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Furnish Rust crates with standardized `Cargo.toml` metadata, READMEs, and doc attributes. Reads workspace conventions and applies them to individual crates for consistent publishing.

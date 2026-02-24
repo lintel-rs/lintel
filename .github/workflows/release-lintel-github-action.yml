@@ -23,23 +23,24 @@ jobs:
             exit 1
           fi
 
-  build-nix:
-    name: Build (x86_64-linux)
+  build:
+    name: Build (x86_64-linux-musl)
     needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v16
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          name: lintel
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: nix build .#lintel-github-action
+        run: cargo build --release --target x86_64-unknown-linux-musl -p lintel-github-action
 
       - name: Package
-        run: tar czf lintel-github-action-x86_64-unknown-linux-gnu.tar.gz -C result/bin lintel-github-action
+        run: tar czf lintel-github-action-x86_64-unknown-linux-gnu.tar.gz -C target/x86_64-unknown-linux-musl/release lintel-github-action
 
       - name: Publish release to lintel-rs/action
         env:

@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-catalog-builder.svg)](https://crates.io/crates/lintel-catalog-builder)
 [![docs.rs](https://docs.rs/lintel-catalog-builder/badge.svg)](https://docs.rs/lintel-catalog-builder)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-catalog-builder.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Build a custom JSON Schema catalog from local schemas and external sources like [SchemaStore](https://www.schemastore.org/).
