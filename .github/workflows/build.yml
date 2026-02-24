@@ -1,0 +1,129 @@
+# Reusable build workflow.
+# Runs on push to master (replacing nix.yml) and is called by release workflows.
+
+name: Build
+
+on:
+  push:
+    branches: [master]
+  workflow_call:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-nix:
+    name: Verify Nix (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-26]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lintel
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - run: nix build .#all
+      - run: nix flake check
+      - run: nix run . -- version
+
+  build-nix:
+    name: Build (${{ matrix.binary }}-${{ matrix.target }})
+    needs: verify-nix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            nix-package: .#lintel
+            binary: lintel
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            nix-package: .#lintel
+            binary: lintel
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            nix-package: .#lintel-static
+            binary: lintel
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            nix-package: .#lintel-static
+            binary: lintel
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            nix-package: .#lintel
+            binary: lintel
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            nix-package: .#lintel
+            binary: lintel
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            nix-package: .#lintel-github-action-static
+            binary: lintel-github-action
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lintel
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build
+        run: nix build ${{ matrix.nix-package }}
+
+      - name: Smoke test
+        run: ./result/bin/${{ matrix.binary }} version
+
+      - name: Verify static linking
+        if: contains(matrix.target, 'musl')
+        run: |
+          file ./result/bin/${{ matrix.binary }}
+          file ./result/bin/${{ matrix.binary }} | grep -q "statically linked"
+
+      - name: Package
+        run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
+
+      - name: Upload artifact
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.binary }}-${{ matrix.target }}
+          path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
+
+  build-cargo:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
+
+      - name: Build
+        run: cargo build --release --package lintel --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path lintel.exe -DestinationPath ../../../lintel-${{ matrix.target }}.zip
+
+      - name: Upload artifact
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v6
+        with:
+          name: lintel-${{ matrix.target }}
+          path: lintel-${{ matrix.target }}.*

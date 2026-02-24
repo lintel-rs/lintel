@@ -1,17 +1,17 @@
 [package]
 name = "schemastore"
-version = "0.0.8"
-edition.workspace = true
+version = "0.0.9"
 authors.workspace = true
-description = "Fetch and match files against the SchemaStore catalog"
-license.workspace = true
-repository.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "schemastore", "validation"]
-categories = ["development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Fetch and match files against the SchemaStore catalog"
 
 [lints]
 workspace = true
 
 [dependencies]
-schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
+schema-catalog = { version = "0.0.5", path = "../schema-catalog" }

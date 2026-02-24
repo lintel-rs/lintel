@@ -153,7 +153,6 @@ mod tests {
     fn test_catalog() -> Catalog {
         Catalog {
             version: 1,
-            title: None,
             schemas: vec![
                 SchemaEntry {
                     name: "tsconfig".into(),
@@ -180,7 +179,7 @@ mod tests {
                     versions: BTreeMap::new(),
                 },
             ],
-            groups: vec![],
+            ..Catalog::default()
         }
     }
 
@@ -244,7 +243,6 @@ mod tests {
     fn github_workflow_catalog() -> Catalog {
         Catalog {
             version: 1,
-            title: None,
             schemas: vec![SchemaEntry {
                 name: "GitHub Workflow".into(),
                 url: "https://www.schemastore.org/github-workflow.json".into(),
@@ -256,7 +254,7 @@ mod tests {
                 ],
                 versions: BTreeMap::new(),
             }],
-            groups: vec![],
+            ..Catalog::default()
         }
     }
 
@@ -297,7 +295,6 @@ mod tests {
     fn empty_description_becomes_none() {
         let catalog = Catalog {
             version: 1,
-            title: None,
             schemas: vec![SchemaEntry {
                 name: "test".into(),
                 url: "https://example.com/test.json".into(),
@@ -306,7 +303,7 @@ mod tests {
                 file_match: vec!["test.json".into()],
                 versions: BTreeMap::new(),
             }],
-            groups: vec![],
+            ..Catalog::default()
         };
         let compiled = CompiledCatalog::compile(&catalog);
         let m = compiled
@@ -319,7 +316,6 @@ mod tests {
     fn non_empty_description_preserved() {
         let catalog = Catalog {
             version: 1,
-            title: None,
             schemas: vec![SchemaEntry {
                 name: "test".into(),
                 url: "https://example.com/test.json".into(),
@@ -328,7 +324,7 @@ mod tests {
                 file_match: vec!["test.json".into()],
                 versions: BTreeMap::new(),
             }],
-            groups: vec![],
+            ..Catalog::default()
         };
         let compiled = CompiledCatalog::compile(&catalog);
         let m = compiled

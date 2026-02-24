@@ -1,27 +1,27 @@
 [package]
 name = "lintel-schema-cache"
-version = "0.0.8"
-edition.workspace = true
+version = "0.0.10"
 authors.workspace = true
-description = "Disk-backed schema cache with HTTP fetching and JSON parsing"
-license.workspace = true
-repository.workspace = true
+categories = ["caching", "development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "cache", "schema"]
-categories = ["caching", "development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Disk-backed schema cache with HTTP fetching and JSON parsing"
 
 [lints]
 workspace = true
 
 [dependencies]
-jsonschema = { version = "0.42", features = ["resolve-async"] }
-tokio = { version = "1", features = ["rt", "fs"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
-serde_json = "1"
 async-trait = "0.1"
-sha2 = "0.10"
 dirs = "6"
 filetime = "0.2"
+jsonschema = { version = "0.42", features = ["resolve-async"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt", "fs", "sync"] }
 tracing = "0.1"
 
 [dev-dependencies]

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.7...cargo-furnish-v0.0.8) - 2026-02-24
+
+### Added
+
+- add jsonschema-migrate crate, per-group _shared dirs, and update README badges
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into id-fixes
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/cargo-furnish-v0.0.6...cargo-furnish-v0.0.7) - 2026-02-23
 
 ### Other

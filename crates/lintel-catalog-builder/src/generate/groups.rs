@@ -1,0 +1,149 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail};
+use schema_catalog::SchemaEntry;
+use tracing::info;
+
+use crate::download::fetch_one;
+use crate::refs::{RefRewriteContext, resolve_and_rewrite, resolve_and_rewrite_value};
+use lintel_catalog_builder::config::SchemaDefinition;
+
+use super::GenerateContext;
+use super::util::{
+    extract_schema_meta, prefetch_versions, process_fetched_versions, resolve_latest_id,
+};
+
+/// Context for processing a single group schema entry.
+pub(super) struct GroupSchemaContext<'a> {
+    pub(super) generate: &'a GenerateContext<'a>,
+    pub(super) group_dir: &'a Path,
+    pub(super) group_key: &'a str,
+    pub(super) trimmed_base: &'a str,
+}
+
+/// Process a single group schema entry: fetch schema + versions concurrently,
+/// then resolve refs and process versions.
+#[allow(clippy::too_many_lines)]
+pub(super) async fn process_group_schema(
+    ctx: &GroupSchemaContext<'_>,
+    key: &str,
+    schema_def: &SchemaDefinition,
+    output_paths: &mut HashSet<PathBuf>,
+) -> Result<SchemaEntry> {
+    let entry_dir = ctx.group_dir.join(key);
+    tokio::fs::create_dir_all(&entry_dir).await?;
+
+    let dest_path = entry_dir.join("latest.json");
+
+    // Collision detection against the schema directory
+    let canonical_dest = entry_dir
+        .canonicalize()
+        .unwrap_or_else(|_| entry_dir.clone());
+    if !output_paths.insert(canonical_dest) {
+        bail!(
+            "output path collision: {} (group={}, key={key})",
+            entry_dir.display(),
+            ctx.group_key,
+        );
+    }
+
+    let schema_url = format!(
+        "{}/schemas/{}/{key}/latest.json",
+        ctx.trimmed_base, ctx.group_key
+    );
+
+    // Fetch schema (if remote) and all versions concurrently
+    let (schema_fetch_result, version_results) = tokio::join!(
+        async {
+            if let Some(url) = &schema_def.url {
+                Some(fetch_one(ctx.generate.cache, url).await.with_context(|| {
+                    format!("failed to download schema for {}/{key}", ctx.group_key)
+                }))
+            } else {
+                None
+            }
+        },
+        prefetch_versions(ctx.generate.cache, &schema_def.versions),
+    );
+
+    // Per-schema shared dir and ref-rewrite state
+    let shared_dir = entry_dir.join("_shared");
+    let shared_base_url = format!(
+        "{}/schemas/{}/{key}/_shared",
+        ctx.trimmed_base, ctx.group_key
+    );
+    let mut already_downloaded: HashMap<String, String> = HashMap::new();
+    let mut ref_ctx = RefRewriteContext {
+        cache: ctx.generate.cache,
+        shared_dir: &shared_dir,
+        base_url_for_shared: &shared_base_url,
+        already_downloaded: &mut already_downloaded,
+        source_url: schema_def.url.clone(),
+    };
+
+    // Process schema result
+    let schema_text = if let Some(url) = &schema_def.url {
+        let (mut value, status) =
+            schema_fetch_result.expect("fetch result must exist when URL is present")?;
+        info!(url = %url, status = %status, "downloaded group schema");
+
+        // Use version URL as $id if latest content matches a version
+        let schema_base_url = format!("{}/schemas/{}/{key}", ctx.trimmed_base, ctx.group_key,);
+        let resolved_url = resolve_latest_id(
+            ctx.generate.cache,
+            url,
+            &version_results,
+            &schema_url,
+            &schema_base_url,
+        );
+
+        resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &resolved_url).await?;
+        serde_json::to_string_pretty(&value)?
+    } else {
+        let source_path = ctx
+            .generate
+            .config_dir
+            .join("schemas")
+            .join(ctx.group_key)
+            .join(format!("{key}.json"));
+        if !source_path.exists() {
+            bail!(
+                "local schema not found: {} (expected for group={}, key={key})",
+                source_path.display(),
+                ctx.group_key,
+            );
+        }
+        let text: String = tokio::fs::read_to_string(&source_path)
+            .await
+            .with_context(|| format!("failed to read local schema {}", source_path.display()))?;
+        resolve_and_rewrite(&mut ref_ctx, &text, &dest_path, &schema_url).await?;
+        text
+    };
+
+    // Process pre-fetched versions
+    let version_urls = process_fetched_versions(&mut ref_ctx, &entry_dir, version_results).await?;
+
+    // Auto-populate name and description from the JSON Schema
+    let (schema_title, schema_desc) = extract_schema_meta(&schema_text);
+    let name = schema_def
+        .name
+        .clone()
+        .or(schema_title)
+        .unwrap_or_else(|| key.to_string());
+    let description = schema_def
+        .description
+        .clone()
+        .or(schema_desc)
+        .unwrap_or_default();
+
+    Ok(SchemaEntry {
+        name,
+        description,
+        url: schema_url,
+        source_url: schema_def.url.clone(),
+        file_match: schema_def.file_match.clone(),
+        versions: version_urls,
+    })
+}

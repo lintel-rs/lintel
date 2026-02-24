@@ -20,6 +20,19 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         craneLib = crane.mkLib pkgs;
+        craneLibStatic =
+          if pkgs.stdenv.isLinux then
+            let
+              muslPkgs =
+                {
+                  "x86_64-linux" = pkgs.pkgsCross.musl64;
+                  "aarch64-linux" = pkgs.pkgsCross.aarch64-multiplatform-musl;
+                }
+                .${system};
+            in
+            crane.mkLib muslPkgs
+          else
+            null;
 
         src =
           let
@@ -34,7 +47,14 @@
               (craneLib.filterCargoSources path type) || (testdataFilter path type) || (readmeFilter path type);
           };
 
-        packages = import ./nix/packages.nix { inherit craneLib pkgs src; };
+        packages = import ./nix/packages.nix {
+          inherit
+            craneLib
+            craneLibStatic
+            pkgs
+            src
+            ;
+        };
       in
       {
         checks = {

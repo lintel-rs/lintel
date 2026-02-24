@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.9...lintel-reporters-v0.0.10) - 2026-02-24
+
+### Other
+
+- updated the following local packages: lintel-validate
+
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.8...lintel-reporters-v0.0.9) - 2026-02-24
+
+### Added
+
+- add jsonschema-migrate crate, per-group _shared dirs, and update README badges
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into id-fixes
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.7...lintel-reporters-v0.0.8) - 2026-02-23
 
 ### Other

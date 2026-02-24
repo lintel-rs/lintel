@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-cli-common-v0.0.3...lintel-cli-common-v0.0.4) - 2026-02-24
+
+### Added
+
+- add jsonschema-migrate crate, per-group _shared dirs, and update README badges
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-cli-common-v0.0.2...lintel-cli-common-v0.0.3) - 2026-02-22
 
 ### Added

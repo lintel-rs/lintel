@@ -5,7 +5,7 @@
 [![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/schemastore.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-Constants and re-exports for working with the [SchemaStore](https://www.schemastore.org/) catalog.
+Constants and re-exports for working with the [`SchemaStore`](https://www.schemastore.org/) catalog.
 
 This is a thin convenience crate that provides:
 

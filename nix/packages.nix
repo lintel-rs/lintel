@@ -1,5 +1,6 @@
 {
   craneLib,
+  craneLibStatic ? null,
   pkgs,
   src,
 }:
@@ -70,18 +71,6 @@ let
 
   lintel-github-action = mkPackage ../crates/lintel-github-action { };
 
-  lintel-schemastore-catalog = mkPackage ../crates/lintel-schemastore-catalog {
-    postInstall = ''
-      installShellCompletion --cmd lintel-schemastore-catalog \
-        --bash <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-bash) \
-        --zsh <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-zsh) \
-        --fish <($out/bin/lintel-schemastore-catalog --bpaf-complete-style-fish)
-      $out/bin/lintel-schemastore-catalog man > lintel-schemastore-catalog.1
-      installManPage lintel-schemastore-catalog.1
-    '';
-    nativeBuildInputs = [ pkgs.installShellFiles ];
-  };
-
   npm-release-binaries = mkPackage ../crates/npm-release-binaries { };
 
   packages = {
@@ -91,12 +80,40 @@ let
       lintel-catalog-builder
       lintel-config-schema-generator
       lintel-github-action
-      lintel-schemastore-catalog
       npm-release-binaries
       ;
   };
+
+  # Static musl packages (Linux only)
+  staticPackages = pkgs.lib.optionalAttrs (craneLibStatic != null) (
+    let
+      staticCargoArtifacts = craneLibStatic.buildDepsOnly (
+        commonArgs // { CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static"; }
+      );
+
+      mkStaticPackage =
+        cratePath:
+        let
+          meta = craneLibStatic.crateNameFromCargoToml { cargoToml = "${cratePath}/Cargo.toml"; };
+        in
+        craneLibStatic.buildPackage (
+          commonArgs
+          // {
+            cargoArtifacts = staticCargoArtifacts;
+            inherit (meta) pname;
+            cargoExtraArgs = "-p ${meta.pname}";
+            CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+          }
+        );
+    in
+    {
+      lintel-static = mkStaticPackage ../crates/lintel;
+      lintel-github-action-static = mkStaticPackage ../crates/lintel-github-action;
+    }
+  );
 in
 packages
+// staticPackages
 // {
   default = lintel;
   all = pkgs.symlinkJoin {
