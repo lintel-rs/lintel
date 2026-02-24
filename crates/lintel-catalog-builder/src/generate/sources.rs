@@ -4,29 +4,22 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use futures_util::stream::{self, StreamExt};
 use lintel_schema_cache::SchemaCache;
 use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
-use crate::download::{DownloadItem, download_batch};
-use crate::refs::{RefRewriteContext, resolve_and_rewrite};
+use crate::download::fetch_one;
+use crate::refs::{RefRewriteContext, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::{OrganizeEntry, SourceConfig};
 
-use super::util::slugify;
+use super::util::{prefetch_versions, process_fetched_versions, resolve_latest_id, slugify};
 
 /// Per-target processing context passed to source-level functions.
 pub(super) struct SourceContext<'a> {
     pub(super) cache: &'a SchemaCache,
     pub(super) base_url: &'a str,
     pub(super) schemas_dir: &'a Path,
-    pub(super) concurrency: usize,
-}
-
-/// Aggregated download results for a source, used by [`resolve_source_refs`].
-struct SourceDownloadResult<'a> {
-    items: &'a [DownloadItem],
-    info: &'a [SourceSchemaInfo],
-    downloaded: &'a HashSet<String>,
 }
 
 /// Information about a source schema being processed.
@@ -39,13 +32,6 @@ struct SourceSchemaInfo {
     versions: BTreeMap<String, String>,
     slug: String,
     target_dir: String,
-}
-
-/// Metadata for a version download, linking it back to its parent schema.
-struct VersionDownloadMeta {
-    entry_index: usize,
-    version_name: String,
-    local_url: String,
 }
 
 /// Process a single external source (e.g. `SchemaStore`).
@@ -84,7 +70,6 @@ pub(super) async fn process_source(
     }
 
     // Classify each schema into an organize directory or the source default.
-    let mut download_items: Vec<DownloadItem> = Vec::new();
     let mut entry_info: Vec<SourceSchemaInfo> = Vec::new();
     let mut dir_slug_counts: HashMap<(String, String), usize> = HashMap::new();
     let mut seen_urls: HashSet<String> = HashSet::new();
@@ -111,7 +96,6 @@ pub(super) async fn process_source(
         };
 
         let schema_dir = ctx.schemas_dir.join(&target_dir).join(&slug);
-        let dest_path = schema_dir.join("latest.json");
 
         // Final collision detection against schema directory
         let canonical_dest = schema_dir
@@ -134,10 +118,6 @@ pub(super) async fn process_source(
         }
 
         let local_url = format!("{base_url}/schemas/{target_dir}/{slug}/latest.json");
-        download_items.push(DownloadItem {
-            url: schema.url.clone(),
-            dest: dest_path,
-        });
         entry_info.push(SourceSchemaInfo {
             name: schema.name.clone(),
             description: schema.description.clone(),
@@ -150,57 +130,44 @@ pub(super) async fn process_source(
         });
     }
 
-    // Download all latest schemas concurrently
-    info!(
-        count = download_items.len(),
-        concurrency = ctx.concurrency,
-        "downloading source schemas"
-    );
-    let downloaded = download_batch(ctx.cache, &download_items, ctx.concurrency).await?;
+    // Process all schemas concurrently: fetch → resolve refs → versions
+    info!(count = entry_info.len(), "processing source schemas");
+    let cache = ctx.cache.clone();
+    let schemas_dir = ctx.schemas_dir.to_path_buf();
+    let base_url_owned = base_url.to_string();
 
-    info!(
-        downloaded = downloaded.len(),
-        skipped = download_items.len() - downloaded.len(),
-        "source download complete"
-    );
+    let mut indexed_entries: Vec<(usize, SchemaEntry)> =
+        stream::iter(entry_info.into_iter().enumerate())
+            .map(|(i, info)| {
+                let cache = cache.clone();
+                let schemas_dir = schemas_dir.clone();
+                let base_url = base_url_owned.clone();
+                async move {
+                    let ctx = SourceSchemaProcessContext {
+                        cache: &cache,
+                        schemas_dir: &schemas_dir,
+                        base_url: &base_url,
+                    };
+                    let entry = process_one_source_schema(&ctx, info).await?;
+                    Ok::<_, anyhow::Error>((i, entry))
+                }
+            })
+            .buffer_unordered(64)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
 
-    // Resolve $ref deps for downloaded schemas (per-schema shared dirs)
-    let result = SourceDownloadResult {
-        items: &download_items,
-        info: &entry_info,
-        downloaded: &downloaded,
-    };
-    resolve_source_refs(ctx, &result).await?;
+    // Restore original ordering
+    indexed_entries.sort_by_key(|(i, _)| *i);
+    let entries: Vec<SchemaEntry> = indexed_entries.into_iter().map(|(_, e)| e).collect();
 
-    // Download, resolve refs, and build local URL maps for all schema versions
-    let local_version_maps = download_source_versions(ctx, &entry_info, &downloaded).await?;
-
-    // Build catalog entries
-    let entries = entry_info
+    let downloaded = entries
         .iter()
-        .enumerate()
-        .map(|(i, info)| {
-            let url = if downloaded.contains(&info.url) {
-                info.local_url.clone()
-            } else {
-                warn!(schema = %info.name, "using upstream URL (download was skipped)");
-                info.url.clone()
-            };
-            let versions = if local_version_maps[i].is_empty() {
-                info.versions.clone()
-            } else {
-                local_version_maps[i].clone()
-            };
-            SchemaEntry {
-                name: info.name.clone(),
-                description: info.description.clone(),
-                url,
-                source_url: Some(info.url.clone()),
-                file_match: info.file_match.clone(),
-                versions,
-            }
-        })
-        .collect();
+        .filter(|e| e.source_url.as_ref() != Some(&e.url))
+        .count();
+    let skipped = entries.len() - downloaded;
+    info!(downloaded, skipped, "source processing complete");
 
     // Build organize groups (key + matched schema names)
     let groups: Vec<(String, Vec<String>)> = source_config
@@ -215,157 +182,110 @@ pub(super) async fn process_source(
     Ok((entries, groups))
 }
 
-/// Resolve `$ref` dependencies for all downloaded source schemas.
-///
-/// Uses per-schema `_shared` directories.
-async fn resolve_source_refs(
-    ctx: &SourceContext<'_>,
-    result: &SourceDownloadResult<'_>,
-) -> Result<()> {
-    let base_url = ctx.base_url.trim_end_matches('/');
-
-    for (item, info) in result.items.iter().zip(result.info.iter()) {
-        if !result.downloaded.contains(&item.url) {
-            continue;
-        }
-
-        let schema_dir = ctx.schemas_dir.join(&info.target_dir).join(&info.slug);
-        let shared_dir = schema_dir.join("_shared");
-        let shared_base_url = format!(
-            "{base_url}/schemas/{}/{}/_shared",
-            info.target_dir, info.slug,
-        );
-        let mut already_downloaded: HashMap<String, String> = HashMap::new();
-
-        let text = tokio::fs::read_to_string(&item.dest).await?;
-        // Always run resolve_and_rewrite: it handles both external $ref
-        // resolution and fixing invalid URI references (spaces, brackets, etc.)
-        debug!(schema = %info.name, "processing schema refs");
-        resolve_and_rewrite(
-            &mut RefRewriteContext {
-                cache: ctx.cache,
-                shared_dir: &shared_dir,
-                base_url_for_shared: &shared_base_url,
-                already_downloaded: &mut already_downloaded,
-                source_url: Some(item.url.clone()),
-            },
-            &text,
-            &item.dest,
-            &info.local_url,
-        )
-        .await
-        .with_context(|| format!("failed to process refs for {}", info.name))?;
-    }
-
-    Ok(())
+/// Shared context for processing a single source schema concurrently.
+struct SourceSchemaProcessContext<'a> {
+    cache: &'a SchemaCache,
+    schemas_dir: &'a Path,
+    base_url: &'a str,
 }
 
-/// Download all schema versions, resolve their refs, and return per-entry
-/// local version URL maps.
-async fn download_source_versions(
-    ctx: &SourceContext<'_>,
-    entry_info: &[SourceSchemaInfo],
-    downloaded: &HashSet<String>,
-) -> Result<Vec<BTreeMap<String, String>>> {
-    let base_url = ctx.base_url.trim_end_matches('/');
+/// Process a single source schema end-to-end: fetch latest + versions
+/// concurrently, then resolve `$ref` dependencies and version refs.
+async fn process_one_source_schema(
+    ctx: &SourceSchemaProcessContext<'_>,
+    info: SourceSchemaInfo,
+) -> Result<SchemaEntry> {
+    let entry_dir = ctx.schemas_dir.join(&info.target_dir).join(&info.slug);
+    let dest_path = entry_dir.join("latest.json");
+    let source_url = info.url.clone();
 
-    // Collect version download items
-    let mut version_download_items: Vec<DownloadItem> = Vec::new();
-    let mut version_meta: Vec<VersionDownloadMeta> = Vec::new();
-    for (i, info) in entry_info.iter().enumerate() {
-        if !downloaded.contains(&info.url) {
-            continue;
-        }
-        for (version_name, version_url) in &info.versions {
-            let versions_dir = ctx
-                .schemas_dir
-                .join(&info.target_dir)
-                .join(&info.slug)
-                .join("versions");
-            let version_dest = versions_dir.join(format!("{version_name}.json"));
-            let version_local_url = format!(
-                "{base_url}/schemas/{}/{}/versions/{version_name}.json",
-                info.target_dir, info.slug,
+    // Fetch latest schema and all versions concurrently
+    let (latest_result, version_results) = tokio::join!(
+        fetch_one(ctx.cache, &source_url),
+        prefetch_versions(ctx.cache, &info.versions),
+    );
+
+    let (entry_url, versions) = match latest_result {
+        Ok((mut value, status)) => {
+            info!(
+                url = %source_url,
+                status = %status,
+                schema = %info.name,
+                "downloaded source schema"
             );
-            version_download_items.push(DownloadItem {
-                url: version_url.clone(),
-                dest: version_dest,
-            });
-            version_meta.push(VersionDownloadMeta {
-                entry_index: i,
-                version_name: version_name.clone(),
-                local_url: version_local_url,
-            });
-        }
-    }
 
-    // Batch download versions
-    let version_downloaded = if version_download_items.is_empty() {
-        HashSet::new()
-    } else {
-        info!(
-            count = version_download_items.len(),
-            "downloading source schema versions"
-        );
-        let dl = download_batch(ctx.cache, &version_download_items, ctx.concurrency).await?;
-        info!(
-            downloaded = dl.len(),
-            skipped = version_download_items.len() - dl.len(),
-            "version download complete"
-        );
-        dl
-    };
+            // Use version URL as $id if latest content matches a version
+            let schema_base_url =
+                format!("{}/schemas/{}/{}", ctx.base_url, info.target_dir, info.slug,);
+            let schema_url = resolve_latest_id(
+                ctx.cache,
+                &source_url,
+                &version_results,
+                &info.local_url,
+                &schema_base_url,
+            );
 
-    // Resolve refs for downloaded versions
-    for (vi, vitem) in version_download_items.iter().enumerate() {
-        if !version_downloaded.contains(&vitem.url) {
-            continue;
-        }
-        let meta = &version_meta[vi];
-        let info = &entry_info[meta.entry_index];
-        let entry_dir = ctx.schemas_dir.join(&info.target_dir).join(&info.slug);
-        let shared_dir = entry_dir.join("_shared");
-        let shared_base_url = format!(
-            "{base_url}/schemas/{}/{}/_shared",
-            info.target_dir, info.slug,
-        );
-        let mut already_downloaded: HashMap<String, String> = HashMap::new();
-        let text = tokio::fs::read_to_string(&vitem.dest).await?;
-        resolve_and_rewrite(
-            &mut RefRewriteContext {
+            let shared_dir = entry_dir.join("_shared");
+            let shared_base_url = format!("{schema_base_url}/_shared");
+            let mut already_downloaded: HashMap<String, String> = HashMap::new();
+            let mut ref_ctx = RefRewriteContext {
                 cache: ctx.cache,
                 shared_dir: &shared_dir,
                 base_url_for_shared: &shared_base_url,
                 already_downloaded: &mut already_downloaded,
-                source_url: Some(vitem.url.clone()),
-            },
-            &text,
-            &vitem.dest,
-            &meta.local_url,
-        )
-        .await
-        .with_context(|| {
-            format!(
-                "failed to process refs for {} version {}",
-                info.name, meta.version_name,
-            )
-        })?;
-    }
+                source_url: Some(source_url.clone()),
+            };
 
-    // Build local version URL maps per entry
-    let mut local_version_maps: Vec<BTreeMap<String, String>> =
-        vec![BTreeMap::new(); entry_info.len()];
-    for (vi, vitem) in version_download_items.iter().enumerate() {
-        let meta = &version_meta[vi];
-        let local_url = if version_downloaded.contains(&vitem.url) {
-            meta.local_url.clone()
-        } else {
-            vitem.url.clone()
-        };
-        local_version_maps[meta.entry_index].insert(meta.version_name.clone(), local_url);
-    }
+            debug!(schema = %info.name, "processing schema refs");
+            if let Err(e) =
+                resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &schema_url).await
+            {
+                warn!(
+                    url = %source_url,
+                    schema = %info.name,
+                    error = %e,
+                    "failed to process refs, using upstream URL"
+                );
+                return Ok(SchemaEntry {
+                    name: info.name,
+                    description: info.description,
+                    url: source_url.clone(),
+                    source_url: Some(source_url),
+                    file_match: info.file_match,
+                    versions: info.versions,
+                });
+            }
 
-    Ok(local_version_maps)
+            // Process pre-fetched versions
+            let version_urls =
+                process_fetched_versions(&mut ref_ctx, &entry_dir, version_results).await?;
+
+            let versions = if version_urls.is_empty() {
+                info.versions
+            } else {
+                version_urls
+            };
+            (info.local_url, versions)
+        }
+        Err(e) => {
+            warn!(
+                url = %source_url,
+                schema = %info.name,
+                error = %e,
+                "failed to download source schema, skipping"
+            );
+            (source_url.clone(), info.versions)
+        }
+    };
+
+    Ok(SchemaEntry {
+        name: info.name,
+        description: info.description,
+        url: entry_url,
+        source_url: Some(source_url),
+        file_match: info.file_match,
+        versions,
+    })
 }
 
 /// Classify a schema into an organize directory or the source default.

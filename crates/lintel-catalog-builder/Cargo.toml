@@ -17,6 +17,7 @@ workspace = true
 schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
 lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
 jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
+jsonschema = "0.42"
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
@@ -30,6 +31,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = "0.4"
 url = "2"
+semver = "1"
 percent-encoding = "2"
 glob-match = "0.2"
 
