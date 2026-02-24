@@ -902,6 +902,7 @@ dependencies = [
  "glob-matcher",
  "globset",
  "hashbrown 0.16.1",
+ "tried",
 ]
 
 [[package]]
@@ -3257,6 +3258,14 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tried"
+version = "0.0.1"
+dependencies = [
+ "criterion",
+ "hashbrown 0.16.1",
 ]
 
 [[package]]

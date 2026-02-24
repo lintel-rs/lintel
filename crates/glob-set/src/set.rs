@@ -1,13 +1,7 @@
-use alloc::string::String;
-use alloc::vec;
 use alloc::vec::Vec;
 
-use aho_corasick::AhoCorasick;
-use hashbrown::HashMap;
-
+use crate::engine::{self, MatchEngine};
 use crate::glob::{Candidate, Glob};
-use crate::literal;
-use crate::strategy;
 
 /// A set of glob patterns that can be matched against paths efficiently.
 ///
@@ -29,223 +23,50 @@ use crate::strategy;
 /// assert!(set.is_match("Cargo.toml"));
 /// assert!(!set.is_match("foo.js"));
 /// ```
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct GlobSet {
-    patterns: Vec<Glob>,
-    /// Extension → indices for `**/*.ext` patterns (extension alone is sufficient).
-    ext_any: HashMap<String, Vec<usize>>,
-    /// Extension → indices for `*.ext` patterns (need `glob_match` verification).
-    ext_local: HashMap<String, Vec<usize>>,
-    /// Literal path → pattern index.
-    literals: HashMap<String, usize>,
-    /// Prefix (with trailing `/`) → pattern index.
-    prefixes: Vec<(String, usize)>,
-    /// Suffix (with leading `/`) → pattern index.
-    suffixes: Vec<(String, usize)>,
-    /// Compound suffix (no leading `/`, e.g. `.test.js`) → pattern index.
-    compound_suffixes: Vec<(String, usize)>,
-    /// Prefix+suffix pairs → pattern index.
-    prefix_suffixes: Vec<(String, String, usize)>,
-    /// Aho-Corasick automaton for remaining glob patterns.
-    ac: Option<AhoCorasick>,
-    /// AC pattern index → glob index.
-    ac_to_glob: Vec<usize>,
-    /// Glob indices with no extractable literal (must always be checked).
-    always_check: Vec<usize>,
+    engine: MatchEngine,
+}
+
+impl Default for GlobSet {
+    fn default() -> Self {
+        Self {
+            engine: MatchEngine::empty(),
+        }
+    }
 }
 
 impl GlobSet {
     /// Return the number of patterns in this set.
     pub fn len(&self) -> usize {
-        self.patterns.len()
+        self.engine.len()
     }
 
     /// Return whether this set is empty.
     pub fn is_empty(&self) -> bool {
-        self.patterns.is_empty()
+        self.engine.is_empty()
     }
 
     /// Test whether any pattern matches the given path.
     pub fn is_match(&self, path: impl AsRef<str>) -> bool {
-        let path = path.as_ref();
-        if self.patterns.is_empty() {
-            return false;
-        }
-
-        if let Some(ext) = strategy::path_extension(path) {
-            // 1a. ExtensionAny — `**/*.ext`: extension match is sufficient.
-            if self.ext_any.contains_key(ext) {
-                return true;
-            }
-            // 1b. ExtensionLocal — `*.ext`: verify with glob_match (single star
-            //     doesn't cross separators).
-            if let Some(indices) = self.ext_local.get(ext) {
-                for &idx in indices {
-                    if glob_matcher::glob_match(self.patterns[idx].glob(), path) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        // 2. Literal strategy.
-        if self.literals.contains_key(path) {
-            return true;
-        }
-
-        // 3. Prefix strategy.
-        for (prefix, _) in &self.prefixes {
-            if path.starts_with(prefix.as_str()) {
-                return true;
-            }
-        }
-
-        // 4. Suffix strategy.
-        //    Suffix has a leading `/`, e.g. "/foo.txt" for `**/foo.txt`.
-        //    Also match when path equals the suffix without the `/`
-        //    (globstar matches zero segments).
-        for (suffix, _) in &self.suffixes {
-            if path.ends_with(suffix.as_str()) || path == &suffix[1..] {
-                return true;
-            }
-        }
-
-        // 5. Compound suffix strategy (`**/*<literal>`, e.g. `**/*.test.js`).
-        for (suffix, _) in &self.compound_suffixes {
-            if path.ends_with(suffix.as_str()) {
-                return true;
-            }
-        }
-
-        // 6. Prefix+suffix strategy (`prefix/**/*<suffix>`).
-        for (prefix, suffix, _) in &self.prefix_suffixes {
-            if path.starts_with(prefix.as_str()) && path.ends_with(suffix.as_str()) {
-                return true;
-            }
-        }
-
-        // 8. Full glob fallback — always-check patterns.
-        for &idx in &self.always_check {
-            if glob_matcher::glob_match(self.patterns[idx].glob(), path) {
-                return true;
-            }
-        }
-
-        // 9. Full glob fallback — AC pre-filter.
-        if let Some(ac) = &self.ac {
-            for mat in ac.find_overlapping_iter(path) {
-                let glob_idx = self.ac_to_glob[mat.pattern().as_usize()];
-                if glob_matcher::glob_match(self.patterns[glob_idx].glob(), path) {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.engine.is_match(path.as_ref())
     }
 
     /// Test whether any pattern matches the given candidate.
     pub fn is_match_candidate(&self, candidate: &Candidate<'_>) -> bool {
-        self.is_match(candidate.path())
+        self.engine.is_match(candidate.path())
     }
 
     /// Return the indices of all patterns that match the given path.
     pub fn matches(&self, path: impl AsRef<str>) -> Vec<usize> {
         let mut result = Vec::new();
-        self.matches_into(path, &mut result);
+        self.engine.matches_into(path.as_ref(), &mut result);
         result
     }
 
     /// Append the indices of all matching patterns to `into`.
     pub fn matches_into(&self, path: impl AsRef<str>, into: &mut Vec<usize>) {
-        let path = path.as_ref();
-        if self.patterns.is_empty() {
-            return;
-        }
-
-        let mut seen = vec![false; self.patterns.len()];
-
-        // 1. Extension strategies.
-        if let Some(ext) = strategy::path_extension(path) {
-            // 1a. ExtensionAny — no verification needed.
-            if let Some(indices) = self.ext_any.get(ext) {
-                for &idx in indices {
-                    if !seen[idx] {
-                        into.push(idx);
-                        seen[idx] = true;
-                    }
-                }
-            }
-            // 1b. ExtensionLocal — verify with glob_match.
-            if let Some(indices) = self.ext_local.get(ext) {
-                for &idx in indices {
-                    if !seen[idx] && glob_matcher::glob_match(self.patterns[idx].glob(), path) {
-                        into.push(idx);
-                        seen[idx] = true;
-                    }
-                }
-            }
-        }
-
-        // 2. Literal strategy.
-        if let Some(&idx) = self.literals.get(path)
-            && !seen[idx]
-        {
-            into.push(idx);
-            seen[idx] = true;
-        }
-
-        // 3. Prefix strategy.
-        for (prefix, idx) in &self.prefixes {
-            if !seen[*idx] && path.starts_with(prefix.as_str()) {
-                into.push(*idx);
-                seen[*idx] = true;
-            }
-        }
-
-        // 4. Suffix strategy.
-        for (suffix, idx) in &self.suffixes {
-            if !seen[*idx] && (path.ends_with(suffix.as_str()) || path == &suffix[1..]) {
-                into.push(*idx);
-                seen[*idx] = true;
-            }
-        }
-
-        // 5. Compound suffix strategy.
-        for (suffix, idx) in &self.compound_suffixes {
-            if !seen[*idx] && path.ends_with(suffix.as_str()) {
-                into.push(*idx);
-                seen[*idx] = true;
-            }
-        }
-
-        // 6. Prefix+suffix strategy.
-        for (prefix, suffix, idx) in &self.prefix_suffixes {
-            if !seen[*idx] && path.starts_with(prefix.as_str()) && path.ends_with(suffix.as_str()) {
-                into.push(*idx);
-                seen[*idx] = true;
-            }
-        }
-
-        // 7. Always-check patterns.
-        for &idx in &self.always_check {
-            if !seen[idx] && glob_matcher::glob_match(self.patterns[idx].glob(), path) {
-                into.push(idx);
-                seen[idx] = true;
-            }
-        }
-
-        // 8. AC pre-filter.
-        if let Some(ac) = &self.ac {
-            for mat in ac.find_overlapping_iter(path) {
-                let glob_idx = self.ac_to_glob[mat.pattern().as_usize()];
-                if !seen[glob_idx] && glob_matcher::glob_match(self.patterns[glob_idx].glob(), path)
-                {
-                    into.push(glob_idx);
-                    seen[glob_idx] = true;
-                }
-            }
-        }
+        self.engine.matches_into(path.as_ref(), into);
     }
 
     /// Return the indices of all patterns that match the given candidate.
@@ -287,54 +108,16 @@ impl GlobSetBuilder {
     ///
     /// Returns an error if the Aho-Corasick automaton cannot be constructed.
     pub fn build(&self) -> Result<GlobSet, crate::error::Error> {
-        let pat_strs: Vec<&str> = self.patterns.iter().map(Glob::glob).collect();
-        let strats = strategy::build(&pat_strs);
-
-        // Build AC automaton for the glob-fallback patterns only.
-        let mut ac_patterns: Vec<String> = Vec::new();
-        let mut ac_to_glob: Vec<usize> = Vec::new();
-        let mut always_check: Vec<usize> = Vec::new();
-
-        for &idx in &strats.glob_indices {
-            match literal::extract_literal(self.patterns[idx].glob()) {
-                Some(lit) => {
-                    ac_patterns.push(String::from(lit));
-                    ac_to_glob.push(idx);
-                }
-                None => {
-                    always_check.push(idx);
-                }
-            }
-        }
-
-        let ac =
-            if ac_patterns.is_empty() {
-                None
-            } else {
-                Some(AhoCorasick::builder().build(&ac_patterns).map_err(|_| {
-                    crate::error::Error::new(crate::error::ErrorKind::UnclosedClass)
-                })?)
-            };
-
-        Ok(GlobSet {
-            patterns: self.patterns.clone(),
-            ext_any: strats.ext_any,
-            ext_local: strats.ext_local,
-            literals: strats.literals,
-            prefixes: strats.prefixes,
-            suffixes: strats.suffixes,
-            compound_suffixes: strats.compound_suffixes,
-            prefix_suffixes: strats.prefix_suffixes,
-            ac,
-            ac_to_glob,
-            always_check,
-        })
+        let engine = engine::build_engine(self.patterns.clone())?;
+        Ok(GlobSet { engine })
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     fn build_set(patterns: &[&str]) -> GlobSet {

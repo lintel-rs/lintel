@@ -1,0 +1,24 @@
+[package]
+name = "tried"
+version = "0.0.1"
+edition.workspace = true
+authors.workspace = true
+description = "A fast, compact double-array trie with `no_std` support. Fork of yada with `no_std` + `alloc` compatibility."
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["trie", "double-array", "prefix", "search", "no_std"]
+categories = ["algorithms", "data-structures", "no-std", "text-processing"]
+
+[lints]
+workspace = true
+
+[dependencies]
+hashbrown = { version = "0.16", default-features = false, features = ["default-hasher"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dev-dependencies]
+criterion = "0.4.0"

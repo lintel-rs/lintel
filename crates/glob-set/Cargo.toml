@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 glob-matcher = { version = "0.0.1", path = "../glob-matcher" }
+tried = { version = "0.0.1", path = "../tried" }
 aho-corasick = { version = "1", default-features = false }
 hashbrown = { version = "0.16", default-features = false, features = ["default-hasher"] }
 

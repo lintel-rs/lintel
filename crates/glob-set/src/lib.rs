@@ -2,16 +2,21 @@
 #![no_std]
 extern crate alloc;
 
+mod engine;
 mod error;
 mod glob;
 mod literal;
+mod map;
 mod parse;
 mod set;
 mod strategy;
+mod tinyset;
 
 pub use crate::error::{Error, ErrorKind};
 pub use crate::glob::{Candidate, Glob, GlobBuilder, GlobMatcher};
+pub use crate::map::{GlobMap, GlobMapBuilder};
 pub use crate::set::{GlobSet, GlobSetBuilder};
+pub use crate::tinyset::{TinyGlobSet, TinyGlobSetBuilder};
 
 use alloc::string::String;
 
