@@ -1,27 +1,4 @@
-//! A fast, compact double-array trie.
-//!
-//! `tried` is a fork of [yada](https://crates.io/crates/yada) with `no_std` +
-//! `alloc` support. It provides O(key-length) exact-match and common-prefix
-//! search over a flat, cache-friendly byte buffer.
-//!
-//! # Example
-//!
-//! ```
-//! use tried::{DoubleArray, DoubleArrayBuilder};
-//!
-//! let keyset: &[(&[u8], u32)] = &[
-//!     (b"a", 0),
-//!     (b"ab", 1),
-//!     (b"abc", 2),
-//! ];
-//! let bytes = DoubleArrayBuilder::build(keyset).unwrap();
-//! let da = DoubleArray::new(bytes);
-//!
-//! assert_eq!(da.exact_match_search(b"ab"), Some(1));
-//!
-//! let prefixes: Vec<_> = da.common_prefix_search(b"abcd").collect();
-//! assert_eq!(prefixes, vec![(0, 1), (1, 2), (2, 3)]);
-//! ```
+#![doc = include_str!("../README.md")]
 #![no_std]
 extern crate alloc;
 
