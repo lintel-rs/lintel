@@ -67,8 +67,12 @@ pub(super) async fn process_fetched_versions(
                     status = %status,
                     "downloaded schema version"
                 );
+                // Temporarily set source_url to the version's URL so that
+                // resolve_and_rewrite_value injects the correct x-lintel metadata.
+                let prev_source_url = ref_ctx.source_url.replace(version_url.clone());
                 resolve_and_rewrite_value(ref_ctx, &mut value, &version_dest, &version_local_url)
                     .await?;
+                ref_ctx.source_url = prev_source_url;
                 version_urls.insert(version_name, version_local_url);
             }
             Err(e) => {

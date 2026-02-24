@@ -322,6 +322,9 @@ pub async fn resolve_and_rewrite_value(
     if external_refs.is_empty() && resolved_relative.is_empty() {
         // No external refs — still fix invalid URI references
         fix_ref_uris(value);
+        if let Some(ref source_url) = ctx.source_url {
+            crate::download::inject_lintel_extra(value, source_url, ctx.cache);
+        }
         crate::download::write_schema_json(value, schema_dest).await?;
         return Ok(());
     }
@@ -355,6 +358,9 @@ pub async fn resolve_and_rewrite_value(
     // Rewrite refs in the root schema and write it
     rewrite_refs(value, &url_map);
     fix_ref_uris(value);
+    if let Some(ref source_url) = ctx.source_url {
+        crate::download::inject_lintel_extra(value, source_url, ctx.cache);
+    }
     crate::download::write_schema_json(value, schema_dest).await?;
 
     // Process and write each dependency
@@ -497,6 +503,9 @@ async fn write_dep_schemas(
         jsonschema_migrate::migrate_to_2020_12(&mut dep_value);
         rewrite_refs(&mut dep_value, &dep_url_map);
         fix_ref_uris(&mut dep_value);
+        if let Some(ref source_url) = source_url {
+            crate::download::inject_lintel_extra(&mut dep_value, source_url, ctx.cache);
+        }
         crate::download::write_schema_json(&dep_value, &dep_dest).await?;
     }
 

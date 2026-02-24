@@ -67,6 +67,8 @@ pub struct SchemaCache {
     ttl: Option<Duration>,
     /// In-memory cache shared across all clones via `Arc`.
     memory_cache: Arc<Mutex<HashMap<String, Value>>>,
+    /// SHA-256 hex digests of the raw content fetched for each URI.
+    content_hashes: Arc<Mutex<HashMap<String, String>>>,
     /// Semaphore that limits concurrent HTTP requests across all callers.
     http_semaphore: Arc<tokio::sync::Semaphore>,
 }
@@ -137,6 +139,7 @@ impl SchemaCacheBuilder {
             skip_read: self.skip_read,
             ttl: self.ttl,
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+            content_hashes: Arc::new(Mutex::new(HashMap::new())),
             http_semaphore: Arc::new(tokio::sync::Semaphore::new(self.max_concurrent_requests)),
         }
     }
@@ -168,6 +171,7 @@ impl SchemaCache {
             skip_read: false,
             ttl: None,
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+            content_hashes: Arc::new(Mutex::new(HashMap::new())),
             http_semaphore: Arc::new(tokio::sync::Semaphore::new(DEFAULT_MAX_CONCURRENT_REQUESTS)),
         }
     }
@@ -179,6 +183,35 @@ impl SchemaCache {
             .lock()
             .expect("memory cache poisoned")
             .insert(uri.to_string(), value);
+    }
+
+    /// Return the SHA-256 hex digest of the raw content last fetched for `uri`.
+    ///
+    /// Returns `None` if the URI has not been fetched or was inserted via
+    /// [`insert`](Self::insert) (which has no raw content to hash).
+    #[allow(clippy::missing_panics_doc)] // Mutex poisoning is unreachable
+    pub fn content_hash(&self, uri: &str) -> Option<String> {
+        self.content_hashes
+            .lock()
+            .expect("content hashes poisoned")
+            .get(uri)
+            .cloned()
+    }
+
+    /// Compute SHA-256 of raw content and store it keyed by URI.
+    fn store_content_hash(&self, uri: &str, content: &str) {
+        let hash = Self::hash_content(content);
+        self.content_hashes
+            .lock()
+            .expect("content hashes poisoned")
+            .insert(uri.to_string(), hash);
+    }
+
+    /// Compute the SHA-256 hash of arbitrary content, returned as a 64-char hex string.
+    pub fn hash_content(content: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        format!("{:x}", hasher.finalize())
     }
 
     /// Fetch a schema by URI, using the disk cache when available.
@@ -232,6 +265,7 @@ impl SchemaCache {
                     if let Ok(content) = tokio::fs::read_to_string(&cache_path).await
                         && let Ok(value) = serde_json::from_str::<Value>(&content)
                     {
+                        self.store_content_hash(uri, &content);
                         self.memory_cache
                             .lock()
                             .expect("memory cache poisoned")
@@ -267,6 +301,7 @@ impl SchemaCache {
             // 304 Not Modified — use cached content
             if let Some(content) = cached_content {
                 let value: Value = serde_json::from_str(&content)?;
+                self.store_content_hash(uri, &content);
                 self.memory_cache
                     .lock()
                     .expect("memory cache poisoned")
@@ -287,6 +322,7 @@ impl SchemaCache {
 
         let body = conditional.body.expect("non-304 response must have a body");
         let value: Value = serde_json::from_str(&body)?;
+        self.store_content_hash(uri, &body);
 
         // Populate in-memory cache
         self.memory_cache
