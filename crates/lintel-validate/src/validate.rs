@@ -14,7 +14,7 @@ use schemastore::CompiledCatalog;
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
-use crate::parsers::{self, FileFormat, JsoncParser, Parser};
+use crate::parsers::{self, Parser};
 use crate::registry;
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
@@ -227,21 +227,7 @@ fn process_one_file(
         let parser = parsers::parser_for(fmt);
         match parser.parse(&content, &path_str) {
             Ok(val) => (parser, val),
-            Err(parse_err) => {
-                // JSONC fallback for .json files that match a catalog entry.
-                if fmt == FileFormat::Json
-                    && compiled_catalogs
-                        .iter()
-                        .any(|cat| cat.find_schema(&path_str, file_name).is_some())
-                {
-                    match JsoncParser.parse(&content, &path_str) {
-                        Ok(val) => (parsers::parser_for(FileFormat::Jsonc), val),
-                        Err(jsonc_err) => return FileResult::Error(jsonc_err.into()),
-                    }
-                } else {
-                    return FileResult::Error(parse_err.into());
-                }
-            }
+            Err(parse_err) => return FileResult::Error(parse_err.into()),
         }
     } else {
         match try_parse_all(&content, &path_str) {
