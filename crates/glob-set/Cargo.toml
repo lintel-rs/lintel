@@ -1,0 +1,27 @@
+[package]
+name = "glob-set"
+version = "0.0.1"
+edition.workspace = true
+authors.workspace = true
+description = "A globset-compatible glob matcher -- `no_std`, no regex, built on glob-matcher"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["glob", "pattern", "matching"]
+categories = ["no-std", "filesystem"]
+
+[lints]
+workspace = true
+
+[dependencies]
+glob-matcher = { version = "0.0.1", path = "../glob-matcher" }
+aho-corasick = { version = "1", default-features = false }
+hashbrown = { version = "0.16", default-features = false, features = ["default-hasher"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dev-dependencies]
+criterion = "0.4.0"
+globset = "0.4.10"
