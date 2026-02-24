@@ -1,28 +1,28 @@
 [package]
 name = "lintel-identify"
 version = "0.0.8"
-edition.workspace = true
 authors.workspace = true
-description = "Schema identification for JSON and YAML files using JSON Schema"
-license.workspace = true
-repository.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "validation", "identification", "linter"]
-categories = ["development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Schema identification for JSON and YAML files using JSON Schema"
 
 [lints]
 workspace = true
 
 [dependencies]
+anyhow = "1"
+bpaf = { version = "0.9", features = ["derive"] }
+glob-match = "0.2"
+jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
+lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.6", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
-lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 schemastore = { version = "0.0.9", path = "../schemastore" }
-jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
-bpaf = { version = "0.9", features = ["derive"] }
-glob-match = "0.2"
-anyhow = "1"
 serde_json = "1"
-tracing = "0.1"
 terminal_size = "0.4"
+tracing = "0.1"

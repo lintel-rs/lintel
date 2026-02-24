@@ -110,7 +110,7 @@ exclude = ["vendor/**", "testdata/**"]
 # map file patterns to schema URLs
 [schemas]
 "my-config.yaml" = "https://example.com/my-schema.json"
-".ci/*.yml" = "//schemas/ci.json"  # // resolves relative to lintel.toml
+".ci/*.yml" = "//schemas/ci.json" # // resolves relative to lintel.toml
 
 # additional schema catalogs
 registries = ["github:my-org/my-schemas"]
