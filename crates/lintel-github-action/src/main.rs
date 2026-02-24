@@ -16,12 +16,22 @@ use lintel_validate::{ValidateArgs, merge_config, validate_args};
 // -----------------------------------------------------------------------
 
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, version, generate(cli))]
+#[bpaf(options, version, fallback_to_usage, generate(cli))]
 #[allow(clippy::upper_case_acronyms)]
 /// Create a GitHub Check Run with Lintel validation annotations
 struct CLI {
-    #[bpaf(external(validate_args))]
-    args: ValidateArgs,
+    #[bpaf(external(commands))]
+    command: Commands,
+}
+
+#[derive(Debug, Clone, Bpaf)]
+enum Commands {
+    /// Validate files and post results as a GitHub Check Run
+    Run(#[bpaf(external(validate_args))] ValidateArgs),
+
+    #[bpaf(command("version"))]
+    /// Print version information
+    Version,
 }
 
 // -----------------------------------------------------------------------
@@ -69,18 +79,24 @@ struct Annotation {
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = cli().run();
-    match run(cli).await {
-        Ok(had_errors) => {
-            if had_errors {
-                ExitCode::from(1)
-            } else {
-                ExitCode::SUCCESS
+    match cli.command {
+        Commands::Version => {
+            println!("lintel-github-action {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
+        Commands::Run(args) => match run(args).await {
+            Ok(had_errors) => {
+                if had_errors {
+                    ExitCode::from(1)
+                } else {
+                    ExitCode::SUCCESS
+                }
             }
-        }
-        Err(e) => {
-            eprintln!("Error: {e:#}");
-            ExitCode::from(2)
-        }
+            Err(e) => {
+                eprintln!("Error: {e:#}");
+                ExitCode::from(2)
+            }
+        },
     }
 }
 
@@ -237,8 +253,7 @@ async fn patch_remaining_annotations(
     Ok(())
 }
 
-async fn run(cli: CLI) -> Result<bool> {
-    let mut args = cli.args;
+async fn run(mut args: ValidateArgs) -> Result<bool> {
     merge_config(&mut args);
 
     // Read required environment variables

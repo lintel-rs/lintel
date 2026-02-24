@@ -76,6 +76,15 @@ jobs:
       - name: Build
         run: nix build ${{ matrix.nix-package }}
 
+      - name: Smoke test
+        run: ./result/bin/${{ matrix.binary }} version
+
+      - name: Verify static linking
+        if: contains(matrix.target, 'musl')
+        run: |
+          file ./result/bin/${{ matrix.binary }}
+          file ./result/bin/${{ matrix.binary }} | grep -q "statically linked"
+
       - name: Package
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
 

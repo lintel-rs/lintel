@@ -1,25 +1,25 @@
 [package]
 name = "lintel-annotate"
-version = "0.0.10"
-edition.workspace = true
+version = "0.0.11"
 authors.workspace = true
-description = "Add schema annotations to JSON, YAML, and TOML files"
-license.workspace = true
-repository.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "validation", "annotation", "linter"]
-categories = ["development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Add schema annotations to JSON, YAML, and TOML files"
 
 [lints]
 workspace = true
 
 [dependencies]
-lintel-config = { version = "0.0.6", path = "../lintel-config" }
-lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
-lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
-schemastore = { version = "0.0.9", path = "../schemastore" }
-bpaf = { version = "0.9", features = ["derive"] }
 anyhow = "1"
+bpaf = { version = "0.9", features = ["derive"] }
+lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
+lintel-config = { version = "0.0.6", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
+lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
+schemastore = { version = "0.0.9", path = "../schemastore" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"

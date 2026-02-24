@@ -18,7 +18,7 @@ Transforms JSON Schema documents from any draft (04, 06, 07, 2019-09) to draft 2
 | `definitions`                           | `$defs`                                          |
 | `id`                                    | `$id` (draft-04 only, on schema-like objects)    |
 | `$ref: "#/definitions/..."`             | `$ref: "#/$defs/..."`                            |
-| `items: [...]  ` (array form)           | `prefixItems` + `items` (from `additionalItems`) |
+| `items: [...]` (array form)             | `prefixItems` + `items` (from `additionalItems`) |
 | `exclusiveMinimum: true` + `minimum: N` | `exclusiveMinimum: N`                            |
 | `exclusiveMaximum: true` + `maximum: N` | `exclusiveMaximum: N`                            |
 | `dependencies` (mixed)                  | `dependentSchemas` + `dependentRequired`         |

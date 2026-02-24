@@ -1,19 +1,19 @@
 [package]
 name = "jsonschema-explain"
 version = "0.2.3"
-edition.workspace = true
 authors.workspace = true
-description = "Render JSON Schema as human-readable terminal documentation"
-license.workspace = true
-repository.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "documentation", "terminal", "cli"]
-categories = ["command-line-utilities", "development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Render JSON Schema as human-readable terminal documentation"
 
 [lints]
 workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
-serde_json = "1"
 markdown-to-ansi = "0.2.0"
+serde_json = "1"

@@ -9,6 +9,7 @@ use tracing_subscriber::prelude::*;
 use lintel_annotate::annotate_args;
 use lintel_check::{CheckArgs, check_args};
 use lintel_explain::explain_args;
+use lintel_format::{FormatArgs, format_args};
 use lintel_identify::identify_args;
 use lintel_reporters::{ReporterKind, make_reporter};
 use lintel_validate::{ValidateArgs, validate_args};
@@ -132,6 +133,13 @@ enum Commands {
         #[bpaf(external(annotate_args))] lintel_annotate::AnnotateArgs,
     ),
 
+    #[bpaf(command("format"))]
+    /// Format JSON, YAML, TOML, and Markdown files
+    Format(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(format_args))] FormatArgs,
+    ),
+
     #[bpaf(command("cache"), hide, fallback_to_usage)]
     /// Cache debugging tools
     Cache(
@@ -236,6 +244,10 @@ async fn main() -> ExitCode {
         Commands::Annotate(global, args) => {
             setup_tracing(&global);
             commands::annotate::run(&args, global.verbose).await
+        }
+        Commands::Format(global, args) => {
+            setup_tracing(&global);
+            commands::format::run(&args, global.verbose)
         }
         Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,

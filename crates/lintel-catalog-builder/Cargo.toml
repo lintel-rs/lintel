@@ -1,39 +1,39 @@
 [package]
 name = "lintel-catalog-builder"
-version = "0.0.8"
-edition.workspace = true
+version = "0.0.9"
 authors.workspace = true
-description = "Build a custom schema catalog from local schemas and external sources"
-license.workspace = true
-repository.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "catalog"]
-categories = ["command-line-utilities", "development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Build a custom schema catalog from local schemas and external sources"
 
 [lints]
 workspace = true
 
 [dependencies]
-schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
-lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
-jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
-jsonschema = "0.42"
+anyhow = "1"
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
+futures-util = "0.3"
+glob-match = "0.2"
+jsonschema = "0.42"
+jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
+lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
+percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+schemars = "1"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-schemars = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
 toml = "1.0"
-anyhow = "1"
-futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = "0.4"
 url = "2"
-semver = "1"
-percent-encoding = "2"
-glob-match = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,23 +1,23 @@
 [package]
 name = "lintel-github-action"
-version = "0.0.9"
-edition.workspace = true
+version = "0.0.10"
 authors.workspace = true
-description = "GitHub Action binary for Lintel — creates Check Runs with inline annotations"
-license.workspace = true
-repository.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "validation", "github-action", "linter"]
-categories = ["command-line-utilities", "development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "GitHub Action binary for Lintel — creates Check Runs with inline annotations"
 
 [lints]
 workspace = true
 
 [dependencies]
-lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
-bpaf = { version = "0.9", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
+bpaf = { version = "0.9", features = ["derive"] }
+lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
