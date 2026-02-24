@@ -93,16 +93,16 @@ pub struct MissingLicenseSection {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("README.md is missing the GitHub CI badge")]
+#[error("README.md is missing the GitHub badge")]
 #[diagnostic(
-    code(furnish::missing_ci_badge),
+    code(furnish::missing_github_badge),
     severity(Warning),
     help("cargo furnish update --force {crate_name}")
 )]
-pub struct MissingCiBadge {
+pub struct MissingGithubBadge {
     #[source_code]
     pub src: NamedSource<String>,
-    #[label("expected [![CI](...)](...) badge")]
+    #[label("expected [![GitHub](...)](...) badge")]
     pub span: SourceSpan,
     pub crate_name: String,
 }
@@ -172,8 +172,8 @@ pub fn check_readme(
         }));
     }
 
-    if !content.contains("actions/workflows/") {
-        diagnostics.push(Box::new(MissingCiBadge {
+    if !content.contains("img.shields.io/github/stars/") {
+        diagnostics.push(Box::new(MissingGithubBadge {
             src: src(),
             span: (0, first_line_len).into(),
             crate_name: crate_name.to_string(),
@@ -293,9 +293,10 @@ pub fn generate_readme(params: &ReadmeParams<'_>) -> String {
         out,
         "[![docs.rs](https://docs.rs/{crate_name}/badge.svg)](https://docs.rs/{crate_name})"
     );
+    let repo_path = repository.trim_start_matches("https://github.com/");
     let _ = writeln!(
         out,
-        "[![CI]({repository}/actions/workflows/ci.yml/badge.svg)]({repository}/actions/workflows/ci.yml)"
+        "[![GitHub](https://img.shields.io/github/stars/{repo_path}?style=flat)]({repository})"
     );
     let _ = writeln!(
         out,

@@ -68,15 +68,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -248,7 +239,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cargo-furnish"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -418,17 +409,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -566,6 +546,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -1237,10 +1218,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-explain"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ansi-term-styles",
  "markdown-to-ansi",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonschema-migrate"
+version = "0.1.0"
+dependencies = [
+ "regex-syntax",
  "serde_json",
 ]
 
@@ -1281,7 +1270,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1312,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1327,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-benchmark"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1338,12 +1327,13 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
  "futures-util",
  "glob-match",
+ "jsonschema-migrate",
  "lintel-schema-cache",
  "percent-encoding",
  "reqwest",
@@ -1362,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1371,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-cli-common"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "bpaf",
  "humantime",
@@ -1379,7 +1369,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "anyhow",
  "glob-match",
@@ -1392,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bpaf",
  "lintel-catalog-builder",
@@ -1403,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1421,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1434,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1452,7 +1442,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "ansi-term-styles",
  "lintel-validate",
@@ -1461,7 +1451,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1478,7 +1468,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1494,6 +1484,7 @@ dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "serde_yaml",
@@ -1506,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validation-cache"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1631,7 +1622,7 @@ dependencies = [
 
 [[package]]
 name = "npm-release-binaries"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bpaf",
  "flate2",
@@ -2303,7 +2294,7 @@ dependencies = [
 
 [[package]]
 name = "schema-catalog"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "schemars",
  "serde",
@@ -2337,12 +2328,11 @@ dependencies = [
 
 [[package]]
 name = "schemastore"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "globset",
  "schema-catalog",
- "serde",
  "serde_json",
 ]
 
@@ -2997,6 +2987,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
 name = "typenum"
@@ -3801,20 +3797,23 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "2.4.2"
+version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
+checksum = "6e499faf5c6b97a0d086f4a8733de6d47aee2252b8127962439d8d4311a73f72"
 dependencies = [
- "arbitrary",
  "crc32fast",
- "crossbeam-utils",
- "displaydoc",
  "flate2",
  "indexmap",
  "memchr",
- "thiserror 2.0.18",
+ "typed-path",
  "zopfli",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c745c48e1007337ed136dc99df34128b9faa6ed542d80a1c673cf55a6d7236c8"
 
 [[package]]
 name = "zmij"

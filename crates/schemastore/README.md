@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/schemastore.svg)](https://crates.io/crates/schemastore)
 [![docs.rs](https://docs.rs/schemastore/badge.svg)](https://docs.rs/schemastore)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/schemastore.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Parse and match files against the [SchemaStore](https://www.schemastore.org/) catalog.
@@ -21,8 +21,10 @@ use schemastore::{parse_catalog, CompiledCatalog, CATALOG_URL};
 
 // Example with inline data:
 let value = serde_json::json!({
+    "version": 1,
     "schemas": [{
         "name": "TypeScript",
+        "description": "TypeScript compiler configuration",
         "url": "https://json.schemastore.org/tsconfig.json",
         "fileMatch": ["tsconfig.json"]
     }]
@@ -36,10 +38,11 @@ assert!(compiled.find_schema("tsconfig.json", "tsconfig.json").is_some());
 ## API
 
 - `CATALOG_URL` — the well-known URL for the `SchemaStore` catalog JSON
-- `Catalog` / `SchemaEntry` — serde types for the catalog
 - `parse_catalog(Value)` — deserialize the catalog from a `serde_json::Value`
 - `CompiledCatalog::compile(&Catalog)` — pre-compile all `fileMatch` globs
 - `CompiledCatalog::find_schema(path, file_name)` — look up the schema URL for a file path
+
+Catalog types (`Catalog`, `SchemaEntry`, etc.) live in the [`schema-catalog`](https://crates.io/crates/schema-catalog) crate.
 
 Bare filename patterns (e.g. `tsconfig.json`) are automatically expanded to also match nested paths (`**/tsconfig.json`). Negation patterns (starting with `!`) are skipped.
 

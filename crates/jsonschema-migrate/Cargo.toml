@@ -1,0 +1,20 @@
+[package]
+name = "jsonschema-migrate"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+description = "Migrate JSON Schema documents to draft 2020-12"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "migration"]
+categories = ["development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+regex-syntax = "0.8"

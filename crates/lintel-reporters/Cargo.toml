@@ -1,6 +1,6 @@
 [package]
 name = "lintel-reporters"
-version = "0.0.8"
+version = "0.0.9"
 edition.workspace = true
 authors.workspace = true
 description = "Reporter implementations for Lintel — pretty, text, and GitHub Actions output"
@@ -15,5 +15,5 @@ workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
-lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
 miette = { version = "7", features = ["fancy"] }

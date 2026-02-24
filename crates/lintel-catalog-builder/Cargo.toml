@@ -1,6 +1,6 @@
 [package]
 name = "lintel-catalog-builder"
-version = "0.0.7"
+version = "0.0.8"
 edition.workspace = true
 authors.workspace = true
 description = "Build a custom schema catalog from local schemas and external sources"
@@ -14,8 +14,9 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
-lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
+schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
+jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }

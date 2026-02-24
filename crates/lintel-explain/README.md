@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-explain.svg)](https://crates.io/crates/lintel-explain)
 [![docs.rs](https://docs.rs/lintel-explain/badge.svg)](https://docs.rs/lintel-explain)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-explain.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Inspect JSON Schema documentation for specific properties and sub-schemas.

@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/lintel-check.svg)](https://crates.io/crates/lintel-check)
 [![docs.rs](https://docs.rs/lintel-check/badge.svg)](https://docs.rs/lintel-check)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/lintel-check.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Check command for [Lintel](https://github.com/lintel-rs/lintel). Provides the `lintel check` subcommand which runs schema validation and additional checks.

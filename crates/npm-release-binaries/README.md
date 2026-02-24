@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/npm-release-binaries.svg)](https://crates.io/crates/npm-release-binaries)
 [![docs.rs](https://docs.rs/npm-release-binaries/badge.svg)](https://docs.rs/npm-release-binaries)
-[![CI](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml/badge.svg)](https://github.com/lintel-rs/lintel/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/npm-release-binaries.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
 Generate and publish platform-specific npm packages from Rust binaries
