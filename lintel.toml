@@ -1,1 +1,1 @@
-exclude = ["crates/lintel-check/testdata/**", "e2e-tests/**"]
+exclude = ["**/testdata/**", "e2e-tests/**"]

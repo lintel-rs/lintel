@@ -87,7 +87,9 @@ let
   # Static musl packages (Linux only)
   staticPackages = pkgs.lib.optionalAttrs (craneLibStatic != null) (
     let
-      staticCargoArtifacts = craneLibStatic.buildDepsOnly commonArgs;
+      staticCargoArtifacts = craneLibStatic.buildDepsOnly (
+        commonArgs // { CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static"; }
+      );
 
       mkStaticPackage =
         cratePath:
@@ -100,6 +102,7 @@ let
             cargoArtifacts = staticCargoArtifacts;
             inherit (meta) pname;
             cargoExtraArgs = "-p ${meta.pname}";
+            CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
           }
         );
     in

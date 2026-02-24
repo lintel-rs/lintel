@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -59,21 +58,6 @@ pub struct MissingCategories {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("[package] field ordering is wrong (expected: {expected})")]
-#[diagnostic(
-    code(furnish::field_order),
-    severity(Warning),
-    help("autofixable with cargo furnish check --fix")
-)]
-pub struct WrongFieldOrder {
-    #[source_code]
-    pub src: NamedSource<String>,
-    #[label("fields are in wrong order here")]
-    pub span: SourceSpan,
-    pub expected: String,
-}
-
-#[derive(Debug, Error, Diagnostic)]
 #[error("{field} should use .workspace = true")]
 #[diagnostic(
     code(furnish::not_workspace_inherited),
@@ -86,21 +70,6 @@ pub struct NotWorkspaceInherited {
     #[label("should be {field}.workspace = true")]
     pub span: SourceSpan,
     pub field: String,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("top-level section ordering is wrong (expected: {expected})")]
-#[diagnostic(
-    code(furnish::section_order),
-    severity(Warning),
-    help("autofixable with cargo furnish check --fix")
-)]
-pub struct WrongSectionOrder {
-    #[source_code]
-    pub src: NamedSource<String>,
-    #[label("sections are in wrong order")]
-    pub span: SourceSpan,
-    pub expected: String,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -159,15 +128,6 @@ const PACKAGE_FIELD_ORDER: &[&str] = &[
     "homepage",
     "keywords",
     "categories",
-];
-
-/// Desired order of top-level sections.
-const SECTION_ORDER: &[&str] = &[
-    "package",
-    "lints",
-    "dependencies",
-    "build-dependencies",
-    "dev-dependencies",
 ];
 
 /// Find the byte offset and length of a line containing `needle` in `content`.
@@ -254,7 +214,7 @@ pub fn check_cargo_toml(
 
     check_package_fields(&ctx, &name, description.as_ref(), &mut diagnostics);
 
-    check_field_and_section_order(&ctx, &mut diagnostics);
+    check_lints_section(&ctx, &mut diagnostics);
 
     Ok((CrateMetadata { name, description }, diagnostics))
 }
@@ -331,54 +291,14 @@ fn check_package_fields(
     }
 }
 
-fn check_field_and_section_order(
+fn check_lints_section(
     ctx: &CargoTomlCheck<'_>,
     diagnostics: &mut Vec<Box<dyn Diagnostic + Send + Sync>>,
 ) {
-    let known_fields: HashSet<&str> = PACKAGE_FIELD_ORDER.iter().copied().collect();
-    let current_fields: Vec<&str> = ctx
-        .package
-        .iter()
-        .map(|(k, _)| k)
-        .filter(|k| known_fields.contains(k))
-        .collect();
-    let expected_fields: Vec<&str> = PACKAGE_FIELD_ORDER
-        .iter()
-        .copied()
-        .filter(|f| ctx.package.get(f).is_some())
-        .collect();
-    if current_fields != expected_fields {
-        diagnostics.push(Box::new(WrongFieldOrder {
-            src: (ctx.src)(ctx.content),
-            span: ctx.pkg_span.into(),
-            expected: expected_fields.join(", "),
-        }));
-    }
-
     if ctx.ws.has_workspace_lints && ctx.doc.get("lints").is_none() {
         diagnostics.push(Box::new(MissingLints {
             src: (ctx.src)(ctx.content),
             span: ctx.pkg_span.into(),
-        }));
-    }
-
-    let current_sections: Vec<&str> = ctx
-        .doc
-        .as_table()
-        .iter()
-        .map(|(k, _)| k)
-        .filter(|k| SECTION_ORDER.contains(k))
-        .collect();
-    let expected_sections: Vec<&str> = SECTION_ORDER
-        .iter()
-        .copied()
-        .filter(|s| ctx.doc.get(s).is_some() || (*s == "lints" && ctx.ws.has_workspace_lints))
-        .collect();
-    if current_sections != expected_sections {
-        diagnostics.push(Box::new(WrongSectionOrder {
-            src: (ctx.src)(ctx.content),
-            span: ctx.pkg_span.into(),
-            expected: expected_sections.join(", "),
         }));
     }
 }
@@ -447,63 +367,20 @@ struct RebuildContext<'a> {
     force: bool,
 }
 
-fn rebuild_package_fields(package: &mut Table, ctx: &RebuildContext<'_>, meta: &ResolvedMetadata) {
-    let name = package
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string();
-    let version = package
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("0.0.1")
-        .to_string();
-
-    let known_fields: HashSet<&str> = PACKAGE_FIELD_ORDER.iter().copied().collect();
-    let unknown_fields: Vec<(String, Item)> = package
-        .iter()
-        .filter(|(k, _)| !known_fields.contains(k))
-        .map(|(k, v)| (k.to_string(), v.clone()))
-        .collect();
-
-    let keys_to_remove: Vec<String> = package.iter().map(|(k, _)| k.to_string()).collect();
-    for key in &keys_to_remove {
-        package.remove(key);
+fn update_package_fields(package: &mut Table, ctx: &RebuildContext<'_>, meta: &ResolvedMetadata) {
+    if let Some(ref desc) = meta.description {
+        package.insert("description", toml_edit::value(desc.as_str()));
     }
-
-    package.insert("name", toml_edit::value(&name));
-    package.insert("version", toml_edit::value(&version));
-
-    for field in &PACKAGE_FIELD_ORDER[2..] {
-        match *field {
-            "description" => {
-                if let Some(ref desc) = meta.description {
-                    package.insert("description", toml_edit::value(desc.as_str()));
-                }
-            }
-            "keywords" => {
-                if let Some(ref kws) = meta.keywords {
-                    let arr: toml_edit::Array =
-                        kws.iter().map(|s| Value::from(s.as_str())).collect();
-                    package.insert("keywords", Item::Value(Value::Array(arr)));
-                }
-            }
-            "categories" => {
-                if let Some(ref cats) = meta.categories {
-                    let arr: toml_edit::Array =
-                        cats.iter().map(|s| Value::from(s.as_str())).collect();
-                    package.insert("categories", Item::Value(Value::Array(arr)));
-                }
-            }
-            f if WORKSPACE_INHERITABLE.contains(&f) => {
-                insert_workspace_field(package, ctx, f);
-            }
-            _ => {}
-        }
+    if let Some(ref kws) = meta.keywords {
+        let arr: toml_edit::Array = kws.iter().map(|s| Value::from(s.as_str())).collect();
+        package.insert("keywords", Item::Value(Value::Array(arr)));
     }
-
-    for (key, val) in &unknown_fields {
-        package.insert(key, val.clone());
+    if let Some(ref cats) = meta.categories {
+        let arr: toml_edit::Array = cats.iter().map(|s| Value::from(s.as_str())).collect();
+        package.insert("categories", Item::Value(Value::Array(arr)));
+    }
+    for &field in WORKSPACE_INHERITABLE {
+        insert_workspace_field(package, ctx, field);
     }
 }
 
@@ -576,15 +453,13 @@ pub fn fix_cargo_toml(
         ws,
         force: update.force,
     };
-    rebuild_package_fields(package, &rebuild_ctx, &meta);
+    update_package_fields(package, &rebuild_ctx, &meta);
 
     if ws.has_workspace_lints && doc.get("lints").is_none() {
         let mut lints = Table::new();
         lints.insert("workspace", toml_edit::value(true));
         doc.insert("lints", Item::Table(lints));
     }
-
-    reorder_sections(&mut doc);
 
     let result = doc.to_string();
     std::fs::write(&cargo_toml_path, &result)
@@ -622,67 +497,6 @@ fn get_string_array(table: &Table, key: &str) -> Option<Vec<String>> {
             .filter_map(|v| v.as_str().map(String::from))
             .collect()
     })
-}
-
-/// Reorder top-level sections by re-serializing the document.
-///
-/// `toml_edit`'s `sort_values_by` reorders the iteration map but not the
-/// serialized output. We work around this by serializing each section into
-/// a temporary document, then concatenating them in the canonical order.
-fn reorder_sections(doc: &mut DocumentMut) {
-    fn section_rank(key: &str) -> usize {
-        SECTION_ORDER
-            .iter()
-            .position(|&s| s == key)
-            .unwrap_or(SECTION_ORDER.len())
-    }
-
-    let keys: Vec<String> = doc.as_table().iter().map(|(k, _)| k.to_string()).collect();
-    let mut sorted_keys = keys.clone();
-    sorted_keys.sort_by_key(|k| section_rank(k));
-
-    // Rebuild the TOML string with sections in the correct order.
-    // We serialize the whole document, then split and reorder sections
-    // at the string level to preserve formatting within each section.
-    let content = doc.to_string();
-    let mut sections: Vec<(String, String)> = Vec::new();
-    let mut current_key = String::new();
-    let mut current_lines: Vec<&str> = Vec::new();
-
-    for line in content.lines() {
-        if line.starts_with('[')
-            && !line.starts_with("[[")
-            && let Some(end) = line.find(']')
-        {
-            // Flush previous section
-            if !current_key.is_empty() {
-                let body = current_lines.join("\n");
-                sections.push((current_key.clone(), body.trim_end().to_string()));
-                current_lines.clear();
-            }
-            current_key = line[1..end].to_string();
-        }
-        current_lines.push(line);
-    }
-    // Flush last section
-    if !current_key.is_empty() {
-        let body = current_lines.join("\n");
-        sections.push((current_key, body.trim_end().to_string()));
-    }
-
-    // Sort sections by canonical order
-    sections.sort_by_key(|(k, _)| section_rank(k));
-
-    let mut out = sections
-        .iter()
-        .map(|(_, body)| body.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    out.push('\n');
-
-    if let Ok(new_doc) = out.parse::<DocumentMut>() {
-        *doc = new_doc;
-    }
 }
 
 #[cfg(test)]

@@ -15,7 +15,6 @@ Create a `lintel-catalog.toml` in your catalog repo:
 
 ```toml
 [catalog]
-
 # Output targets
 [target.local]
 type = "dir"
