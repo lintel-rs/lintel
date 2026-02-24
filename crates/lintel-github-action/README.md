@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: lintel-rs/action@v1
+      - uses: lintel-rs/action@v0
 ```
 
 With zero configuration Lintel auto-discovers files and matches them against schemas from the [SchemaStore](https://www.schemastore.org/) catalog.
@@ -44,7 +44,7 @@ With zero configuration Lintel auto-discovers files and matches them against sch
 ### Validate specific paths
 
 ```yaml
-- uses: lintel-rs/action@v1
+- uses: lintel-rs/action@v0
   with:
     paths: "config/**/*.yaml src/*.json"
 ```
@@ -52,7 +52,7 @@ With zero configuration Lintel auto-discovers files and matches them against sch
 ### Exclude directories
 
 ```yaml
-- uses: lintel-rs/action@v1
+- uses: lintel-rs/action@v0
   with:
     exclude: "vendor/**, node_modules/**"
 ```
@@ -60,7 +60,7 @@ With zero configuration Lintel auto-discovers files and matches them against sch
 ### Pin a specific version
 
 ```yaml
-- uses: lintel-rs/action@v1
+- uses: lintel-rs/action@v0
   with:
     version: v0.0.9
 ```
