@@ -34,6 +34,8 @@ url = "2"
 semver = "1"
 percent-encoding = "2"
 glob-match = "0.2"
+minijinja = { version = "2", features = ["builtins"] }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 [dev-dependencies]
 tempfile = "3"

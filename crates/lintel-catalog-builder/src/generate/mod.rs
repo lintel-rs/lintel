@@ -12,6 +12,7 @@ use schema_catalog::SchemaEntry;
 use tracing::{info, warn};
 
 use crate::catalog::build_output_catalog;
+use crate::download::ProcessedSchemas;
 use crate::targets::{AnyTarget, OutputContext, Target};
 use lintel_catalog_builder::config::{CatalogConfig, load_config};
 
@@ -25,6 +26,7 @@ struct GenerateContext<'a> {
     config: &'a CatalogConfig,
     config_path: &'a Path,
     config_dir: &'a Path,
+    processed: &'a ProcessedSchemas,
 }
 
 /// Run the `generate` subcommand.
@@ -70,13 +72,6 @@ pub async fn run(
         .max_concurrent_requests(concurrency)
         .build();
 
-    let ctx = GenerateContext {
-        cache: &cache,
-        config: &config,
-        config_path: &config_path,
-        config_dir,
-    };
-
     // Process each target
     for (target_name, target_config) in &config.target {
         if let Some(filter) = target_filter
@@ -99,6 +94,15 @@ pub async fn run(
                 })?;
         }
         tokio::fs::create_dir_all(&output_dir).await?;
+
+        let processed = ProcessedSchemas::new(&output_dir);
+        let ctx = GenerateContext {
+            cache: &cache,
+            config: &config,
+            config_path: &config_path,
+            config_dir,
+            processed: &processed,
+        };
 
         generate_for_target(&ctx, &target, &output_dir)
             .await
@@ -141,6 +145,7 @@ async fn generate_for_target(
             group_dir: &group_dir,
             group_key,
             trimmed_base,
+            processed: ctx.processed,
         };
         for (key, schema_def) in &group_config.schemas {
             let entry =
@@ -168,6 +173,7 @@ async fn generate_for_target(
         cache: ctx.cache,
         base_url,
         schemas_dir: &schemas_dir,
+        processed: ctx.processed,
     };
     for (source_name, source_config) in &ctx.config.sources {
         info!(source = %source_name, url = %source_config.url, "processing source");
@@ -207,7 +213,10 @@ async fn generate_for_target(
     info!(entries = entries.len(), "writing output files");
     let catalog_groups_vec: Vec<schema_catalog::CatalogGroup> =
         catalog_groups.into_values().collect();
-    let groups_meta_vec: Vec<(String, String)> = groups_meta.into_values().collect();
+    let groups_meta_vec: Vec<(String, String, String)> = groups_meta
+        .into_iter()
+        .map(|(k, (n, d))| (k, n, d))
+        .collect();
     let catalog = build_output_catalog(
         ctx.config.catalog.title.clone(),
         entries,
@@ -219,7 +228,9 @@ async fn generate_for_target(
         config_path: ctx.config_path,
         catalog: &catalog,
         groups_meta: &groups_meta_vec,
+        base_url,
         source_count: ctx.config.sources.len(),
+        processed: ctx.processed,
     };
 
     target.finalize(&output_ctx).await?;

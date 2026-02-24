@@ -9,7 +9,7 @@ use lintel_schema_cache::SchemaCache;
 use schema_catalog::SchemaEntry;
 use tracing::{debug, info, warn};
 
-use crate::download::fetch_one;
+use crate::download::{ProcessedSchemas, fetch_one};
 use crate::refs::{RefRewriteContext, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::{OrganizeEntry, SourceConfig};
 
@@ -20,6 +20,7 @@ pub(super) struct SourceContext<'a> {
     pub(super) cache: &'a SchemaCache,
     pub(super) base_url: &'a str,
     pub(super) schemas_dir: &'a Path,
+    pub(super) processed: &'a ProcessedSchemas,
 }
 
 /// Information about a source schema being processed.
@@ -109,13 +110,11 @@ pub(super) async fn process_source(
             );
         }
 
-        // Track organize group membership
-        if target_dir != source_name {
-            organize_schemas
-                .entry(target_dir.clone())
-                .or_default()
-                .push(schema.name.clone());
-        }
+        // Track group membership (including the source's own default group)
+        organize_schemas
+            .entry(target_dir.clone())
+            .or_default()
+            .push(schema.name.clone());
 
         let local_url = format!("{base_url}/schemas/{target_dir}/{slug}/latest.json");
         entry_info.push(SourceSchemaInfo {
@@ -135,6 +134,7 @@ pub(super) async fn process_source(
     let cache = ctx.cache.clone();
     let schemas_dir = ctx.schemas_dir.to_path_buf();
     let base_url_owned = base_url.to_string();
+    let processed = ctx.processed.clone();
 
     let mut indexed_entries: Vec<(usize, SchemaEntry)> =
         stream::iter(entry_info.into_iter().enumerate())
@@ -142,11 +142,13 @@ pub(super) async fn process_source(
                 let cache = cache.clone();
                 let schemas_dir = schemas_dir.clone();
                 let base_url = base_url_owned.clone();
+                let processed = processed.clone();
                 async move {
                     let ctx = SourceSchemaProcessContext {
                         cache: &cache,
                         schemas_dir: &schemas_dir,
                         base_url: &base_url,
+                        processed: &processed,
                     };
                     let entry = process_one_source_schema(&ctx, info).await?;
                     Ok::<_, anyhow::Error>((i, entry))
@@ -169,8 +171,8 @@ pub(super) async fn process_source(
     let skipped = entries.len() - downloaded;
     info!(downloaded, skipped, "source processing complete");
 
-    // Build organize groups (key + matched schema names)
-    let groups: Vec<(String, Vec<String>)> = source_config
+    // Build groups: explicit organize keys + the source's own default group
+    let mut groups: Vec<(String, Vec<String>)> = source_config
         .organize
         .keys()
         .filter_map(|dir_name| {
@@ -178,6 +180,10 @@ pub(super) async fn process_source(
             Some((dir_name.clone(), schemas))
         })
         .collect();
+    // Remaining entries are schemas that fell through to the source default
+    for (key, schemas) in organize_schemas {
+        groups.push((key, schemas));
+    }
 
     Ok((entries, groups))
 }
@@ -187,6 +193,7 @@ struct SourceSchemaProcessContext<'a> {
     cache: &'a SchemaCache,
     schemas_dir: &'a Path,
     base_url: &'a str,
+    processed: &'a ProcessedSchemas,
 }
 
 /// Process a single source schema end-to-end: fetch latest + versions
@@ -234,6 +241,7 @@ async fn process_one_source_schema(
                 base_url_for_shared: &shared_base_url,
                 already_downloaded: &mut already_downloaded,
                 source_url: Some(source_url.clone()),
+                processed: ctx.processed,
             };
 
             debug!(schema = %info.name, "processing schema refs");

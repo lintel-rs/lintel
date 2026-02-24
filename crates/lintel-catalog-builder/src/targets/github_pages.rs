@@ -57,6 +57,7 @@ mod tests {
     use schema_catalog::SchemaEntry;
 
     use crate::catalog::build_output_catalog;
+    use crate::download::ProcessedSchemas;
 
     use super::*;
 
@@ -64,12 +65,15 @@ mod tests {
     async fn write_gh_pages_creates_nojekyll_and_index() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let catalog = build_output_catalog(None, vec![], vec![]);
+        let processed = ProcessedSchemas::new(dir.path());
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: Path::new("lintel-catalog.toml"),
             catalog: &catalog,
             groups_meta: &[],
+            base_url: "https://example.com/",
             source_count: 0,
+            processed: &processed,
         };
         let target = GitHubPagesTarget {
             base_url: "https://example.com/".into(),
@@ -86,31 +90,43 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn html_escape_special_chars() {
-        assert_eq!(
-            super::super::html_escape("<b>\"hi\"&</b>"),
-            "&lt;b&gt;&quot;hi&quot;&amp;&lt;/b&gt;"
-        );
-    }
-
-    #[test]
-    fn generate_index_html_contains_schema() {
+    #[tokio::test]
+    async fn generate_site_contains_schema() -> Result<()> {
+        let dir = tempfile::tempdir()?;
         let catalog = build_output_catalog(
             None,
             vec![SchemaEntry {
                 name: "Test Schema".into(),
                 description: "A test".into(),
-                url: "schemas/test.json".into(),
+                url: "https://example.com/schemas/test/latest.json".into(),
                 source_url: None,
                 file_match: vec!["*.test".into()],
                 versions: BTreeMap::new(),
             }],
             vec![],
         );
-        let html = super::super::generate_index_html(&catalog, &[]);
-        assert!(html.contains("Test Schema"));
-        assert!(html.contains("A test"));
-        assert!(html.contains("schemas/test.json"));
+        let processed = ProcessedSchemas::new(dir.path());
+        let ctx = OutputContext {
+            output_dir: dir.path(),
+            config_path: Path::new("lintel-catalog.toml"),
+            catalog: &catalog,
+            groups_meta: &[],
+            base_url: "https://example.com/",
+            source_count: 0,
+            processed: &processed,
+        };
+        crate::html::generate_site(&ctx).await?;
+
+        let index = std::fs::read_to_string(dir.path().join("index.html"))?;
+        assert!(index.contains("Test Schema"));
+        assert!(index.contains("A test"));
+
+        // Schema detail page should exist
+        let schema_page = dir.path().join("schemas/test/index.html");
+        assert!(schema_page.exists());
+        let schema_html = std::fs::read_to_string(&schema_page)?;
+        assert!(schema_html.contains("Test Schema"));
+        assert!(schema_html.contains("*.test"));
+        Ok(())
     }
 }

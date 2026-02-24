@@ -7,6 +7,8 @@ use lintel_schema_cache::SchemaCache;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, info, warn};
 
+use crate::download::ProcessedSchemas;
+
 /// Shared context for [`resolve_and_rewrite`], grouping cross-cutting state
 /// that would otherwise require many individual arguments.
 pub struct RefRewriteContext<'a> {
@@ -17,6 +19,7 @@ pub struct RefRewriteContext<'a> {
     /// Original source URL of the schema being processed. Used to resolve
     /// relative `$ref` values (e.g. `./rule.json`) against the schema's origin.
     pub source_url: Option<String>,
+    pub processed: &'a ProcessedSchemas,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -325,7 +328,7 @@ pub async fn resolve_and_rewrite_value(
         if let Some(ref source_url) = ctx.source_url {
             crate::download::inject_lintel_extra(value, source_url, ctx.cache);
         }
-        crate::download::write_schema_json(value, schema_dest).await?;
+        crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
         return Ok(());
     }
 
@@ -361,7 +364,7 @@ pub async fn resolve_and_rewrite_value(
     if let Some(ref source_url) = ctx.source_url {
         crate::download::inject_lintel_extra(value, source_url, ctx.cache);
     }
-    crate::download::write_schema_json(value, schema_dest).await?;
+    crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
 
     // Process and write each dependency
     write_dep_schemas(ctx, dep_values, &url_map).await?;
@@ -506,7 +509,7 @@ async fn write_dep_schemas(
         if let Some(ref source_url) = source_url {
             crate::download::inject_lintel_extra(&mut dep_value, source_url, ctx.cache);
         }
-        crate::download::write_schema_json(&dep_value, &dep_dest).await?;
+        crate::download::write_schema_json(&dep_value, &dep_dest, ctx.processed).await?;
     }
 
     Ok(())

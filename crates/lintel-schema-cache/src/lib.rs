@@ -185,6 +185,19 @@ impl SchemaCache {
             .insert(uri.to_string(), value);
     }
 
+    /// Look up a schema by URI from the in-memory cache only.
+    ///
+    /// Returns `None` if the URI is not in memory. Does not check disk cache
+    /// or fetch from the network.
+    #[allow(clippy::missing_panics_doc)] // Mutex poisoning is unreachable
+    pub fn get(&self, uri: &str) -> Option<Value> {
+        self.memory_cache
+            .lock()
+            .expect("memory cache poisoned")
+            .get(uri)
+            .cloned()
+    }
+
     /// Return the SHA-256 hex digest of the raw content last fetched for `uri`.
     ///
     /// Returns `None` if the URI has not been fetched or was inserted via

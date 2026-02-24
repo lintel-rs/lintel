@@ -1,0 +1,13 @@
+<div class="schema-card">
+  <div class="schema-card-name">
+    <a href="{{ site.base_path }}{{ schema.url }}">{{ schema.name }}</a>
+  </div>
+  {% if schema.description %}
+  <div class="schema-card-desc">{{ schema.description }}</div>
+  {% endif %} {% if schema.file_match %}
+  <div class="schema-card-patterns">
+    {% for pattern in schema.file_match %}<code>{{ pattern }}</code> {% endfor
+    %}
+  </div>
+  {% endif %}
+</div>

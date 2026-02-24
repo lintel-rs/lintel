@@ -1,0 +1,23 @@
+{% extends "base.html" %} {% block content %}
+<div class="home-header">
+  <h1>{{ site.title }}</h1>
+  <span class="home-stats"
+    >{{ site.schema_count }} schemas &middot; {{ site.group_count }}
+    groups</span
+  >
+</div>
+
+{% if groups %}
+<section class="card-grid">
+  {% for group in groups %} {% include "components/group_card.html" %} {% endfor
+  %}
+</section>
+{% endif %} {% if unassigned %}
+<section class="unassigned-section">
+  <h2>Other Schemas</h2>
+  <div class="schema-list">
+    {% for schema in unassigned %} {% include "components/schema_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %} {% endblock %}
