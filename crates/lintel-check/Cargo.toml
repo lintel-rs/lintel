@@ -15,5 +15,7 @@ workspace = true
 
 [dependencies]
 lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
+lintel-format = { version = "0.0.1", path = "../lintel-format" }
 bpaf = { version = "0.9", features = ["derive"] }
 anyhow = "1"
+miette = "7"

@@ -20,6 +20,7 @@ lintel-check = { version = "0.0.11", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.6", path = "../lintel-config" }
 lintel-explain = { version = "0.0.4", path = "../lintel-explain" }
+lintel-format = { version = "0.0.1", path = "../lintel-format" }
 lintel-identify = { version = "0.0.7", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.9", path = "../lintel-reporters" }
 lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }

@@ -1,0 +1,30 @@
+[package]
+name = "lintel-format"
+version = "0.0.1"
+edition.workspace = true
+authors.workspace = true
+description = "Format command for Lintel — formats JSON, YAML, TOML, and Markdown files using dprint"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["json", "yaml", "toml", "markdown", "formatter"]
+categories = ["development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+bpaf = { version = "0.9", features = ["derive"] }
+ansi-term-styles = "0.1.0"
+anyhow = "1"
+miette = { version = "7", features = ["fancy"] }
+thiserror = "2"
+dprint-plugin-json = "0.21"
+dprint-plugin-toml = "0.7"
+dprint-plugin-markdown = "0.21"
+pretty_yaml = "0.6"
+similar = "2"
+glob = "0.3"
+glob-match = "0.2"
+ignore = "0.4"
+lintel-config = { version = "0.0.6", path = "../lintel-config" }
