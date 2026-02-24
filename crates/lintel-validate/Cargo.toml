@@ -1,6 +1,6 @@
 [package]
 name = "lintel-validate"
-version = "0.0.3"
+version = "0.0.4"
 edition.workspace = true
 authors.workspace = true
 description = "Core validation engine for Lintel — validates JSON, YAML, TOML, JSON5, and JSONC against JSON Schema"
@@ -14,10 +14,10 @@ categories = ["development-tools"]
 workspace = true
 
 [dependencies]
-lintel-config = { version = "0.0.5", path = "../lintel-config" }
-lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
-lintel-validation-cache = { version = "0.0.6", path = "../lintel-validation-cache" }
-lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
+lintel-config = { version = "0.0.6", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
+lintel-validation-cache = { version = "0.0.7", path = "../lintel-validation-cache" }
+lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 jsonschema = { version = "0.42", features = ["resolve-async"] }
 tokio = { version = "1", features = ["rt", "fs"] }
 glob = "0.3"
@@ -31,8 +31,8 @@ json5 = "1.3"
 jsonc-parser = { version = "0.29", features = ["serde"] }
 ignore = "0.4"
 toml = "1.0"
-schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
-schemastore = { version = "0.0.8", path = "../schemastore" }
+schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+schemastore = { version = "0.0.9", path = "../schemastore" }
 tracing = "0.1"
 bpaf = { version = "0.9", features = ["derive"] }
 

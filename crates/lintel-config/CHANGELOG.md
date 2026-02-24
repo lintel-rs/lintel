@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.5...lintel-config-v0.0.6) - 2026-02-24
+
+### Added
+
+- add jsonschema-migrate crate, per-group _shared dirs, and update README badges
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into id-fixes
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.4...lintel-config-v0.0.5) - 2026-02-23
 
 ### Other
