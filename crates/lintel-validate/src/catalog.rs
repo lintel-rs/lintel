@@ -1,5 +1,5 @@
 use lintel_schema_cache::SchemaCache;
-use schemastore::Catalog;
+use schema_catalog::Catalog;
 
 /// Fetch the `SchemaStore` catalog via the schema cache.
 ///

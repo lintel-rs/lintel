@@ -1363,8 +1363,9 @@ mod tests {
     }"#;
 
     fn gh_catalog_json() -> String {
-        r#"{"schemas":[{
+        r#"{"version":1,"schemas":[{
             "name": "GitHub Workflow",
+            "description": "GitHub Actions workflow",
             "url": "https://www.schemastore.org/github-workflow.json",
             "fileMatch": [
                 "**/.github/workflows/*.yml",
@@ -1714,8 +1715,9 @@ validate_formats = false
             r#"{"name":"hello","on":"push","jobs":{"build":{}}}"#,
         )?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;
@@ -1756,8 +1758,9 @@ validate_formats = false
             "{ pkgs, ... }: { packages = [ pkgs.git ]; }",
         )?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;
@@ -1790,8 +1793,9 @@ validate_formats = false
         // File has .cfg extension, content is valid JSON but fails schema validation
         fs::write(tmp.path().join("myapp.cfg"), r#"{"wrong":"field"}"#)?;
 
-        let catalog_json = r#"{"schemas":[{
+        let catalog_json = r#"{"version":1,"schemas":[{
             "name": "MyApp Config",
+            "description": "MyApp configuration",
             "url": "https://example.com/myapp.schema.json",
             "fileMatch": ["*.cfg"]
         }]}"#;

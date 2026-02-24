@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+extern crate alloc;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 

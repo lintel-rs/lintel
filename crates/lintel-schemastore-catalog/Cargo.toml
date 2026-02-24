@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
+schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
 schemastore = { version = "0.0.8", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }

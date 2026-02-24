@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use schema_catalog::SchemaEntry;
+
 /// Slugify a schema name into a filename.
 ///
 /// Lowercases, replaces non-alphanumeric characters with hyphens,
@@ -47,7 +49,7 @@ pub fn slugify_name(name: &str) -> String {
 ///
 /// When multiple schemas would produce the same filename, a numeric suffix
 /// is appended (e.g. `foo.json`, `foo-2.json`, `foo-3.json`).
-pub fn build_filename_map(schemas: &[schemastore::SchemaEntry]) -> HashMap<String, String> {
+pub fn build_filename_map(schemas: &[SchemaEntry]) -> HashMap<String, String> {
     let mut url_to_filename: HashMap<String, String> = HashMap::new();
     let mut filename_counts: HashMap<String, usize> = HashMap::new();
     let mut seen_urls = std::collections::HashSet::new();
@@ -110,6 +112,8 @@ pub fn rewrite_catalog_urls(
 
 #[cfg(test)]
 mod tests {
+    use alloc::collections::BTreeMap;
+
     use super::*;
 
     #[test]
@@ -151,17 +155,21 @@ mod tests {
     #[test]
     fn build_map_deduplicates_same_url() {
         let schemas = vec![
-            schemastore::SchemaEntry {
+            SchemaEntry {
                 name: "Foo".into(),
+                description: String::new(),
                 url: "https://example.com/foo.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![],
+                versions: BTreeMap::new(),
             },
-            schemastore::SchemaEntry {
+            SchemaEntry {
                 name: "Foo Again".into(),
+                description: String::new(),
                 url: "https://example.com/foo.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![],
+                versions: BTreeMap::new(),
             },
         ];
         let map = build_filename_map(&schemas);
@@ -172,23 +180,29 @@ mod tests {
     #[test]
     fn build_map_handles_name_collisions() {
         let schemas = vec![
-            schemastore::SchemaEntry {
+            SchemaEntry {
                 name: "Foo".into(),
+                description: String::new(),
                 url: "https://example.com/a.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![],
+                versions: BTreeMap::new(),
             },
-            schemastore::SchemaEntry {
+            SchemaEntry {
                 name: "Foo".into(),
+                description: String::new(),
                 url: "https://example.com/b.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![],
+                versions: BTreeMap::new(),
             },
-            schemastore::SchemaEntry {
+            SchemaEntry {
                 name: "Foo".into(),
+                description: String::new(),
                 url: "https://example.com/c.json".into(),
-                description: None,
+                source_url: None,
                 file_match: vec![],
+                versions: BTreeMap::new(),
             },
         ];
         let map = build_filename_map(&schemas);
