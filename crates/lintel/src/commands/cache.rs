@@ -174,7 +174,7 @@ async fn trace_catalog(
     cfg: &lintel_config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
-) -> Vec<schemastore::CompiledCatalog> {
+) -> Vec<schema_catalog::CompiledCatalog> {
     println!();
     println!("catalog:");
     let compiled_catalogs = validate::fetch_compiled_catalogs(retriever, cfg, no_catalog).await;
@@ -202,7 +202,7 @@ fn trace_schema_resolution(
     instance: &serde_json::Value,
     cfg: &lintel_config::Config,
     config_dir: &Path,
-    compiled_catalogs: &[schemastore::CompiledCatalog],
+    compiled_catalogs: &[schema_catalog::CompiledCatalog],
     path_str: &str,
     file_name: &str,
     file_path: &Path,

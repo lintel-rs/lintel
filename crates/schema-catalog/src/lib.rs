@@ -13,6 +13,9 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod compiled;
+pub use compiled::{CompiledCatalog, SchemaMatch};
+
 /// Schema catalog index that maps file patterns to JSON Schema URLs.
 ///
 /// A catalog is a collection of schema entries used by editors and tools to
@@ -24,6 +27,7 @@ use serde_json::Value;
 #[schemars(title = "catalog.json")]
 pub struct Catalog {
     /// The catalog format version. Currently always `1`.
+    #[serde(default = "default_version")]
     pub version: u32,
     /// An optional human-readable title for the catalog.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,6 +66,7 @@ pub struct SchemaEntry {
     #[schemars(example = example_schema_name())]
     pub name: String,
     /// A short description of what the schema validates.
+    #[serde(default)]
     pub description: String,
     /// The URL where the schema can be fetched.
     #[schemars(example = example_schema_url())]
@@ -82,6 +87,10 @@ pub struct SchemaEntry {
     /// Values are URLs to the versioned schema.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub versions: BTreeMap<String, String>,
+}
+
+fn default_version() -> u32 {
+    1
 }
 
 fn example_schema_name() -> String {

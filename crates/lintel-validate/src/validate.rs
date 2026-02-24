@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::catalog;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
-use schemastore::CompiledCatalog;
+use schema_catalog::CompiledCatalog;
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;

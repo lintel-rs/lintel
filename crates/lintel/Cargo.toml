@@ -25,6 +25,7 @@ lintel-reporters = { version = "0.0.8", path = "../lintel-reporters" }
 lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.6", path = "../lintel-validation-cache" }
+schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
 schemastore = { version = "0.0.8", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
 glob-match = "0.2"

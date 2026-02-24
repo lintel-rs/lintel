@@ -18,7 +18,7 @@ lintel-config = { version = "0.0.5", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.8", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.3", path = "../lintel-validate" }
 lintel-cli-common = { version = "0.0.3", path = "../lintel-cli-common" }
-schemastore = { version = "0.0.8", path = "../schemastore" }
+schema-catalog = { version = "0.0.4", path = "../schema-catalog" }
 bpaf = { version = "0.9", features = ["derive"] }
 anyhow = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

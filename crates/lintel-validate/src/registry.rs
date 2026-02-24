@@ -1,5 +1,5 @@
 use lintel_schema_cache::SchemaCache;
-use schemastore::Catalog;
+use schema_catalog::Catalog;
 
 /// The default Lintel catalog registry (always fetched unless `--no-catalog`).
 pub const DEFAULT_REGISTRY: &str = "https://catalog.lintel.tools/catalog.json";
@@ -52,7 +52,7 @@ pub async fn fetch(
     for resolved in &urls {
         match cache.fetch(resolved).await {
             Ok((value, _status)) => {
-                let catalog = schemastore::parse_catalog(value)?;
+                let catalog = schema_catalog::parse_catalog_value(value)?;
                 return Ok(catalog);
             }
             Err(e) => last_err = Some(e),

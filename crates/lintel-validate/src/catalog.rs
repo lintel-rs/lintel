@@ -1,5 +1,5 @@
 use lintel_schema_cache::SchemaCache;
-use schemastore::Catalog;
+use schema_catalog::Catalog;
 
 /// Fetch the `SchemaStore` catalog via the schema cache.
 ///
@@ -10,6 +10,6 @@ pub async fn fetch_catalog(
     cache: &SchemaCache,
 ) -> Result<Catalog, Box<dyn core::error::Error + Send + Sync>> {
     let (value, _status) = cache.fetch(schemastore::CATALOG_URL).await?;
-    let catalog = schemastore::parse_catalog(value)?;
+    let catalog = schema_catalog::parse_catalog_value(value)?;
     Ok(catalog)
 }

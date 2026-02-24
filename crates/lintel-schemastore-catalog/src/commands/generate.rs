@@ -32,7 +32,7 @@ pub async fn run(
     debug!(bytes = catalog_text.len(), "catalog fetched");
 
     // 2. Parse as both typed Catalog (for URL extraction) and Value (for round-trip rewriting)
-    let catalog: schemastore::Catalog =
+    let catalog: schema_catalog::Catalog =
         serde_json::from_str(&catalog_text).context("failed to parse SchemaStore catalog")?;
     let mut catalog_value: serde_json::Value = serde_json::from_str(&catalog_text)
         .context("failed to parse SchemaStore catalog as JSON value")?;

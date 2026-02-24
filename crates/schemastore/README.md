@@ -5,49 +5,26 @@
 [![GitHub](https://img.shields.io/github/stars/lintel-rs/lintel?style=flat)](https://github.com/lintel-rs/lintel)
 [![License](https://img.shields.io/crates/l/schemastore.svg)](https://github.com/lintel-rs/lintel/blob/master/LICENSE)
 
-Parse and match files against the [SchemaStore](https://www.schemastore.org/) catalog.
+Constants and re-exports for working with the [SchemaStore](https://www.schemastore.org/) catalog.
 
-`SchemaStore` is a community-maintained collection of JSON Schema definitions for common configuration files. This crate deserializes the catalog and matches file paths to their corresponding schemas using the `fileMatch` glob patterns.
+This is a thin convenience crate that provides:
+
+- `CATALOG_URL` — the well-known URL for the `SchemaStore` catalog JSON
+- `pub use schema_catalog` — re-exports the `schema-catalog` crate for catalog types, parsing, and compiled matching
 
 ## Usage
 
 ```rust
-use schemastore::{parse_catalog, CompiledCatalog, CATALOG_URL};
+use schemastore::CATALOG_URL;
+use schemastore::schema_catalog::{self, CompiledCatalog};
 
 // Fetch the catalog JSON yourself (using reqwest, ureq, etc.)
 // let json = reqwest::blocking::get(CATALOG_URL)?.text()?;
-// let value: serde_json::Value = serde_json::from_str(&json)?;
-// let catalog = parse_catalog(value)?;
+// let catalog = schema_catalog::parse_catalog(&json)?;
+// let compiled = CompiledCatalog::compile(&catalog);
 
-// Example with inline data:
-let value = serde_json::json!({
-    "schemas": [{
-        "name": "TypeScript",
-        "url": "https://json.schemastore.org/tsconfig.json",
-        "fileMatch": ["tsconfig.json"]
-    }]
-});
-let catalog = parse_catalog(value).unwrap();
-let compiled = CompiledCatalog::compile(&catalog);
-
-assert!(compiled.find_schema("tsconfig.json", "tsconfig.json").is_some());
+assert!(CATALOG_URL.starts_with("https://"));
 ```
-
-## API
-
-- `CATALOG_URL` — the well-known URL for the `SchemaStore` catalog JSON
-- `Catalog` / `SchemaEntry` — serde types for the catalog
-- `parse_catalog(Value)` — deserialize the catalog from a `serde_json::Value`
-- `CompiledCatalog::compile(&Catalog)` — pre-compile all `fileMatch` globs
-- `CompiledCatalog::find_schema(path, file_name)` — look up the schema URL for a file path
-
-Bare filename patterns (e.g. `tsconfig.json`) are automatically expanded to also match nested paths (`**/tsconfig.json`). Negation patterns (starting with `!`) are skipped.
-
-## Design
-
-Internally, `CompiledCatalog` uses a single `GlobMap` from the `glob-set` crate. The `GlobMap`'s `MatchEngine` automatically dispatches each pattern to the fastest strategy (literal hash, extension hash, prefix/suffix tries, Aho-Corasick pre-filter), so no hand-rolled tiered lookup is needed.
-
-This crate is `#![no_std]` — it only depends on `alloc`, `serde`, `serde_json`, and `glob-set`. No HTTP client is included; callers fetch the catalog JSON themselves.
 
 ## License
 

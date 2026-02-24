@@ -10,7 +10,7 @@ use lintel_cli_common::CliCacheOptions;
 use lintel_schema_cache::SchemaCache;
 use lintel_validate::parsers;
 use lintel_validate::validate;
-use schemastore::CompiledCatalog;
+use schema_catalog::CompiledCatalog;
 
 // ---------------------------------------------------------------------------
 // CLI args

@@ -1480,6 +1480,7 @@ dependencies = [
  "lintel-validate",
  "lintel-validation-cache",
  "miette",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "serde_yaml",
@@ -1500,7 +1501,7 @@ dependencies = [
  "lintel-config",
  "lintel-schema-cache",
  "lintel-validate",
- "schemastore",
+ "schema-catalog",
  "tokio",
  "tracing",
 ]
@@ -1625,7 +1626,7 @@ dependencies = [
  "lintel-config",
  "lintel-schema-cache",
  "lintel-validate",
- "schemastore",
+ "schema-catalog",
  "serde_json",
  "terminal_size",
  "tracing",
@@ -1665,6 +1666,7 @@ dependencies = [
  "bpaf",
  "futures-util",
  "reqwest",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "tempfile",
@@ -1692,6 +1694,7 @@ dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
+ "schema-catalog",
  "schemastore",
  "serde_json",
  "serde_yaml",
@@ -2563,6 +2566,7 @@ dependencies = [
 name = "schema-catalog"
 version = "0.0.4"
 dependencies = [
+ "glob-set",
  "schemars",
  "serde",
  "serde_json",
@@ -2597,11 +2601,7 @@ dependencies = [
 name = "schemastore"
 version = "0.0.8"
 dependencies = [
- "anyhow",
- "glob-set",
  "schema-catalog",
- "serde",
- "serde_json",
 ]
 
 [[package]]
