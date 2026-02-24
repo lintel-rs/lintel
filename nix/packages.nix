@@ -1,5 +1,6 @@
 {
   craneLib,
+  craneLibStatic ? null,
   pkgs,
   src,
 }:
@@ -95,8 +96,34 @@ let
       npm-release-binaries
       ;
   };
+
+  # Static musl packages (Linux only)
+  staticPackages = pkgs.lib.optionalAttrs (craneLibStatic != null) (
+    let
+      staticCargoArtifacts = craneLibStatic.buildDepsOnly commonArgs;
+
+      mkStaticPackage =
+        cratePath:
+        let
+          meta = craneLibStatic.crateNameFromCargoToml { cargoToml = "${cratePath}/Cargo.toml"; };
+        in
+        craneLibStatic.buildPackage (
+          commonArgs
+          // {
+            cargoArtifacts = staticCargoArtifacts;
+            inherit (meta) pname;
+            cargoExtraArgs = "-p ${meta.pname}";
+          }
+        );
+    in
+    {
+      lintel-static = mkStaticPackage ../crates/lintel;
+      lintel-github-action-static = mkStaticPackage ../crates/lintel-github-action;
+    }
+  );
 in
 packages
+// staticPackages
 // {
   default = lintel;
   all = pkgs.symlinkJoin {

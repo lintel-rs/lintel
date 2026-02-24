@@ -20,6 +20,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         craneLib = crane.mkLib pkgs;
+        craneLibStatic = if pkgs.stdenv.isLinux then crane.mkLib pkgs.pkgsStatic else null;
 
         src =
           let
@@ -34,7 +35,14 @@
               (craneLib.filterCargoSources path type) || (testdataFilter path type) || (readmeFilter path type);
           };
 
-        packages = import ./nix/packages.nix { inherit craneLib pkgs src; };
+        packages = import ./nix/packages.nix {
+          inherit
+            craneLib
+            craneLibStatic
+            pkgs
+            src
+            ;
+        };
       in
       {
         checks = {
