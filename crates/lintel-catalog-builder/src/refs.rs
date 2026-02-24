@@ -2,19 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use futures_util::stream::StreamExt;
 use lintel_schema_cache::SchemaCache;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, info, warn};
-
-/// A downloaded `$ref` dependency pending recursive processing.
-struct DownloadedDep {
-    text: String,
-    filename: String,
-    url: String,
-    /// The absolute source URL this dependency was downloaded from, used to
-    /// resolve any relative `$ref` values within the dependency itself.
-    source_url: Option<String>,
-}
 
 /// Shared context for [`resolve_and_rewrite`], grouping cross-cutting state
 /// that would otherwise require many individual arguments.
@@ -283,7 +274,8 @@ fn resolve_all_relative_refs(
 }
 
 /// Download all `$ref` dependencies for a schema, rewrite URLs to local paths,
-/// and write the updated schema. Handles transitive dependencies recursively.
+/// and write the updated schema. Handles transitive dependencies via BFS
+/// concurrent resolution.
 ///
 /// - `ctx`: shared context containing the schema cache, shared directory,
 ///   base URL for the shared directory, and already-downloaded map
@@ -302,6 +294,17 @@ pub async fn resolve_and_rewrite(
     let mut value: serde_json::Value =
         serde_json::from_str(schema_text).context("failed to parse schema JSON")?;
 
+    resolve_and_rewrite_value(ctx, &mut value, schema_dest, schema_url).await
+}
+
+/// Like [`resolve_and_rewrite`] but takes an already-parsed `Value`, avoiding
+/// a redundant parse when the caller already has the JSON in memory.
+pub async fn resolve_and_rewrite_value(
+    ctx: &mut RefRewriteContext<'_>,
+    value: &mut serde_json::Value,
+    schema_dest: &Path,
+    schema_url: &str,
+) -> Result<()> {
     // Set $id to the canonical URL where this schema will be hosted
     value
         .as_object_mut()
@@ -311,16 +314,15 @@ pub async fn resolve_and_rewrite(
             serde_json::Value::String(schema_url.to_string()),
         );
 
-    jsonschema_migrate::migrate_to_2020_12(&mut value);
+    jsonschema_migrate::migrate_to_2020_12(value);
 
-    let external_refs = find_external_refs(&value);
-    let resolved_relative = resolve_all_relative_refs(&value, ctx.source_url.as_deref());
+    let external_refs = find_external_refs(value);
+    let resolved_relative = resolve_all_relative_refs(value, ctx.source_url.as_deref());
 
     if external_refs.is_empty() && resolved_relative.is_empty() {
         // No external refs — still fix invalid URI references
-        fix_ref_uris(&mut value);
-        let fixed = serde_json::to_string_pretty(&value)?;
-        tokio::fs::write(schema_dest, format!("{fixed}\n")).await?;
+        fix_ref_uris(value);
+        crate::download::write_schema_json(value, schema_dest).await?;
         return Ok(());
     }
 
@@ -330,83 +332,172 @@ pub async fn resolve_and_rewrite(
         "found $ref dependencies"
     );
 
-    // Build ref → local path mapping and download deps.
-    // The url_map keys are the original $ref base strings (absolute URLs or
-    // relative paths), and the values are the new local URLs.
-    let mut url_map: HashMap<String, String> = HashMap::new();
-    let mut to_process: Vec<DownloadedDep> = Vec::new();
-
-    // Combine absolute external refs and resolved relative refs into a single
-    // list so the download logic is shared.
-    let all_refs: Vec<(String, String)> = external_refs
+    // Seed the queue with all refs from the root schema.
+    let pending: Vec<(String, String, Option<String>)> = external_refs
         .iter()
-        .map(|url| (url.clone(), url.clone()))
+        .map(|url| (url.clone(), url.clone(), Some(url.clone())))
         .chain(
             resolved_relative
                 .iter()
-                .map(|(rel, abs)| (rel.clone(), abs.clone())),
+                .map(|(rel, abs)| (rel.clone(), abs.clone(), Some(abs.clone()))),
         )
         .collect();
 
-    for (ref_key, download_url) in &all_refs {
-        if let Some(existing_filename) = ctx.already_downloaded.get(download_url) {
-            // Already downloaded, just build the mapping using the stored filename
+    let parent_stem = schema_dest
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
+    // Fetch all transitive deps concurrently via a bounded queue
+    let (url_map, dep_values) = fetch_refs_queued(ctx, pending, &parent_stem).await?;
+
+    // Rewrite refs in the root schema and write it
+    rewrite_refs(value, &url_map);
+    fix_ref_uris(value);
+    crate::download::write_schema_json(value, schema_dest).await?;
+
+    // Process and write each dependency
+    write_dep_schemas(ctx, dep_values, &url_map).await?;
+
+    Ok(())
+}
+
+/// Queue-based concurrent fetcher for `$ref` dependencies. Unlike BFS waves,
+/// this starts fetching transitive deps as soon as each parent completes,
+/// maintaining up to `concurrency` in-flight fetches at all times.
+///
+/// Returns `(url_map, dep_values)` where `url_map` maps original `$ref` keys
+/// to local URLs and `dep_values` contains the fetched JSON values.
+async fn fetch_refs_queued(
+    ctx: &mut RefRewriteContext<'_>,
+    initial: Vec<(String, String, Option<String>)>,
+    parent_stem: &str,
+) -> Result<(
+    HashMap<String, String>,
+    Vec<(String, serde_json::Value, Option<String>)>,
+)> {
+    let mut url_map: HashMap<String, String> = HashMap::new();
+    let mut dep_values: Vec<(String, serde_json::Value, Option<String>)> = Vec::new();
+    let mut pending: Vec<(String, String, Option<String>)> = initial;
+    let mut in_flight = futures_util::stream::FuturesUnordered::new();
+    let mut shared_dir_created = false;
+
+    loop {
+        // Drain all pending items into in_flight — the semaphore in
+        // SchemaCache handles HTTP concurrency.
+        while let Some((ref_key, download_url, source_url)) = pending.pop() {
+            if let Some(existing_filename) = ctx.already_downloaded.get(&download_url) {
+                let local_url = format!(
+                    "{}/{}",
+                    ctx.base_url_for_shared.trim_end_matches('/'),
+                    existing_filename,
+                );
+                url_map.insert(ref_key, local_url);
+                continue;
+            }
+
+            if !shared_dir_created {
+                tokio::fs::create_dir_all(ctx.shared_dir).await?;
+                shared_dir_created = true;
+            }
+
+            let dep_basename = filename_from_url(&download_url)?;
+            let base_filename = format!("{parent_stem}--{dep_basename}");
+            let filename = unique_filename_in(ctx.shared_dir, &base_filename);
+            ctx.already_downloaded
+                .insert(download_url.clone(), filename.clone());
             let local_url = format!(
                 "{}/{}",
                 ctx.base_url_for_shared.trim_end_matches('/'),
-                existing_filename,
+                filename,
             );
-            url_map.insert(ref_key.clone(), local_url);
-            continue;
+            url_map.insert(ref_key, local_url.clone());
+
+            let cache = ctx.cache.clone();
+            in_flight.push(async move {
+                let result = crate::download::fetch_one(&cache, &download_url).await;
+                (download_url, filename, local_url, source_url, result)
+            });
         }
 
-        let dep_basename = filename_from_url(download_url)?;
-        let parent_stem = schema_dest
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
-        let base_filename = format!("{parent_stem}--{dep_basename}");
-        tokio::fs::create_dir_all(ctx.shared_dir).await?;
-        // Disambiguate filename if another URL already produced the same name
-        let filename = unique_filename_in(ctx.shared_dir, &base_filename);
-        let dest_path = ctx.shared_dir.join(&filename);
+        // Nothing in flight and nothing pending → done
+        if in_flight.is_empty() {
+            break;
+        }
 
-        match crate::download::download_one(ctx.cache, download_url, &dest_path).await {
-            Ok((dep_text, status)) => {
+        // Wait for the next completed fetch (safe: we checked !is_empty above)
+        let Some((download_url, filename, local_url, source_url, result)) = in_flight.next().await
+        else {
+            break;
+        };
+
+        match result {
+            Ok((dep_value, status)) => {
                 info!(url = %download_url, status = %status, "downloaded $ref dependency");
-                ctx.already_downloaded
-                    .insert(download_url.clone(), filename.clone());
-                let local_url = format!(
-                    "{}/{filename}",
-                    ctx.base_url_for_shared.trim_end_matches('/')
-                );
-                url_map.insert(ref_key.clone(), local_url.clone());
-                to_process.push(DownloadedDep {
-                    text: dep_text,
-                    filename,
-                    url: local_url,
-                    source_url: Some(download_url.clone()),
-                });
+
+                // Immediately enqueue transitive refs (will be submitted next iteration)
+                for url in find_external_refs(&dep_value) {
+                    if !ctx.already_downloaded.contains_key(&url) {
+                        pending.push((url.clone(), url.clone(), Some(url.clone())));
+                    }
+                }
+                for (rel, abs) in resolve_all_relative_refs(&dep_value, source_url.as_deref()) {
+                    if !ctx.already_downloaded.contains_key(&abs) {
+                        pending.push((rel, abs.clone(), Some(abs)));
+                    }
+                }
+
+                dep_values.push((filename, dep_value, source_url));
             }
             Err(e) => {
                 warn!(url = %download_url, error = %e, "failed to download $ref dependency, keeping original URL");
+                ctx.already_downloaded.remove(&download_url);
+                url_map.retain(|_, v| v != &local_url);
             }
         }
     }
 
-    // Rewrite refs in the main schema and fix invalid URI references
-    rewrite_refs(&mut value, &url_map);
-    fix_ref_uris(&mut value);
-    let rewritten = serde_json::to_string_pretty(&value)?;
-    tokio::fs::write(schema_dest, format!("{rewritten}\n")).await?;
+    Ok((url_map, dep_values))
+}
 
-    // Recursively process transitive deps (they may also have relative refs)
-    for dep in to_process {
-        let dep_dest = ctx.shared_dir.join(&dep.filename);
-        let prev_source_url = ctx.source_url.take();
-        ctx.source_url = dep.source_url;
-        Box::pin(resolve_and_rewrite(ctx, &dep.text, &dep_dest, &dep.url)).await?;
-        ctx.source_url = prev_source_url;
+/// Set `$id`, migrate, rewrite `$ref`s, fix URIs, and write each dependency to
+/// disk.
+async fn write_dep_schemas(
+    ctx: &RefRewriteContext<'_>,
+    dep_values: Vec<(String, serde_json::Value, Option<String>)>,
+    url_map: &HashMap<String, String>,
+) -> Result<()> {
+    for (filename, mut dep_value, source_url) in dep_values {
+        let dep_dest = ctx.shared_dir.join(&filename);
+        let dep_local_url = format!(
+            "{}/{}",
+            ctx.base_url_for_shared.trim_end_matches('/'),
+            filename,
+        );
+
+        // Resolve any relative refs in the dep against its source URL
+        let dep_relative = resolve_all_relative_refs(&dep_value, source_url.as_deref());
+        // Build a combined url_map for this dep: inherited + its own relative refs
+        let mut dep_url_map = url_map.clone();
+        for (rel, abs) in &dep_relative {
+            if let Some(existing_filename) = ctx.already_downloaded.get(abs) {
+                let local_url = format!(
+                    "{}/{}",
+                    ctx.base_url_for_shared.trim_end_matches('/'),
+                    existing_filename,
+                );
+                dep_url_map.insert(rel.clone(), local_url);
+            }
+        }
+
+        if let Some(obj) = dep_value.as_object_mut() {
+            obj.insert("$id".to_string(), serde_json::Value::String(dep_local_url));
+        }
+        jsonschema_migrate::migrate_to_2020_12(&mut dep_value);
+        rewrite_refs(&mut dep_value, &dep_url_map);
+        fix_ref_uris(&mut dep_value);
+        crate::download::write_schema_json(&dep_value, &dep_dest).await?;
     }
 
     Ok(())

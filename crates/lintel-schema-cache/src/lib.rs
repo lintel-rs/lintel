@@ -67,6 +67,8 @@ pub struct SchemaCache {
     ttl: Option<Duration>,
     /// In-memory cache shared across all clones via `Arc`.
     memory_cache: Arc<Mutex<HashMap<String, Value>>>,
+    /// Semaphore that limits concurrent HTTP requests across all callers.
+    http_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 /// Builder for constructing a [`SchemaCache`] with sensible defaults.
@@ -82,11 +84,15 @@ pub struct SchemaCache {
 /// let cache = SchemaCache::builder().build();
 /// let cache = SchemaCache::builder().force_fetch(true).ttl(Duration::from_secs(3600)).build();
 /// ```
+/// Default maximum number of concurrent HTTP requests.
+const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 20;
+
 #[must_use]
 pub struct SchemaCacheBuilder {
     cache_dir: Option<PathBuf>,
     skip_read: bool,
     ttl: Option<Duration>,
+    max_concurrent_requests: usize,
 }
 
 impl SchemaCacheBuilder {
@@ -109,6 +115,12 @@ impl SchemaCacheBuilder {
         self
     }
 
+    /// Set the maximum number of concurrent HTTP requests.
+    pub fn max_concurrent_requests(mut self, n: usize) -> Self {
+        self.max_concurrent_requests = n;
+        self
+    }
+
     /// Returns the cache directory that will be used, or [`ensure_cache_dir()`]
     /// if none was explicitly set.
     ///
@@ -125,6 +137,7 @@ impl SchemaCacheBuilder {
             skip_read: self.skip_read,
             ttl: self.ttl,
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+            http_semaphore: Arc::new(tokio::sync::Semaphore::new(self.max_concurrent_requests)),
         }
     }
 }
@@ -140,6 +153,7 @@ impl SchemaCache {
             cache_dir: Some(ensure_cache_dir()),
             skip_read: false,
             ttl: Some(DEFAULT_SCHEMA_CACHE_TTL),
+            max_concurrent_requests: DEFAULT_MAX_CONCURRENT_REQUESTS,
         }
     }
 
@@ -154,6 +168,7 @@ impl SchemaCache {
             skip_read: false,
             ttl: None,
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+            http_semaphore: Arc::new(tokio::sync::Semaphore::new(DEFAULT_MAX_CONCURRENT_REQUESTS)),
         }
     }
 
@@ -236,6 +251,13 @@ impl SchemaCache {
                 }
             }
         }
+
+        // Acquire a permit before making the HTTP request
+        let _permit = self
+            .http_semaphore
+            .acquire()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
         // Conditional network fetch
         tracing::Span::current().record("status", "network_fetch");
