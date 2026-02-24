@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.7...lintel-catalog-builder-v0.0.8) - 2026-02-24
+
+### Other
+
+- Add custom Catalog serializer with $schema field, remove schemastore re-exports
+- Merge origin/master and resolve conflicts in generate modules
+- Move generate command bpaf args into commands/generate.rs
+- Split generate command into separate modules under src/generate/
+- Store schemas in versioned directory structure and download all versions
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.6...lintel-catalog-builder-v0.0.7) - 2026-02-23
 
 ### Other
