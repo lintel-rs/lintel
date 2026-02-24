@@ -69,8 +69,6 @@ let
 
   lintel-config-schema-generator = mkPackage ../crates/lintel-config-schema-generator { };
 
-  lintel-github-action = mkPackage ../crates/lintel-github-action { };
-
   npm-release-binaries = mkPackage ../crates/npm-release-binaries { };
 
   packages = {
@@ -79,7 +77,6 @@ let
       lintel
       lintel-catalog-builder
       lintel-config-schema-generator
-      lintel-github-action
       npm-release-binaries
       ;
   };
@@ -108,7 +105,6 @@ let
     in
     {
       lintel-static = mkStaticPackage ../crates/lintel;
-      lintel-github-action-static = mkStaticPackage ../crates/lintel-github-action;
     }
   );
 in

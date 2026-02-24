@@ -44,12 +44,6 @@ jobs:
             gh workflow run release-lintel.yml --ref "$TAG" -f version="$VERSION"
           fi
 
-          ACTION_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | startswith("lintel-github-action-v")) | .tag')
-          if [ -n "$ACTION_TAG" ]; then
-            ACTION_VERSION="${ACTION_TAG#lintel-github-action-v}"
-            gh workflow run release-lintel-github-action.yml --ref "$ACTION_TAG" -f version="$ACTION_VERSION"
-          fi
-
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest

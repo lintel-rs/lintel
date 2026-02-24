@@ -1,3 +1,8 @@
 [[package]]
 name = "lintel"
 git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "lintel-github-action"
+release = false
+publish = false
