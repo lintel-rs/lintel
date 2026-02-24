@@ -1,6 +1,6 @@
 [package]
 name = "lintel-annotate"
-version = "0.0.10"
+version = "0.0.11"
 edition.workspace = true
 authors.workspace = true
 description = "Add schema annotations to JSON, YAML, and TOML files"
@@ -15,8 +15,8 @@ workspace = true
 
 [dependencies]
 lintel-config = { version = "0.0.6", path = "../lintel-config" }
-lintel-schema-cache = { version = "0.0.9", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
+lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
+lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 schemastore = { version = "0.0.9", path = "../schemastore" }
 bpaf = { version = "0.9", features = ["derive"] }

@@ -25,7 +25,6 @@ struct GenerateContext<'a> {
     config: &'a CatalogConfig,
     config_path: &'a Path,
     config_dir: &'a Path,
-    concurrency: usize,
 }
 
 /// Run the `generate` subcommand.
@@ -65,15 +64,17 @@ pub async fn run(
         );
     }
 
-    // Create schema cache
-    let cache = SchemaCache::builder().force_fetch(no_cache).build();
+    // Create schema cache with unified concurrency control
+    let cache = SchemaCache::builder()
+        .force_fetch(no_cache)
+        .max_concurrent_requests(concurrency)
+        .build();
 
     let ctx = GenerateContext {
         cache: &cache,
         config: &config,
         config_path: &config_path,
         config_dir,
-        concurrency,
     };
 
     // Process each target
@@ -167,7 +168,6 @@ async fn generate_for_target(
         cache: ctx.cache,
         base_url,
         schemas_dir: &schemas_dir,
-        concurrency: ctx.concurrency,
     };
     for (source_name, source_config) in &ctx.config.sources {
         info!(source = %source_name, url = %source_config.url, "processing source");

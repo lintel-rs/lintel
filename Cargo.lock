@@ -1402,7 +1402,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1460,18 +1460,20 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "bpaf",
  "futures-util",
  "glob-match",
+ "jsonschema",
  "jsonschema-migrate",
  "lintel-schema-cache",
  "percent-encoding",
  "reqwest",
  "schema-catalog",
  "schemars",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",
@@ -1485,7 +1487,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1517,7 +1519,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "bpaf",
  "lintel-catalog-builder",
@@ -1528,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1566,7 +1568,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1579,7 +1581,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1597,7 +1599,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ansi-term-styles",
  "lintel-validate",
@@ -1606,7 +1608,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-schema-cache"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1623,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "bpaf",
