@@ -70,10 +70,9 @@ pub trait Parser {
 /// Detect file format from extension. Returns `None` for unrecognized extensions.
 pub fn detect_format(path: &Path) -> Option<FileFormat> {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("json") => Some(FileFormat::Json),
         Some("yaml" | "yml") => Some(FileFormat::Yaml),
         Some("json5") => Some(FileFormat::Json5),
-        Some("jsonc") => Some(FileFormat::Jsonc),
+        Some("json" | "jsonc") => Some(FileFormat::Jsonc),
         Some("toml") => Some(FileFormat::Toml),
         Some("md" | "mdx") => Some(FileFormat::Markdown),
         _ => None,
@@ -246,7 +245,10 @@ mod tests {
 
     #[test]
     fn detect_format_json() {
-        assert_eq!(detect_format(Path::new("foo.json")), Some(FileFormat::Json));
+        assert_eq!(
+            detect_format(Path::new("foo.json")),
+            Some(FileFormat::Jsonc)
+        );
     }
 
     #[test]
