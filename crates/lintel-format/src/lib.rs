@@ -45,7 +45,7 @@ fn json_config() -> dprint_plugin_json::configuration::Configuration {
 
 fn toml_config() -> dprint_plugin_toml::configuration::Configuration {
     dprint_plugin_toml::configuration::ConfigurationBuilder::new()
-        .cargo_apply_conventions(false)
+        .cargo_apply_conventions(true)
         .build()
 }
 

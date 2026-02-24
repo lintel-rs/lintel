@@ -1,30 +1,30 @@
 [package]
 name = "lintel-explain"
 version = "0.0.5"
-edition.workspace = true
 authors.workspace = true
-description = "Inspect JSON Schema documentation for specific properties"
-license.workspace = true
-repository.workspace = true
+categories = ["command-line-utilities", "development-tools"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "documentation", "terminal", "cli"]
-categories = ["command-line-utilities", "development-tools"]
+license.workspace = true
+repository.workspace = true
+description = "Inspect JSON Schema documentation for specific properties"
 
 [lints]
 workspace = true
 
 [dependencies]
-lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
-lintel-identify = { version = "0.0.8", path = "../lintel-identify" }
-lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
-jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
-bpaf = { version = "0.9", features = ["derive"] }
-serde_json = "1"
 anyhow = "1"
-tracing = "0.1"
-terminal_size = "0.4"
+bpaf = { version = "0.9", features = ["derive"] }
+jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
+lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
+lintel-identify = { version = "0.0.8", path = "../lintel-identify" }
+lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+serde_json = "1"
 tempfile = "3"
+terminal_size = "0.4"
+tracing = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

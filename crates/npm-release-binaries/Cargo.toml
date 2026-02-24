@@ -1,25 +1,25 @@
 [package]
 name = "npm-release-binaries"
 version = "0.0.3"
-edition.workspace = true
 authors.workspace = true
-description = "Generate and publish platform-specific npm packages from Rust binaries"
-license.workspace = true
-repository.workspace = true
+categories = ["command-line-utilities"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["npm", "release", "binary", "cli"]
-categories = ["command-line-utilities"]
+license.workspace = true
+repository.workspace = true
+description = "Generate and publish platform-specific npm packages from Rust binaries"
 
 [lints]
 workspace = true
 
 [dependencies]
 bpaf = { version = "0.9", features = ["derive", "bright-color"] }
+flate2 = "1"
+glob = "0.3"
 miette = { version = "7", features = ["fancy"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-toml = "1.0"
-glob = "0.3"
-flate2 = "1"
 tar = "0.4"
+toml = "1.0"
 zip = { version = "8", default-features = false, features = ["deflate"] }
