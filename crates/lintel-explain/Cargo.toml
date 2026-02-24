@@ -1,6 +1,6 @@
 [package]
 name = "lintel-explain"
-version = "0.0.4"
+version = "0.0.5"
 edition.workspace = true
 authors.workspace = true
 description = "Inspect JSON Schema documentation for specific properties"
@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "development-tools"]
 workspace = true
 
 [dependencies]
-lintel-validate = { version = "0.0.4", path = "../lintel-validate" }
-lintel-identify = { version = "0.0.7", path = "../lintel-identify" }
+lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
+lintel-identify = { version = "0.0.8", path = "../lintel-identify" }
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
 bpaf = { version = "0.9", features = ["derive"] }
