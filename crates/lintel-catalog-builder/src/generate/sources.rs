@@ -13,7 +13,7 @@ use crate::download::fetch_one;
 use crate::refs::{RefRewriteContext, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::{OrganizeEntry, SourceConfig};
 
-use super::util::{prefetch_versions, process_fetched_versions, slugify};
+use super::util::{prefetch_versions, process_fetched_versions, resolve_latest_id, slugify};
 
 /// Per-target processing context passed to source-level functions.
 pub(super) struct SourceContext<'a> {
@@ -214,11 +214,19 @@ async fn process_one_source_schema(
                 "downloaded source schema"
             );
 
-            let shared_dir = entry_dir.join("_shared");
-            let shared_base_url = format!(
-                "{}/schemas/{}/{}/_shared",
-                ctx.base_url, info.target_dir, info.slug,
+            // Use version URL as $id if latest content matches a version
+            let schema_base_url =
+                format!("{}/schemas/{}/{}", ctx.base_url, info.target_dir, info.slug,);
+            let schema_url = resolve_latest_id(
+                ctx.cache,
+                &source_url,
+                &version_results,
+                &info.local_url,
+                &schema_base_url,
             );
+
+            let shared_dir = entry_dir.join("_shared");
+            let shared_base_url = format!("{schema_base_url}/_shared");
             let mut already_downloaded: HashMap<String, String> = HashMap::new();
             let mut ref_ctx = RefRewriteContext {
                 cache: ctx.cache,
@@ -230,8 +238,7 @@ async fn process_one_source_schema(
 
             debug!(schema = %info.name, "processing schema refs");
             if let Err(e) =
-                resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &info.local_url)
-                    .await
+                resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &schema_url).await
             {
                 warn!(
                     url = %source_url,

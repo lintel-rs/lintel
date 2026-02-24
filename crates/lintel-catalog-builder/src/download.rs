@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::Result;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this
 /// are skipped and the catalog retains the original upstream URL.
@@ -16,20 +17,62 @@ pub struct LintelExtra {
     /// SHA-256 hex digest of the raw schema content before any transformations.
     #[serde(rename = "sourceSha256")]
     pub source_sha256: String,
+    /// `true` when the schema fails validation after transformation.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub invalid: bool,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde requires fn(&bool) -> bool
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
+/// A retriever that returns a permissive schema for any URI.
+///
+/// Used during schema validation so that external `$ref` targets don't cause
+/// compilation failures — we only want to catch structural issues in the
+/// schema itself.
+struct NoopRetriever;
+
+impl jsonschema::Retrieve for NoopRetriever {
+    fn retrieve(
+        &self,
+        _uri: &jsonschema::Uri<String>,
+    ) -> Result<serde_json::Value, Box<dyn core::error::Error + Send + Sync>> {
+        // `true` is the most permissive JSON Schema (accepts everything).
+        Ok(serde_json::Value::Bool(true))
+    }
+}
+
+/// Check whether a JSON Schema value is invalid by attempting to compile it.
+///
+/// Returns `true` if the schema fails compilation. Uses a no-op retriever
+/// so external `$ref`s resolve to permissive schemas without network I/O.
+fn is_schema_invalid(value: &serde_json::Value) -> bool {
+    jsonschema::options()
+        .with_retriever(NoopRetriever)
+        .build(value)
+        .is_err()
 }
 
 /// Inject `x-lintel` metadata into a schema's root object.
 ///
 /// Looks up the content hash for `source_url` from the cache. If the hash is
 /// not available (e.g. the schema was never fetched via HTTP), no metadata is
-/// injected.
+/// injected. Also validates the schema and sets `invalid: true` if it fails
+/// compilation.
 pub fn inject_lintel_extra(value: &mut serde_json::Value, source_url: &str, cache: &SchemaCache) {
     let Some(hash) = cache.content_hash(source_url) else {
         return;
     };
+    let invalid = is_schema_invalid(value);
+    if invalid {
+        warn!(source = %source_url, "schema is invalid after transformation");
+    }
     let extra = LintelExtra {
         source: source_url.to_string(),
         source_sha256: hash,
+        invalid,
     };
     if let Some(obj) = value.as_object_mut() {
         obj.insert(

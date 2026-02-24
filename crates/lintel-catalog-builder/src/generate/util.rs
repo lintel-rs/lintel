@@ -90,6 +90,50 @@ pub(super) async fn process_fetched_versions(
     Ok(version_urls)
 }
 
+/// If the latest schema's content hash matches any successfully-fetched
+/// version's content hash, return that version's local URL as the canonical
+/// `$id`. Otherwise return `default_url` (the `.../latest.json` URL).
+///
+/// When multiple versions match (same content), the highest version is chosen
+/// using semver ordering. Non-semver version names fall back to lexicographic.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn resolve_latest_id(
+    cache: &SchemaCache,
+    latest_source_url: &str,
+    version_results: &[VersionFetchResult],
+    default_url: &str,
+    schema_base_url: &str,
+) -> String {
+    let Some(latest_hash) = cache.content_hash(latest_source_url) else {
+        return default_url.to_string();
+    };
+    let mut best_match: Option<&str> = None;
+    for (version_name, version_url, result) in version_results {
+        if result.is_ok()
+            && let Some(vh) = cache.content_hash(version_url)
+            && vh == latest_hash
+            && best_match.is_none_or(|prev| version_gt(version_name, prev))
+        {
+            best_match = Some(version_name.as_str());
+        }
+    }
+    match best_match {
+        Some(version_name) => format!("{schema_base_url}/versions/{version_name}.json"),
+        None => default_url.to_string(),
+    }
+}
+
+/// Return `true` if `a` is a higher version than `b`.
+///
+/// Attempts semver parsing first; falls back to lexicographic comparison for
+/// non-semver version strings.
+fn version_gt(a: &str, b: &str) -> bool {
+    match (semver::Version::parse(a), semver::Version::parse(b)) {
+        (Ok(va), Ok(vb)) => va > vb,
+        _ => a > b,
+    }
+}
+
 /// Extract the `title` and `description` from a JSON Schema string.
 ///
 /// Returns `(title, description)` — either or both may be `None` if the schema
@@ -159,5 +203,14 @@ mod tests {
     #[test]
     fn slugify_special_chars() {
         assert_eq!(slugify("foo/bar (baz)"), "foo-bar-baz");
+    }
+
+    #[test]
+    fn version_gt_semver() {
+        assert!(version_gt("2.3.15", "2.3.9"));
+        assert!(version_gt("2.4.4", "2.4.3"));
+        assert!(!version_gt("2.4.3", "2.4.4"));
+        assert!(!version_gt("2.4.4", "2.4.4"));
+        assert!(version_gt("10.0.0", "9.9.9"));
     }
 }

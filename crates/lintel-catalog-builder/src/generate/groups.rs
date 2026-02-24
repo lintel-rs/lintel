@@ -11,7 +11,9 @@ use crate::refs::{RefRewriteContext, resolve_and_rewrite, resolve_and_rewrite_va
 use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
-use super::util::{extract_schema_meta, prefetch_versions, process_fetched_versions};
+use super::util::{
+    extract_schema_meta, prefetch_versions, process_fetched_versions, resolve_latest_id,
+};
 
 /// Context for processing a single group schema entry.
 pub(super) struct GroupSchemaContext<'a> {
@@ -23,6 +25,7 @@ pub(super) struct GroupSchemaContext<'a> {
 
 /// Process a single group schema entry: fetch schema + versions concurrently,
 /// then resolve refs and process versions.
+#[allow(clippy::too_many_lines)]
 pub(super) async fn process_group_schema(
     ctx: &GroupSchemaContext<'_>,
     key: &str,
@@ -85,7 +88,18 @@ pub(super) async fn process_group_schema(
         let (mut value, status) =
             schema_fetch_result.expect("fetch result must exist when URL is present")?;
         info!(url = %url, status = %status, "downloaded group schema");
-        resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &schema_url).await?;
+
+        // Use version URL as $id if latest content matches a version
+        let schema_base_url = format!("{}/schemas/{}/{key}", ctx.trimmed_base, ctx.group_key,);
+        let resolved_url = resolve_latest_id(
+            ctx.generate.cache,
+            url,
+            &version_results,
+            &schema_url,
+            &schema_base_url,
+        );
+
+        resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &resolved_url).await?;
         serde_json::to_string_pretty(&value)?
     } else {
         let source_path = ctx
