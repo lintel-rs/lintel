@@ -4,7 +4,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use glob_set::{Glob, GlobMap, GlobMapBuilder};
 use serde::Deserialize;
 
 /// Re-export canonical catalog types from `schema-catalog`.
@@ -39,60 +39,6 @@ pub fn parse_catalog(value: serde_json::Value) -> Result<Catalog, serde_json::Er
     serde_json::from_value(value)
 }
 
-/// A compiled `GlobSet` paired with the schema URL and original pattern for each index.
-struct CompiledGlobSet {
-    set: GlobSet,
-    /// `(url, original_pattern)` for each compiled glob, in index order.
-    entries: Vec<(String, String)>,
-}
-
-impl CompiledGlobSet {
-    /// Build from a list of `(pattern, url)` pairs.
-    /// Invalid patterns are silently skipped.
-    fn build(patterns: &[(String, String)]) -> Self {
-        let mut builder = GlobSetBuilder::new();
-        let mut entries = Vec::new();
-        for (pattern, url) in patterns {
-            if let Ok(glob) = Glob::new(pattern) {
-                builder.add(glob);
-                entries.push((url.clone(), pattern.clone()));
-            }
-        }
-        Self {
-            set: builder.build().unwrap_or_else(|_| GlobSet::empty()),
-            entries,
-        }
-    }
-
-    /// Return the URL of the first matching pattern, or `None`.
-    fn find_match(&self, path: &str, file_name: &str) -> Option<&str> {
-        let matches = self.set.matches(path);
-        if let Some(&idx) = matches.first() {
-            return Some(&self.entries[idx].0);
-        }
-        let matches = self.set.matches(file_name);
-        if let Some(&idx) = matches.first() {
-            return Some(&self.entries[idx].0);
-        }
-        None
-    }
-
-    /// Return the `(url, matched_pattern)` for the first matching pattern, or `None`.
-    fn find_match_detailed(&self, path: &str, file_name: &str) -> Option<(&str, &str)> {
-        let matches = self.set.matches(path);
-        if let Some(&idx) = matches.first() {
-            let (url, pat) = &self.entries[idx];
-            return Some((url, pat));
-        }
-        let matches = self.set.matches(file_name);
-        if let Some(&idx) = matches.first() {
-            let (url, pat) = &self.entries[idx];
-            return Some((url, pat));
-        }
-        None
-    }
-}
-
 /// Details about a catalog entry, stored for detailed match lookups.
 #[derive(Debug, Clone)]
 struct CatalogEntryInfo {
@@ -116,68 +62,37 @@ pub struct SchemaMatch<'a> {
     pub description: Option<&'a str>,
 }
 
+/// A glob entry stored in the `GlobMap`, carrying the schema URL and the original pattern.
+struct GlobEntry {
+    url: String,
+    pattern: String,
+}
+
 /// Compiled catalog for fast filename matching.
 ///
-/// Uses a three-tier lookup to avoid brute-force glob matching:
-/// 1. **Exact filename** — O(log n) `BTreeMap` lookup for bare filenames
-/// 2. **Extension-indexed `GlobSet`s** — compiled automaton per extension
-/// 3. **Fallback `GlobSet`** — compiled automaton for patterns that can't be indexed
+/// Uses a single [`GlobMap`] with an optimized `MatchEngine` that automatically
+/// dispatches to the fastest strategy per pattern (literal hash, extension hash,
+/// prefix/suffix tries, Aho-Corasick pre-filter).
 pub struct CompiledCatalog {
-    /// Tier 1: exact filename → schema URL.
-    exact_filename: BTreeMap<String, String>,
-    /// Tier 2: file extension → compiled glob set with URLs.
-    extension_sets: BTreeMap<String, CompiledGlobSet>,
-    /// Tier 3: patterns that can't be classified into the above tiers.
-    fallback_set: CompiledGlobSet,
-    /// Reverse lookup: schema URL → schema name.
-    url_to_name: BTreeMap<String, String>,
-    /// Reverse lookup: schema URL → catalog entry info.
+    map: GlobMap<GlobEntry>,
     url_to_entry: BTreeMap<String, CatalogEntryInfo>,
 }
 
-/// Returns `true` if the pattern is a bare filename (no glob meta-characters or path separators).
-fn is_bare_filename(pattern: &str) -> bool {
-    !pattern.contains('/')
-        && !pattern.contains('*')
-        && !pattern.contains('?')
-        && !pattern.contains('[')
-}
-
-/// Try to extract a file extension from a glob pattern.
-///
-/// Looks for the last `.ext` segment where `ext` is alphanumeric (e.g. `.yml`, `.json`).
-/// Returns `None` for patterns like `*` or `Dockerfile` with no extension.
-fn extract_extension(pattern: &str) -> Option<&str> {
-    let file_part = pattern.rsplit('/').next().unwrap_or(pattern);
-    let dot_pos = file_part.rfind('.')?;
-    let ext = &file_part[dot_pos..];
-    // Only index clean extensions (no glob chars inside the extension)
-    if ext.contains('*') || ext.contains('?') || ext.contains('[') {
-        return None;
-    }
-    // Map back to the original pattern slice
-    let offset = pattern.len() - file_part.len() + dot_pos;
-    Some(&pattern[offset..])
-}
-
 impl CompiledCatalog {
-    /// Compile a catalog into a tiered matcher.
+    /// Compile a catalog into a matcher.
     ///
     /// Entries with no `fileMatch` patterns are skipped.
-    /// Bare filename patterns are stored in an exact-match `BTreeMap`.
-    /// Patterns with a deterministic extension are compiled into per-extension `GlobSet`s.
-    /// Everything else goes into a fallback `GlobSet`.
+    /// Negation patterns (starting with `!`) are skipped.
+    /// Patterns without `/` are prepended with `**/` so they match at any depth.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an empty `GlobMap` cannot be constructed (should never happen).
     pub fn compile(catalog: &Catalog) -> Self {
-        let mut exact_filename: BTreeMap<String, String> = BTreeMap::new();
-        let mut ext_patterns: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
-        let mut fallback_patterns: Vec<(String, String)> = Vec::new();
-        let mut url_to_name: BTreeMap<String, String> = BTreeMap::new();
+        let mut builder = GlobMapBuilder::new();
         let mut url_to_entry: BTreeMap<String, CatalogEntryInfo> = BTreeMap::new();
 
         for schema in &catalog.schemas {
-            url_to_name
-                .entry(schema.url.clone())
-                .or_insert_with(|| schema.name.clone());
             url_to_entry
                 .entry(schema.url.clone())
                 .or_insert_with(|| CatalogEntryInfo {
@@ -191,31 +106,28 @@ impl CompiledCatalog {
                     continue;
                 }
 
-                if is_bare_filename(pattern) {
-                    exact_filename
-                        .entry(pattern.clone())
-                        .or_insert_with(|| schema.url.clone());
-                } else if let Some(ext) = extract_extension(pattern) {
-                    ext_patterns
-                        .entry(ext.to_ascii_lowercase())
-                        .or_default()
-                        .push((pattern.clone(), schema.url.clone()));
+                let normalized = if pattern.contains('/') {
+                    pattern.clone()
                 } else {
-                    fallback_patterns.push((pattern.clone(), schema.url.clone()));
+                    alloc::format!("**/{pattern}")
+                };
+
+                if let Ok(glob) = Glob::new(&normalized) {
+                    builder.insert(
+                        glob,
+                        GlobEntry {
+                            url: schema.url.clone(),
+                            pattern: pattern.clone(),
+                        },
+                    );
                 }
             }
         }
 
-        let extension_sets = ext_patterns
-            .into_iter()
-            .map(|(ext, patterns)| (ext, CompiledGlobSet::build(&patterns)))
-            .collect();
-
         Self {
-            exact_filename,
-            extension_sets,
-            fallback_set: CompiledGlobSet::build(&fallback_patterns),
-            url_to_name,
+            map: builder
+                .build()
+                .unwrap_or_else(|_| GlobMapBuilder::new().build().expect("empty map builds")),
             url_to_entry,
         }
     }
@@ -224,24 +136,9 @@ impl CompiledCatalog {
     ///
     /// `path` is the full path string, `file_name` is the basename.
     /// Returns the first matching schema URL, or `None`.
-    pub fn find_schema(&self, path: &str, file_name: &str) -> Option<&str> {
-        // Tier 1: exact filename lookup
-        if let Some(url) = self.exact_filename.get(file_name) {
-            return Some(url);
-        }
-
-        // Tier 2: extension-indexed GlobSet
-        if let Some(dot_pos) = file_name.rfind('.') {
-            let ext = &file_name[dot_pos..];
-            if let Some(compiled) = self.extension_sets.get(&ext.to_ascii_lowercase())
-                && let Some(url) = compiled.find_match(path, file_name)
-            {
-                return Some(url);
-            }
-        }
-
-        // Tier 3: fallback GlobSet
-        self.fallback_set.find_match(path, file_name)
+    pub fn find_schema(&self, path: &str, _file_name: &str) -> Option<&str> {
+        let path = path.strip_prefix("./").unwrap_or(path);
+        self.map.get(path).map(|e| e.url.as_str())
     }
 
     /// Find the schema for a given file path, returning detailed match info.
@@ -251,57 +148,23 @@ impl CompiledCatalog {
     pub fn find_schema_detailed<'a>(
         &'a self,
         path: &str,
-        file_name: &'a str,
+        _file_name: &'a str,
     ) -> Option<SchemaMatch<'a>> {
-        // Tier 1: exact filename lookup
-        if let Some(url) = self.exact_filename.get(file_name)
-            && let Some(entry) = self.url_to_entry.get(url.as_str())
-        {
-            return Some(SchemaMatch {
-                url,
-                matched_pattern: file_name,
-                file_match: &entry.file_match,
-                name: &entry.name,
-                description: entry.description.as_deref(),
-            });
-        }
-
-        // Tier 2: extension-indexed GlobSet
-        if let Some(dot_pos) = file_name.rfind('.') {
-            let ext = &file_name[dot_pos..];
-            if let Some(compiled) = self.extension_sets.get(&ext.to_ascii_lowercase())
-                && let Some((url, pattern)) = compiled.find_match_detailed(path, file_name)
-                && let Some(entry) = self.url_to_entry.get(url)
-            {
-                return Some(SchemaMatch {
-                    url,
-                    matched_pattern: pattern,
-                    file_match: &entry.file_match,
-                    name: &entry.name,
-                    description: entry.description.as_deref(),
-                });
-            }
-        }
-
-        // Tier 3: fallback GlobSet
-        if let Some((url, pattern)) = self.fallback_set.find_match_detailed(path, file_name)
-            && let Some(entry) = self.url_to_entry.get(url)
-        {
-            return Some(SchemaMatch {
-                url,
-                matched_pattern: pattern,
-                file_match: &entry.file_match,
-                name: &entry.name,
-                description: entry.description.as_deref(),
-            });
-        }
-
-        None
+        let path = path.strip_prefix("./").unwrap_or(path);
+        let entry = self.map.get(path)?;
+        let info = self.url_to_entry.get(&entry.url)?;
+        Some(SchemaMatch {
+            url: &entry.url,
+            matched_pattern: &entry.pattern,
+            file_match: &info.file_match,
+            name: &info.name,
+            description: info.description.as_deref(),
+        })
     }
 
     /// Look up the human-readable schema name for a given URL.
     pub fn schema_name(&self, url: &str) -> Option<&str> {
-        self.url_to_name.get(url).map(String::as_str)
+        self.url_to_entry.get(url).map(|e| e.name.as_str())
     }
 }
 

@@ -2598,7 +2598,7 @@ name = "schemastore"
 version = "0.0.8"
 dependencies = [
  "anyhow",
- "globset",
+ "glob-set",
  "schema-catalog",
  "serde",
  "serde_json",

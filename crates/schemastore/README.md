@@ -45,7 +45,9 @@ Bare filename patterns (e.g. `tsconfig.json`) are automatically expanded to also
 
 ## Design
 
-This crate is `#![no_std]` — it only depends on `alloc`, `serde`, `serde_json`, and `glob-match`. No HTTP client is included; callers fetch the catalog JSON themselves.
+Internally, `CompiledCatalog` uses a single `GlobMap` from the `glob-set` crate. The `GlobMap`'s `MatchEngine` automatically dispatches each pattern to the fastest strategy (literal hash, extension hash, prefix/suffix tries, Aho-Corasick pre-filter), so no hand-rolled tiered lookup is needed.
+
+This crate is `#![no_std]` — it only depends on `alloc`, `serde`, `serde_json`, and `glob-set`. No HTTP client is included; callers fetch the catalog JSON themselves.
 
 ## License
 
