@@ -44,13 +44,13 @@ pub(crate) fn extract_literal(pattern: &str) -> Option<&str> {
             }
             b'[' => {
                 flush!();
-                i = skip_char_class(bytes, i);
+                i = glob_matcher::skip_char_class(bytes, i);
                 cur_start = i;
                 cur_len = 0;
             }
             b'{' => {
                 flush!();
-                i = skip_braces(bytes, i);
+                i = glob_matcher::skip_braces(bytes, i);
                 cur_start = i;
                 cur_len = 0;
             }
@@ -73,52 +73,6 @@ pub(crate) fn extract_literal(pattern: &str) -> Option<&str> {
     } else {
         Some(&pattern[best])
     }
-}
-
-/// Advance past a `[...]` character class starting at `bytes[i] == b'['`.
-fn skip_char_class(bytes: &[u8], mut i: usize) -> usize {
-    i += 1; // skip `[`
-    if i < bytes.len() && matches!(bytes[i], b'^' | b'!') {
-        i += 1;
-    }
-    // `]` as first char in class is literal, not a close.
-    if i < bytes.len() && bytes[i] == b']' {
-        i += 1;
-    }
-    while i < bytes.len() && bytes[i] != b']' {
-        if bytes[i] == b'\\' {
-            i += 1;
-        }
-        i += 1;
-    }
-    if i < bytes.len() {
-        i += 1; // skip `]`
-    }
-    i
-}
-
-/// Advance past a `{...}` alternation group (potentially nested),
-/// skipping `[...]` character classes so that `}` inside brackets is not
-/// mistaken for the brace terminator.
-fn skip_braces(bytes: &[u8], mut i: usize) -> usize {
-    let mut depth = 1u32;
-    i += 1; // skip `{`
-    while i < bytes.len() && depth > 0 {
-        match bytes[i] {
-            b'[' => {
-                i = skip_char_class(bytes, i);
-                continue;
-            }
-            b'{' => depth += 1,
-            b'}' => depth -= 1,
-            b'\\' => {
-                i += 1;
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    i
 }
 
 #[cfg(test)]

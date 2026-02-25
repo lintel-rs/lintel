@@ -314,39 +314,17 @@ pub(crate) fn expand_braces(pattern: &str) -> Vec<String> {
         i += 1;
     };
 
-    // Find the matching `}`, skipping `[...]` character classes.
-    let mut depth: u32 = 1;
-    let mut in_brackets = false;
-    i = open + 1;
-    let close = loop {
-        if i >= bytes.len() {
-            // Unclosed brace — don't expand.
-            return alloc::vec![String::from(pattern)];
-        }
-        if bytes[i] == b'\\' {
-            i += 2;
-            continue;
-        }
-        if in_brackets {
-            if bytes[i] == b']' {
-                in_brackets = false;
-            }
-            i += 1;
-            continue;
-        }
-        match bytes[i] {
-            b'[' => in_brackets = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    break i;
-                }
-            }
-            _ => {}
-        }
-        i += 1;
-    };
+    // Find the matching `}` using glob-matcher's skip_braces.
+    let close_end = glob_matcher::skip_braces(bytes, open);
+    if close_end > bytes.len() || close_end == 0 {
+        // Unclosed brace — don't expand.
+        return alloc::vec![String::from(pattern)];
+    }
+    let close = close_end - 1;
+    if close <= open || bytes[close] != b'}' {
+        // Unclosed brace — don't expand.
+        return alloc::vec![String::from(pattern)];
+    }
 
     let prefix = &pattern[..open];
     let suffix = &pattern[close + 1..];
@@ -363,38 +341,34 @@ pub(crate) fn expand_braces(pattern: &str) -> Vec<String> {
     results
 }
 
-/// Split a brace interior by top-level commas (respecting nested braces).
+/// Split a brace interior by top-level commas, respecting nested braces
+/// and `[...]` character classes via `glob_matcher` helpers.
 fn split_brace_alternatives(s: &str) -> Vec<&str> {
     let bytes = s.as_bytes();
     let mut parts = Vec::new();
     let mut start = 0;
-    let mut depth: u32 = 0;
-    let mut in_brackets = false;
     let mut i = 0;
 
     while i < bytes.len() {
-        if bytes[i] == b'\\' {
-            i += 2;
-            continue;
-        }
-        if in_brackets {
-            if bytes[i] == b']' {
-                in_brackets = false;
-            }
-            i += 1;
-            continue;
-        }
         match bytes[i] {
-            b'[' => in_brackets = true,
-            b'{' => depth += 1,
-            b'}' => depth -= 1,
-            b',' if depth == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
+            b'\\' => {
+                i += 2;
             }
-            _ => {}
+            b'[' => {
+                i = glob_matcher::skip_char_class(bytes, i);
+            }
+            b'{' => {
+                i = glob_matcher::skip_braces(bytes, i);
+            }
+            b',' => {
+                parts.push(&s[start..i]);
+                i += 1;
+                start = i;
+            }
+            _ => {
+                i += 1;
+            }
         }
-        i += 1;
     }
     parts.push(&s[start..]);
     parts
