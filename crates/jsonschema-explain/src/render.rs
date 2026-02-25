@@ -41,13 +41,15 @@ pub(crate) fn render_variant_block(
         .is_some_and(|p| !p.is_empty());
     let desc = get_description(resolved);
 
+    let dep_tag = deprecated_tag(resolved, f);
+
     if has_properties || desc.is_some() {
         // Expanded block
         let ty = schema_type_str(resolved).unwrap_or_default();
         let suffix = format_type_suffix(&ty, f);
         let _ = writeln!(
             out,
-            "    {}({index}){} {}{label}{}{suffix}",
+            "    {}({index}){} {}{label}{}{dep_tag}{suffix}",
             f.dim, f.reset, f.green, f.reset
         );
         if let Some(desc) = desc {
@@ -77,24 +79,41 @@ pub(crate) fn render_properties(
     let indent = "    ".repeat(depth);
     let desc_indent = format!("{indent}    ");
 
-    // Sort required fields first, preserving relative order within each group.
+    // Sort: required first, then normal, then deprecated — preserving
+    // relative order within each group.
     let mut sorted_props: Vec<_> = props.iter().collect();
-    sorted_props.sort_by_key(|(name, _)| i32::from(!required.contains(name)));
+    sorted_props.sort_by_key(|(name, schema)| {
+        let deprecated = resolve_ref(schema, root)
+            .get("deprecated")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        // 0 = required, 1 = normal, 2 = deprecated
+        i32::from(deprecated) * 2 + i32::from(!required.contains(name))
+    });
 
     for (prop_name, prop_schema) in sorted_props {
         let prop_schema = resolve_ref(prop_schema, root);
         let ty = schema_type_str(prop_schema).unwrap_or_default();
         let is_required = required.contains(prop_name);
+        let is_deprecated = prop_schema
+            .get("deprecated")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let type_display = format_type(&ty, f);
         let req_tag = if is_required {
             format!(", {}*required{}", f.red, f.reset)
         } else {
             String::new()
         };
+        let deprecated_tag = if is_deprecated {
+            format!(" {}[DEPRECATED]{}", f.dim, f.reset)
+        } else {
+            String::new()
+        };
 
         let _ = writeln!(
             out,
-            "{indent}{}{prop_name}{} ({type_display}{req_tag})",
+            "{indent}{}{prop_name}{}{deprecated_tag} ({type_display}{req_tag})",
             f.green, f.reset
         );
 
@@ -173,9 +192,9 @@ fn render_property_details(
                 _ => keyword,
             };
             let _ = writeln!(out, "{desc_indent}{}{label}:{}", f.dim, f.reset);
-            for variant in variants {
-                let summary = variant_summary(variant, root, f);
-                let _ = writeln!(out, "{desc_indent}  - {summary}");
+            for (i, variant) in variants.iter().enumerate() {
+                let resolved = resolve_ref(variant, root);
+                render_inline_variant(out, resolved, variant, root, f, depth, desc_indent, i + 1);
             }
         }
     }
@@ -186,6 +205,78 @@ fn render_property_details(
         let nested_required = required_set(prop_schema);
         out.push('\n');
         render_properties(out, nested_props, &nested_required, root, f, depth + 1);
+    }
+}
+
+/// Render a variant inline within a property's composition list.
+///
+/// `$ref` variants are always shown as one-line references (the DEFINITIONS
+/// section has the full details). Non-ref variants with properties are
+/// expanded inline when depth allows.
+#[allow(clippy::too_many_arguments)]
+fn render_inline_variant(
+    out: &mut String,
+    resolved: &Value,
+    original: &Value,
+    root: &Value,
+    f: &Fmt<'_>,
+    depth: usize,
+    desc_indent: &str,
+    index: usize,
+) {
+    let is_ref = original.get("$ref").is_some();
+    let has_properties = resolved
+        .get("properties")
+        .and_then(Value::as_object)
+        .is_some_and(|p| !p.is_empty());
+
+    // $ref variants are kept as one-line references; non-ref variants with
+    // properties are expanded when depth allows.
+    if !is_ref && has_properties && depth < MAX_DEPTH {
+        let deprecated_tag = deprecated_tag(resolved, f);
+        let (label, label_is_type) =
+            if let Some(title) = resolved.get("title").and_then(Value::as_str) {
+                (title.to_string(), false)
+            } else if let Some(ty) = schema_type_str(resolved) {
+                (ty, true)
+            } else {
+                (format!("variant {index}"), false)
+            };
+        let suffix = if label_is_type {
+            String::new()
+        } else {
+            let ty = schema_type_str(resolved).unwrap_or_default();
+            format_type_suffix(&ty, f)
+        };
+        let _ = writeln!(
+            out,
+            "{desc_indent}  {}({index}){} {}{label}{}{deprecated_tag}{suffix}",
+            f.dim, f.reset, f.green, f.reset
+        );
+        if let Some(desc) = get_description(resolved) {
+            let nested_indent = format!("{desc_indent}      ");
+            write_description(out, desc, f, &nested_indent);
+        }
+        if let Some(props) = resolved.get("properties").and_then(Value::as_object) {
+            let req = required_set(resolved);
+            render_properties(out, props, &req, root, f, depth + 2);
+        }
+    } else {
+        let summary = variant_summary(original, root, f);
+        let _ = writeln!(out, "{desc_indent}  - {summary}");
+    }
+}
+
+/// Return a `" [DEPRECATED]"` tag if the schema has `"deprecated": true`.
+fn deprecated_tag(schema: &Value, f: &Fmt<'_>) -> String {
+    if schema
+        .get("deprecated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        format!(" {}[DEPRECATED]{}", f.dim, f.reset)
+    } else {
+        String::new()
     }
 }
 

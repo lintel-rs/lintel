@@ -178,10 +178,28 @@ fn render_definitions_section(out: &mut String, schema: &Value, f: &Fmt<'_>) {
             && !defs.is_empty()
         {
             write_section(out, "DEFINITIONS", f);
-            for (def_name, def_schema) in defs {
+            // Sort deprecated definitions to the end.
+            let mut sorted_defs: Vec<_> = defs.iter().collect();
+            sorted_defs.sort_by_key(|(_, s)| {
+                i32::from(
+                    s.get("deprecated")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                )
+            });
+            for (def_name, def_schema) in sorted_defs {
                 let ty = schema_type_str(def_schema).unwrap_or_default();
                 let suffix = format_type_suffix(&ty, f);
-                let _ = writeln!(out, "    {}{def_name}{}{suffix}", f.green, f.reset);
+                let is_deprecated = def_schema
+                    .get("deprecated")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let dep_tag = if is_deprecated {
+                    format!(" {}[DEPRECATED]{}", f.dim, f.reset)
+                } else {
+                    String::new()
+                };
+                let _ = writeln!(out, "    {}{def_name}{}{dep_tag}{suffix}", f.green, f.reset);
                 if let Some(desc) = get_description(def_schema) {
                     write_description(out, desc, f, "        ");
                 }

@@ -161,40 +161,76 @@ pub(crate) fn get_description(schema: &Value) -> Option<&str> {
 /// Produce a one-line summary of a variant schema for `oneOf`/`anyOf`/`allOf` listings.
 pub(crate) fn variant_summary(variant: &Value, root: &Value, f: &Fmt<'_>) -> String {
     let resolved = resolve_ref(variant, root);
+    let dep = if resolved
+        .get("deprecated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        format!(" {}[DEPRECATED]{}", f.dim, f.reset)
+    } else {
+        String::new()
+    };
 
+    // Title first — best label for any variant.
     if let Some(title) = resolved.get("title").and_then(Value::as_str) {
         let ty = schema_type_str(resolved).unwrap_or_default();
         if ty.is_empty() {
-            return format!("{}{title}{}", f.bold, f.reset);
+            return format!("{}{title}{}{dep}", f.bold, f.reset);
         }
-        return format!("{}{title}{} ({})", f.bold, f.reset, format_type(&ty, f));
+        return format!(
+            "{}{title}{}{dep} ({})",
+            f.bold,
+            f.reset,
+            format_type(&ty, f)
+        );
+    }
+
+    // $ref variants without a title: show the ref name — DEFINITIONS has details.
+    if let Some(r) = variant.get("$ref").and_then(Value::as_str) {
+        if r.starts_with("#/") {
+            return format!("{}{}{}{dep}", f.cyan, ref_name(r), f.reset);
+        }
+        return format!("{}(see: {r}){}{dep}", f.dim, f.reset);
     }
 
     if let Some(desc) = get_description(resolved) {
+        let first_line = first_sentence(desc);
         let ty = schema_type_str(resolved).unwrap_or_default();
         let rendered = if f.is_color() {
-            markdown_to_ansi::render_inline(desc, &f.md_opts(None))
+            markdown_to_ansi::render_inline(first_line, &f.md_opts(None))
         } else {
-            desc.to_string()
+            first_line.to_string()
         };
         if ty.is_empty() {
-            return rendered;
+            return format!("{rendered}{dep}");
         }
-        return format!("{} - {rendered}", format_type(&ty, f));
-    }
-
-    if let Some(r) = variant.get("$ref").and_then(Value::as_str) {
-        if r.starts_with("#/") {
-            return format!("{}{}{}", f.cyan, ref_name(r), f.reset);
-        }
-        return format!("{}(see: {r}){}", f.dim, f.reset);
+        return format!("{} - {rendered}{dep}", format_type(&ty, f));
     }
 
     if let Some(ty) = schema_type_str(resolved) {
-        return format_type(&ty, f);
+        return format!("{}{dep}", format_type(&ty, f));
     }
 
-    format!("{}(schema){}", f.dim, f.reset)
+    format!("{}(schema){}{dep}", f.dim, f.reset)
+}
+
+/// Extract the first sentence or line from a description for one-line summaries.
+fn first_sentence(desc: &str) -> &str {
+    // Use the first line break (paragraph boundary) if present.
+    let trimmed = desc.trim();
+    if let Some(pos) = trimmed.find("\n\n") {
+        let first = trimmed[..pos].trim();
+        if !first.is_empty() {
+            return first;
+        }
+    }
+    if let Some(pos) = trimmed.find('\n') {
+        let first = trimmed[..pos].trim();
+        if !first.is_empty() {
+            return first;
+        }
+    }
+    trimmed
 }
 
 #[cfg(test)]
