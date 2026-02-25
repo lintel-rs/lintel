@@ -83,29 +83,31 @@ jobs:
           name: ${{ matrix.binary }}-${{ matrix.target }}
           path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
 
+  # Build GNU/Linux binaries in Docker using Debian 11 (bullseye) to support
+  # older versions of glibc. Inspired by Biome's build setup:
+  # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
   build-cargo:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
+    env:
+      RUSTFLAGS: "-C strip=symbols -C codegen-units=1"
     strategy:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            container: debian:buster-slim
+            container: rust:bullseye
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-            container: debian:buster-slim
+            container: rust:bullseye
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     steps:
-      - name: Install build dependencies
-        if: matrix.container
-        run: apt-get update && apt-get install -y curl gcc git
-
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
+        if: "!matrix.container"
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
