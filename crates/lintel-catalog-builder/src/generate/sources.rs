@@ -83,6 +83,19 @@ pub(super) async fn process_source(
             continue;
         }
 
+        // Skip schemas whose fileMatch entries match any exclude-matches pattern
+        if !source_config.exclude_matches.is_empty()
+            && schema.file_match.iter().any(|fm| {
+                source_config
+                    .exclude_matches
+                    .iter()
+                    .any(|pat| organize_glob_matches(pat, fm))
+            })
+        {
+            debug!(schema = %schema.name, "excluded by exclude-matches");
+            continue;
+        }
+
         let target_dir = classify_schema(schema, &source_config.organize, source_name)?;
         let base_slug = slugify(&schema.name);
 

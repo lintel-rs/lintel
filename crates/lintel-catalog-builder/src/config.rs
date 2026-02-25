@@ -205,6 +205,15 @@ pub struct SourceConfig {
     /// `{"schemas": [...]}`).
     #[schemars(example = &"https://www.schemastore.org/api/json/catalog.json")]
     pub url: String,
+    /// Filenames to exclude from this source.
+    ///
+    /// If any of a schema's `fileMatch` entries match one of these patterns
+    /// (using the same glob logic as `organize`), the schema is skipped
+    /// entirely. Use this to suppress source schemas that duplicate
+    /// explicitly configured group entries.
+    #[schemars(example = &["biome.jsonc"])]
+    #[serde(default)]
+    pub exclude_matches: Vec<String>,
     /// Rules for routing schemas from this source into local groups.
     ///
     /// Each key is a group identifier (matching a key in `[groups]`) and the
@@ -378,6 +387,36 @@ base_url = "https://example.com/"
             }
             TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
         }
+    }
+
+    #[test]
+    fn parse_source_with_exclude_matches() {
+        let toml = r#"
+[catalog]
+
+[sources.schemastore]
+url = "https://www.schemastore.org/api/json/catalog.json"
+exclude-matches = ["biome.jsonc", "prettier.json"]
+
+[sources.schemastore.organize.github]
+match = ["**.github**"]
+"#;
+        let config = load_config(toml).expect("parse");
+        let ss = &config.sources["schemastore"];
+        assert_eq!(ss.exclude_matches, vec!["biome.jsonc", "prettier.json"]);
+    }
+
+    #[test]
+    fn parse_source_exclude_matches_defaults_empty() {
+        let toml = r#"
+[catalog]
+
+[sources.schemastore]
+url = "https://www.schemastore.org/api/json/catalog.json"
+"#;
+        let config = load_config(toml).expect("parse");
+        let ss = &config.sources["schemastore"];
+        assert!(ss.exclude_matches.is_empty());
     }
 
     #[test]

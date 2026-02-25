@@ -137,7 +137,16 @@ pub fn filename_from_url(url: &str) -> Result<String> {
         .map(Iterator::collect)
         .unwrap_or_default();
     if let Some(last) = segments.last().filter(|s| !s.is_empty()) {
-        return Ok((*last).to_string());
+        let name = (*last).to_string();
+        // Ensure .json extension so the HTML generator can safely strip it
+        // to create a directory path that won't collide with the file.
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
+            return Ok(name);
+        }
+        return Ok(format!("{name}.json"));
     }
     // No path segments — use domain as filename
     let host = parsed
@@ -571,6 +580,18 @@ mod tests {
         assert_eq!(
             filename_from_url("https://example.com/a/b/c/my-schema.json").expect("ok"),
             "my-schema.json"
+        );
+    }
+
+    #[test]
+    fn filename_from_url_appends_json_extension() {
+        assert_eq!(
+            filename_from_url("https://example.com/version/1").expect("ok"),
+            "1.json"
+        );
+        assert_eq!(
+            filename_from_url("https://example.com/schemas/feed-1").expect("ok"),
+            "feed-1.json"
         );
     }
 
