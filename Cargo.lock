@@ -1471,7 +1471,7 @@ dependencies = [
  "lintel-schema-cache",
  "minijinja",
  "percent-encoding",
- "pulldown-cmark",
+ "pulldown-cmark 0.13.1",
  "reqwest",
  "schema-catalog",
  "schemars",
