@@ -109,7 +109,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "workspace"
+          shared-key: build-${{ matrix.target }}
 
       - name: Build
         run: cargo build --release --package lintel --target ${{ matrix.target }}
