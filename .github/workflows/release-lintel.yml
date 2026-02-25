@@ -83,6 +83,29 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  action:
+    name: Update lintel-rs/action tags
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update version tags on lintel-rs/action
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_RELEASE_TOKEN }}
+        run: |
+          VERSION="v${{ inputs.version }}"
+          MAJOR="v$(echo "${{ inputs.version }}" | cut -d. -f1)"
+          HEAD=$(gh api repos/lintel-rs/action/git/ref/heads/main --jq .object.sha)
+
+          # Create vX.Y.Z tag
+          gh api repos/lintel-rs/action/git/refs \
+            -X POST -f ref="refs/tags/${VERSION}" -f sha="$HEAD"
+
+          # Update vX tag
+          gh api repos/lintel-rs/action/git/refs/tags/${MAJOR} \
+            -X PATCH -f sha="$HEAD" -F force=true 2>/dev/null \
+          || gh api repos/lintel-rs/action/git/refs \
+            -X POST -f ref="refs/tags/${MAJOR}" -f sha="$HEAD"
+
   docker-build:
     name: Docker (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
