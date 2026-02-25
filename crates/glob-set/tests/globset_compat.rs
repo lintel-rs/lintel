@@ -393,10 +393,7 @@ fn matchalt_globstar_foo() {
     assert_match("{**/src/**,foo}", "foo");
 }
 
-// In globset, `[}]` inside `{...}` is parsed as a character class containing `}`.
-// glob-set (via glob-matcher) does not handle this edge case.
 #[test]
-#[ignore = "glob-set: [}] inside alternates is not supported"]
 fn matchalt_bracket_in_alt() {
     assert_match("{[}],foo}", "}");
 }

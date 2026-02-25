@@ -97,12 +97,18 @@ fn skip_char_class(bytes: &[u8], mut i: usize) -> usize {
     i
 }
 
-/// Advance past a `{...}` alternation group (potentially nested).
+/// Advance past a `{...}` alternation group (potentially nested),
+/// skipping `[...]` character classes so that `}` inside brackets is not
+/// mistaken for the brace terminator.
 fn skip_braces(bytes: &[u8], mut i: usize) -> usize {
     let mut depth = 1u32;
     i += 1; // skip `{`
     while i < bytes.len() && depth > 0 {
         match bytes[i] {
+            b'[' => {
+                i = skip_char_class(bytes, i);
+                continue;
+            }
             b'{' => depth += 1,
             b'}' => depth -= 1,
             b'\\' => {

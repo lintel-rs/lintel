@@ -657,6 +657,8 @@ mod tests {
         assert!(!glob_match("a/{a{a,b},b}", "a/c"));
         assert!(glob_match("a/{b,c[}]*}", "a/b"));
         assert!(glob_match("a/{b,c[}]*}", "a/c}xx"));
+        assert!(glob_match("{[}],foo}", "}"));
+        assert!(glob_match("{[}],foo}", "foo"));
     }
 
     // The below tests are based on Bash and micromatch.

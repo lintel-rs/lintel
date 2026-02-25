@@ -314,8 +314,9 @@ pub(crate) fn expand_braces(pattern: &str) -> Vec<String> {
         i += 1;
     };
 
-    // Find the matching `}`.
+    // Find the matching `}`, skipping `[...]` character classes.
     let mut depth: u32 = 1;
+    let mut in_brackets = false;
     i = open + 1;
     let close = loop {
         if i >= bytes.len() {
@@ -326,7 +327,15 @@ pub(crate) fn expand_braces(pattern: &str) -> Vec<String> {
             i += 2;
             continue;
         }
+        if in_brackets {
+            if bytes[i] == b']' {
+                in_brackets = false;
+            }
+            i += 1;
+            continue;
+        }
         match bytes[i] {
+            b'[' => in_brackets = true,
             b'{' => depth += 1,
             b'}' => {
                 depth -= 1;
@@ -360,6 +369,7 @@ fn split_brace_alternatives(s: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut depth: u32 = 0;
+    let mut in_brackets = false;
     let mut i = 0;
 
     while i < bytes.len() {
@@ -367,7 +377,15 @@ fn split_brace_alternatives(s: &str) -> Vec<&str> {
             i += 2;
             continue;
         }
+        if in_brackets {
+            if bytes[i] == b']' {
+                in_brackets = false;
+            }
+            i += 1;
+            continue;
+        }
         match bytes[i] {
+            b'[' => in_brackets = true,
             b'{' => depth += 1,
             b'}' => depth -= 1,
             b',' if depth == 0 => {
@@ -632,6 +650,13 @@ mod tests {
     #[test]
     fn expand_unclosed_brace_no_expansion() {
         assert_eq!(expand_braces("{a,b"), vec!["{a,b"]);
+    }
+
+    #[test]
+    fn expand_braces_skips_brackets() {
+        // `[}]` inside `{...}` is a character class, not a brace terminator.
+        let result = expand_braces("{[}],foo}");
+        assert_eq!(result, vec!["[}]", "foo"]);
     }
 
     // -- brace expansion → strategy classification --

@@ -69,6 +69,18 @@ The build-time advantage comes from avoiding regex compilation entirely. This ma
 
 For single-pattern `**` matching, `globset`'s regex backend is faster. The `glob-set` advantage shows in multi-pattern `GlobSet` matching (where the Aho-Corasick pre-filter and strategy engine apply) and dramatically in build times.
 
+## Differences from `globset`
+
+`glob-set` follows POSIX/gitignore semantics where `*` does **not** match path separators (`/`). In `globset`, `*` crosses `/` by default.
+
+| Pattern  | Path        | `glob-set` | `globset` |
+| -------- | ----------- | ---------- | --------- |
+| `*.c`    | `foo.c`     | match      | match     |
+| `*.c`    | `src/foo.c` | **no**     | match     |
+| `**/*.c` | `src/foo.c` | match      | match     |
+
+If you need recursive matching, use `**` explicitly (e.g. `**/*.c` instead of `*.c`). This is consistent with how `.gitignore` and most POSIX glob implementations behave.
+
 ## Acknowledgments
 
 This crate is based on the API and design of [globset](https://crates.io/crates/globset) by [Andrew Gallant (BurntSushi)](https://github.com/BurntSushi), part of the [ripgrep](https://github.com/BurntSushi/ripgrep) project. The original `globset` crate is an excellent, battle-tested library — `glob-set` reimplements its API surface with a `no_std`-compatible, regex-free backend built on [glob-matcher](https://crates.io/crates/glob-matcher).
