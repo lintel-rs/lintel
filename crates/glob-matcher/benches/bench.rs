@@ -1,7 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use glob_matcher::glob_match;
 
 const PATH: &str = "some/a/bigger/path/to/the/crazy/needle.txt";
 const GLOB: &str = "some/**/needle.txt";
@@ -20,8 +19,16 @@ fn globset(pat: &str, s: &str) -> bool {
     pat.is_match(s)
 }
 
+fn glob_matcher_crate(b: &mut Criterion) {
+    b.bench_function("glob_matcher_crate", |b| {
+        b.iter(|| assert!(glob_matcher::glob_match(GLOB, PATH)));
+    });
+}
+
 fn glob_match_crate(b: &mut Criterion) {
-    b.bench_function("mine", |b| b.iter(|| assert!(glob_match(GLOB, PATH))));
+    b.bench_function("glob_match_crate", |b| {
+        b.iter(|| assert!(glob_match::glob_match(GLOB, PATH)));
+    });
 }
 
 fn glob_crate(b: &mut Criterion) {
@@ -32,5 +39,11 @@ fn globset_crate(b: &mut Criterion) {
     b.bench_function("globset_crate", |b| b.iter(|| assert!(globset(GLOB, PATH))));
 }
 
-criterion_group!(benches, globset_crate, glob_crate, glob_match_crate);
+criterion_group!(
+    benches,
+    globset_crate,
+    glob_crate,
+    glob_matcher_crate,
+    glob_match_crate,
+);
 criterion_main!(benches);
