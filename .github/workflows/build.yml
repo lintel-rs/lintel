@@ -64,9 +64,7 @@ jobs:
 
       - name: Verify static linking
         if: contains(matrix.target, 'musl')
-        run: |
-          file ./result/bin/${{ matrix.binary }}
-          file ./result/bin/${{ matrix.binary }} | grep -q "statically linked"
+        run: "! ldd ./result/bin/${{ matrix.binary }}"
 
       - name: Package
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
