@@ -41,6 +41,23 @@ fn example_registry() -> Vec<String> {
     vec!["https://example.com/custom-catalog.json".into()]
 }
 
+/// Formatting configuration.
+///
+/// Controls how `lintel format` behaves. The `dprint` field passes
+/// configuration through to the dprint-based formatters (JSON, TOML,
+/// Markdown) and `pretty_yaml`.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(title = "Format")]
+pub struct Format {
+    /// dprint formatter configuration.
+    ///
+    /// Global fields (`lineWidth`, `indentWidth`, `useTabs`, `newLineKind`)
+    /// apply to all formatters. Per-plugin sections (`json`, `toml`,
+    /// `markdown`) override the global defaults for that plugin.
+    pub dprint: Option<dprint_config::DprintConfig>,
+}
+
 /// Conditional settings applied to files or schemas matching specific patterns.
 ///
 /// Each `[[override]]` block targets files by path glob, schemas by URI glob,
@@ -189,6 +206,11 @@ pub struct Config {
     /// before parent config overrides after merging.
     #[serde(default, rename = "override")]
     pub overrides: Vec<Override>,
+
+    /// Formatting configuration for `lintel format`.
+    #[schemars(title = "Format")]
+    #[serde(default)]
+    pub format: Option<Format>,
 }
 
 impl Config {
@@ -213,6 +235,10 @@ impl Config {
         }
         // Child overrides come first (higher priority), then parent overrides.
         self.overrides.extend(parent.overrides);
+        // Child format takes priority; fall back to parent's.
+        if self.format.is_none() {
+            self.format = parent.format;
+        }
     }
 
     /// Find a custom schema mapping for the given file path.
@@ -768,6 +794,121 @@ files = ["schemas/vector.json"]
         assert!(!config.should_validate_formats("schemas/vector.json", &[]));
         // Second override matches for other files, returns true
         assert!(config.should_validate_formats("schemas/other.json", &[]));
+    }
+
+    // --- Format / dprint config ---
+
+    #[test]
+    fn parses_format_dprint_config_kebab_case() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            r#"
+root = true
+
+[format.dprint]
+line-width = 100
+
+[format.dprint.toml]
+"cargo.applyConventions" = false
+
+[format.dprint.json]
+indent-width = 4
+trailing-commas = "never"
+"#,
+        )?;
+
+        let config = find_and_load(tmp.path())?.expect("config should exist");
+        let fmt = config.format.expect("format section should exist");
+        let dprint = fmt.dprint.expect("dprint section should exist");
+        assert_eq!(dprint.line_width, Some(100));
+        let toml_cfg = dprint.toml.expect("toml section should exist");
+        assert_eq!(toml_cfg.cargo_apply_conventions, Some(false));
+        let json_cfg = dprint.json.expect("json section should exist");
+        assert_eq!(json_cfg.indent_width, Some(4));
+        Ok(())
+    }
+
+    #[test]
+    fn parses_format_dprint_config_camel_case() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            r#"
+root = true
+
+[format.dprint]
+lineWidth = 100
+
+[format.dprint.toml]
+"cargo.applyConventions" = false
+
+[format.dprint.json]
+indentWidth = 4
+trailingCommas = "never"
+"#,
+        )?;
+
+        let config = find_and_load(tmp.path())?.expect("config should exist");
+        let fmt = config.format.expect("format section should exist");
+        let dprint = fmt.dprint.expect("dprint section should exist");
+        assert_eq!(dprint.line_width, Some(100));
+        let toml_cfg = dprint.toml.expect("toml section should exist");
+        assert_eq!(toml_cfg.cargo_apply_conventions, Some(false));
+        let json_cfg = dprint.json.expect("json section should exist");
+        assert_eq!(json_cfg.indent_width, Some(4));
+        Ok(())
+    }
+
+    #[test]
+    fn format_section_child_takes_priority() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let sub = tmp.path().join("child");
+        fs::create_dir_all(&sub)?;
+
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            r"
+[format.dprint]
+lineWidth = 80
+",
+        )?;
+
+        fs::write(
+            sub.join("lintel.toml"),
+            r"
+[format.dprint]
+lineWidth = 120
+",
+        )?;
+
+        let config = find_and_load(&sub)?.expect("config should exist");
+        let dprint = config.format.expect("format").dprint.expect("dprint");
+        assert_eq!(dprint.line_width, Some(120));
+        Ok(())
+    }
+
+    #[test]
+    fn format_section_inherits_from_parent() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let sub = tmp.path().join("child");
+        fs::create_dir_all(&sub)?;
+
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            r"
+[format.dprint]
+lineWidth = 80
+",
+        )?;
+
+        // Child has no format section
+        fs::write(sub.join("lintel.toml"), "exclude = [\"test/**\"]\n")?;
+
+        let config = find_and_load(&sub)?.expect("config should exist");
+        let dprint = config.format.expect("format").dprint.expect("dprint");
+        assert_eq!(dprint.line_width, Some(80));
+        Ok(())
     }
 
     #[test]

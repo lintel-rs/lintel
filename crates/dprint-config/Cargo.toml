@@ -1,0 +1,19 @@
+[package]
+name = "dprint-config"
+version = "0.0.1"
+authors.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
+homepage.workspace = true
+keywords = ["dprint", "formatter", "config", "json-schema"]
+license.workspace = true
+repository.workspace = true
+description = "Strongly-typed configuration structs and JSON Schema for dprint formatter plugins (TypeScript, JSON, TOML, Markdown). Used by [Lintel](https://github.com/lintel-rs/lintel) to pass user formatting options through to dprint."
+
+[lints]
+workspace = true
+
+[dependencies]
+schemars = { version = "1", default-features = false, features = ["derive"] }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

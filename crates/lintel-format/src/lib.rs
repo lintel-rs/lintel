@@ -3,6 +3,8 @@
 
 extern crate alloc;
 
+mod toml;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -39,22 +41,145 @@ fn detect_format(path: &Path) -> Option<FormatKind> {
 // dprint configuration (constructed once, reused)
 // ---------------------------------------------------------------------------
 
-fn json_config() -> dprint_plugin_json::configuration::Configuration {
-    dprint_plugin_json::configuration::ConfigurationBuilder::new().build()
+/// Pre-built native configs for all formatters.
+pub struct FormatConfig {
+    json: dprint_plugin_json::configuration::Configuration,
+    toml: dprint_plugin_toml::configuration::Configuration,
+    markdown: dprint_plugin_markdown::configuration::Configuration,
+    yaml: pretty_yaml::config::FormatOptions,
 }
 
-fn toml_config() -> dprint_plugin_toml::configuration::Configuration {
-    dprint_plugin_toml::configuration::ConfigurationBuilder::new()
-        .cargo_apply_conventions(true)
-        .build()
+impl Default for FormatConfig {
+    fn default() -> Self {
+        Self {
+            json: dprint_plugin_json::configuration::ConfigurationBuilder::new().build(),
+            toml: dprint_plugin_toml::configuration::ConfigurationBuilder::new().build(),
+            markdown: dprint_plugin_markdown::configuration::ConfigurationBuilder::new().build(),
+            yaml: pretty_yaml::config::FormatOptions::default(),
+        }
+    }
 }
 
-fn markdown_config() -> dprint_plugin_markdown::configuration::Configuration {
-    dprint_plugin_markdown::configuration::ConfigurationBuilder::new().build()
+impl FormatConfig {
+    /// Build formatter configs from a `DprintConfig`.
+    fn from_dprint(dprint: &dprint_config::DprintConfig) -> Self {
+        let global = build_global_config(dprint);
+
+        let json = {
+            let map = dprint
+                .json
+                .as_ref()
+                .and_then(|j| serde_json::to_value(j).ok())
+                .map(|v| json_value_to_config_key_map(&v))
+                .unwrap_or_default();
+            dprint_plugin_json::configuration::resolve_config(map, &global).config
+        };
+
+        let toml = {
+            let map = dprint
+                .toml
+                .as_ref()
+                .and_then(|t| serde_json::to_value(t).ok())
+                .map(|v| json_value_to_config_key_map(&v))
+                .unwrap_or_default();
+            dprint_plugin_toml::configuration::resolve_config(map, &global).config
+        };
+
+        let markdown = {
+            let map = dprint
+                .markdown
+                .as_ref()
+                .and_then(|m| serde_json::to_value(m).ok())
+                .map(|v| json_value_to_config_key_map(&v))
+                .unwrap_or_default();
+            dprint_plugin_markdown::configuration::resolve_config(map, &global).config
+        };
+
+        let yaml = {
+            let mut opts = pretty_yaml::config::FormatOptions::default();
+            if let Some(w) = dprint.line_width {
+                opts.layout.print_width = w as usize;
+            }
+            if let Some(w) = dprint.indent_width {
+                opts.layout.indent_width = w as usize;
+            }
+            opts
+        };
+
+        Self {
+            json,
+            toml,
+            markdown,
+            yaml,
+        }
+    }
 }
 
-fn yaml_options() -> pretty_yaml::config::FormatOptions {
-    pretty_yaml::config::FormatOptions::default()
+/// Build a `GlobalConfiguration` from `DprintConfig` global fields.
+fn build_global_config(
+    dprint: &dprint_config::DprintConfig,
+) -> dprint_core::configuration::GlobalConfiguration {
+    use dprint_core::configuration::GlobalConfiguration;
+
+    GlobalConfiguration {
+        line_width: dprint.line_width,
+        use_tabs: dprint.use_tabs,
+        indent_width: dprint.indent_width.and_then(|v| u8::try_from(v).ok()),
+        new_line_kind: dprint.new_line_kind.map(|nk| match nk {
+            dprint_config::NewLineKind::Crlf => {
+                dprint_core::configuration::NewLineKind::CarriageReturnLineFeed
+            }
+            dprint_config::NewLineKind::Lf => dprint_core::configuration::NewLineKind::LineFeed,
+            // dprint-core doesn't have a System variant; map to Auto
+            dprint_config::NewLineKind::Auto | dprint_config::NewLineKind::System => {
+                dprint_core::configuration::NewLineKind::Auto
+            }
+        }),
+    }
+}
+
+/// Convert a `serde_json::Value` object into dprint's `ConfigKeyMap`.
+///
+/// Only top-level string, number (i32), and bool values are converted;
+/// nested objects and arrays are skipped since dprint plugins don't use them
+/// for their config keys (except `jsonTrailingCommaFiles` which we handle
+/// specially).
+fn json_value_to_config_key_map(
+    value: &serde_json::Value,
+) -> dprint_core::configuration::ConfigKeyMap {
+    use dprint_core::configuration::{ConfigKeyMap, ConfigKeyValue};
+
+    let Some(obj) = value.as_object() else {
+        return ConfigKeyMap::new();
+    };
+
+    let mut map = ConfigKeyMap::new();
+    for (key, val) in obj {
+        let ckv = match val {
+            serde_json::Value::String(s) => ConfigKeyValue::from_str(s),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    ConfigKeyValue::from_i32(i32::try_from(i).unwrap_or(i32::MAX))
+                } else {
+                    continue;
+                }
+            }
+            serde_json::Value::Bool(b) => ConfigKeyValue::from_bool(*b),
+            serde_json::Value::Array(arr) => {
+                let items: Vec<ConfigKeyValue> = arr
+                    .iter()
+                    .filter_map(|v| match v {
+                        serde_json::Value::String(s) => Some(ConfigKeyValue::from_str(s)),
+                        _ => None,
+                    })
+                    .collect();
+                ConfigKeyValue::Array(items)
+            }
+            _ => continue,
+        };
+        map.insert(key.clone(), ckv);
+    }
+    map
 }
 
 // ---------------------------------------------------------------------------
@@ -67,53 +192,40 @@ fn yaml_options() -> pretty_yaml::config::FormatOptions {
 /// # Errors
 ///
 /// Returns an error if the file content cannot be parsed.
-pub fn format_content(path: &Path, content: &str) -> Result<Option<String>> {
+pub fn format_content(path: &Path, content: &str, cfg: &FormatConfig) -> Result<Option<String>> {
     let Some(kind) = detect_format(path) else {
         return Ok(None);
     };
 
     match kind {
         FormatKind::Json | FormatKind::Jsonc => {
-            let config = json_config();
-            dprint_plugin_json::format_text(path, content, &config)
+            dprint_plugin_json::format_text(path, content, &cfg.json)
                 .map_err(|e| anyhow::anyhow!("{e}"))
         }
-        FormatKind::Toml => {
-            let config = toml_config();
-            dprint_plugin_toml::format_text(path, content, &config)
-                .map_err(|e| anyhow::anyhow!("{e}"))
-        }
-        FormatKind::Yaml => {
-            let opts = yaml_options();
-            match pretty_yaml::format_text(content, &opts) {
-                Ok(formatted) => {
-                    if formatted == content {
-                        Ok(None)
-                    } else {
-                        Ok(Some(formatted))
-                    }
+        FormatKind::Toml => toml::format_text(path, content, &cfg.toml),
+        FormatKind::Yaml => match pretty_yaml::format_text(content, &cfg.yaml) {
+            Ok(formatted) => {
+                if formatted == content {
+                    Ok(None)
+                } else {
+                    Ok(Some(formatted))
                 }
-                Err(e) => Err(anyhow::anyhow!("YAML syntax error: {e}")),
             }
-        }
+            Err(e) => Err(anyhow::anyhow!("YAML syntax error: {e}")),
+        },
         FormatKind::Markdown => {
-            let md_config = markdown_config();
-            let json_cfg = json_config();
-            let toml_cfg = toml_config();
-            let yaml_opts = yaml_options();
-
-            dprint_plugin_markdown::format_text(content, &md_config, |tag, text, _line_width| {
+            dprint_plugin_markdown::format_text(content, &cfg.markdown, |tag, text, _line_width| {
                 match tag {
                     "json" => {
-                        dprint_plugin_json::format_text(Path::new("code.json"), text, &json_cfg)
+                        dprint_plugin_json::format_text(Path::new("code.json"), text, &cfg.json)
                     }
                     "jsonc" => {
-                        dprint_plugin_json::format_text(Path::new("code.jsonc"), text, &json_cfg)
+                        dprint_plugin_json::format_text(Path::new("code.jsonc"), text, &cfg.json)
                     }
                     "toml" => {
-                        dprint_plugin_toml::format_text(Path::new("code.toml"), text, &toml_cfg)
+                        dprint_plugin_toml::format_text(Path::new("code.toml"), text, &cfg.toml)
                     }
-                    "yaml" | "yml" => match pretty_yaml::format_text(text, &yaml_opts) {
+                    "yaml" | "yml" => match pretty_yaml::format_text(text, &cfg.yaml) {
                         Ok(formatted) if formatted == text => Ok(None),
                         Ok(formatted) => Ok(Some(formatted)),
                         Err(_) => Ok(None),
@@ -349,7 +461,12 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 // Config loading
 // ---------------------------------------------------------------------------
 
-fn merge_config_excludes(globs: &[String], user_excludes: &[String]) -> Vec<String> {
+struct LoadedConfig {
+    excludes: Vec<String>,
+    format: FormatConfig,
+}
+
+fn load_config(globs: &[String], user_excludes: &[String]) -> LoadedConfig {
     let search_dir = globs
         .iter()
         .find(|g| Path::new(g).is_dir())
@@ -362,13 +479,24 @@ fn merge_config_excludes(globs: &[String], user_excludes: &[String]) -> Vec<Stri
 
     match cfg_result {
         Ok(cfg) => {
+            let format = cfg
+                .format
+                .as_ref()
+                .and_then(|f| f.dprint.as_ref())
+                .map(FormatConfig::from_dprint)
+                .unwrap_or_default();
+
             let mut excludes = cfg.exclude;
             excludes.extend(user_excludes.iter().cloned());
-            excludes
+
+            LoadedConfig { excludes, format }
         }
         Err(e) => {
             eprintln!("warning: failed to load lintel.toml: {e}");
-            user_excludes.to_vec()
+            LoadedConfig {
+                excludes: user_excludes.to_vec(),
+                format: FormatConfig::default(),
+            }
         }
     }
 }
@@ -424,8 +552,8 @@ pub struct FormatResult {
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
 pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<FormatDiagnostic>> {
-    let exclude = merge_config_excludes(globs, user_excludes);
-    let files = collect_files(globs, &exclude)?;
+    let loaded = load_config(globs, user_excludes);
+    let files = collect_files(globs, &loaded.excludes)?;
 
     let mut diagnostics = Vec::new();
     for file_path in &files {
@@ -433,7 +561,7 @@ pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<Fo
             continue;
         };
 
-        if let Ok(Some(formatted)) = format_content(file_path, &content) {
+        if let Ok(Some(formatted)) = format_content(file_path, &content, &loaded.format) {
             let path_str = file_path.display().to_string();
             diagnostics.push(make_diagnostic(path_str, &content, &formatted));
         }
@@ -451,8 +579,8 @@ pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<Fo
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
 pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
-    let exclude = merge_config_excludes(globs, user_excludes);
-    let files = collect_files(globs, &exclude)?;
+    let loaded = load_config(globs, user_excludes);
+    let files = collect_files(globs, &loaded.excludes)?;
 
     let mut fixed = 0;
     for file_path in &files {
@@ -460,7 +588,7 @@ pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
             continue;
         };
 
-        if let Ok(Some(formatted)) = format_content(file_path, &content) {
+        if let Ok(Some(formatted)) = format_content(file_path, &content, &loaded.format) {
             fs::write(file_path, formatted)?;
             fixed += 1;
         }
@@ -478,8 +606,8 @@ pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
 pub fn run(args: &FormatArgs) -> Result<FormatResult> {
-    let exclude = merge_config_excludes(&args.globs, &args.exclude);
-    let files = collect_files(&args.globs, &exclude)?;
+    let loaded = load_config(&args.globs, &args.exclude);
+    let files = collect_files(&args.globs, &loaded.excludes)?;
 
     let mut result = FormatResult {
         formatted: Vec::new(),
@@ -501,7 +629,7 @@ pub fn run(args: &FormatArgs) -> Result<FormatResult> {
             }
         };
 
-        match format_content(file_path, &content) {
+        match format_content(file_path, &content, &loaded.format) {
             Ok(Some(formatted)) => {
                 if args.check {
                     let diag = make_diagnostic(path_str.clone(), &content, &formatted);
