@@ -19,6 +19,8 @@ pub struct SiteInfo {
     pub base_path: String,
     pub schema_count: usize,
     pub group_count: usize,
+    /// Package version for the footer.
+    pub version: String,
 }
 
 /// Context for the home page template.
@@ -149,16 +151,22 @@ pub fn build_site_info(ctx: &OutputContext<'_>) -> SiteInfo {
     let base_url = ensure_trailing_slash(ctx.base_url);
     let base_path = extract_path(&base_url);
     let schema_count = ctx.processed.len();
-    SiteInfo {
-        title,
-        description: alloc::format!(
+    let description = if let Some(desc) = ctx.site_description {
+        String::from(desc)
+    } else {
+        alloc::format!(
             "A catalog of {} JSON Schemas for editor auto-completion, validation, and documentation",
             format_number(schema_count),
-        ),
+        )
+    };
+    SiteInfo {
+        title,
+        description,
         base_url,
         base_path,
         schema_count,
         group_count: ctx.catalog.groups.len(),
+        version: String::from(env!("CARGO_PKG_VERSION")),
     }
 }
 
@@ -216,9 +224,11 @@ pub fn build_group_page(
         .filter_map(|s| schema_card(s, &site.base_url))
         .collect();
 
+    let count = schemas.len();
+    let schema_word = if count == 1 { "schema" } else { "schemas" };
     let seo_description = alloc::format!(
-        "{} schemas for {}. {} Lintel is a catalog of {} JSON Schemas for project configuration.",
-        schemas.len(),
+        "{} {schema_word} for {}. {} Lintel is a catalog of {} JSON Schemas for project configuration.",
+        format_number(count),
         name,
         ensure_sentence_end(description),
         format_number(site.schema_count),

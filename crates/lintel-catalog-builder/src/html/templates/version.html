@@ -4,8 +4,25 @@
 page_url }}{% endblock %} {% block og_title %}{{ schema_name }} {{ version_name
 }} - {{ site.title }}{% endblock %} {% block og_description %}Version {{
 version_name }} of {{ schema_name }}{% endblock %} {% block og_url %}{{
-site.base_url }}{{ page_url }}{% endblock %} {% block content %} {% include
-"components/breadcrumb.html" %}
+site.base_url }}{{ page_url }}{% endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "{{ schema_name }} {{ version_name }}",
+    "description": "Version {{ version_name }} of {{ schema_name }}",
+    "url": "{{ site.base_url }}{{ page_url }}",
+    "codeRepository": "{{ json_url }}",
+    "programmingLanguage": "JSON Schema",
+    "version": "{{ version_name }}",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "{{ site.title }}",
+      "url": "{{ site.base_url }}"
+    }
+  }
+</script>
+{% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
 
 <div class="schema-layout">
   <article class="version-detail">

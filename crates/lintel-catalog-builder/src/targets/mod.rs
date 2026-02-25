@@ -25,12 +25,17 @@ pub struct OutputContext<'a> {
     pub source_count: usize,
     /// All processed schema values for in-memory lookups during HTML generation.
     pub processed: &'a ProcessedSchemas,
+    /// Optional site description from the target's site config.
+    pub site_description: Option<&'a str>,
 }
 
 /// Behaviour that every output target must implement.
 pub trait Target {
     /// The `base_url` configured for this target.
     fn base_url(&self) -> &str;
+
+    /// The site description configured for this target, if any.
+    fn site_description(&self) -> Option<&str>;
 
     /// Resolve the output directory for this target.
     fn output_dir(&self, target_name: &str, config_dir: &Path) -> PathBuf;
@@ -54,20 +59,22 @@ impl From<TargetConfig> for AnyTarget {
             TargetConfig::Dir {
                 dir,
                 base_url,
-                github,
+                site,
             } => Self::Dir(DirTarget {
                 dir,
                 base_url,
-                github,
+                site,
             }),
             TargetConfig::GitHubPages {
                 base_url,
                 cname,
                 dir,
+                site,
             } => Self::GitHubPages(GitHubPagesTarget {
                 base_url,
                 cname,
                 dir,
+                site,
             }),
         }
     }
@@ -78,6 +85,13 @@ impl Target for AnyTarget {
         match self {
             Self::Dir(t) => t.base_url(),
             Self::GitHubPages(t) => t.base_url(),
+        }
+    }
+
+    fn site_description(&self) -> Option<&str> {
+        match self {
+            Self::Dir(t) => t.site_description(),
+            Self::GitHubPages(t) => t.site_description(),
         }
     }
 
@@ -217,6 +231,7 @@ mod tests {
             base_url: "https://example.com/",
             source_count: 1,
             processed: &processed,
+            site_description: None,
         };
         write_readme(&ctx).await?;
         let content = tokio::fs::read_to_string(dir.path().join("README.md")).await?;

@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use tracing::debug;
 
+use lintel_catalog_builder::config::SiteConfig;
+
 use super::{OutputContext, Target, write_common_files};
 
 /// A target optimized for GitHub Pages deployment.
@@ -10,11 +12,16 @@ pub struct GitHubPagesTarget {
     pub base_url: String,
     pub cname: Option<String>,
     pub dir: Option<String>,
+    pub site: Option<SiteConfig>,
 }
 
 impl Target for GitHubPagesTarget {
     fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    fn site_description(&self) -> Option<&str> {
+        self.site.as_ref().and_then(|s| s.description.as_deref())
     }
 
     fn output_dir(&self, target_name: &str, config_dir: &Path) -> PathBuf {
@@ -38,8 +45,15 @@ impl Target for GitHubPagesTarget {
             .await
             .context("failed to write .nojekyll")?;
 
-        // CNAME
-        if let Some(domain) = &self.cname {
+        // CNAME — prefer site.github.cname, fall back to direct cname
+        let cname = self
+            .site
+            .as_ref()
+            .and_then(|s| s.github.as_ref())
+            .and_then(|g| g.cname.as_deref())
+            .or(self.cname.as_deref());
+
+        if let Some(domain) = cname {
             tokio::fs::write(ctx.output_dir.join("CNAME"), format!("{domain}\n"))
                 .await
                 .context("failed to write CNAME")?;
@@ -74,11 +88,13 @@ mod tests {
             base_url: "https://example.com/",
             source_count: 0,
             processed: &processed,
+            site_description: None,
         };
         let target = GitHubPagesTarget {
             base_url: "https://example.com/".into(),
             cname: Some("example.com".into()),
             dir: None,
+            site: None,
         };
         // Call finalize which writes common files + github pages files
         // We just test the github-pages-specific parts here
@@ -114,6 +130,7 @@ mod tests {
             base_url: "https://example.com/",
             source_count: 0,
             processed: &processed,
+            site_description: None,
         };
         crate::html::generate_site(&ctx).await?;
 

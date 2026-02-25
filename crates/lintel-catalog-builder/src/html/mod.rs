@@ -358,6 +358,7 @@ mod tests {
             base_url: "https://example.com/",
             source_count: 0,
             processed: &processed,
+            site_description: None,
         };
 
         generate_site(&ctx).await?;

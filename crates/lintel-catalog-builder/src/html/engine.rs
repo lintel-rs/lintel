@@ -34,9 +34,54 @@ pub fn create_engine() -> Result<Environment<'static>> {
         }
     });
 
+    env.add_filter("commafy", commafy_filter);
+    env.add_filter("pluralize", pluralize_filter);
+
     register_templates(&mut env)?;
 
     Ok(env)
+}
+
+/// Extract a `usize` from a minijinja [`Value`](minijinja::Value).
+fn value_as_usize(value: &minijinja::Value) -> usize {
+    value.as_usize().unwrap_or_else(|| {
+        #[allow(clippy::cast_sign_loss)]
+        i64::try_from(value.clone())
+            .ok()
+            .and_then(|v| usize::try_from(v).ok())
+            .unwrap_or(0)
+    })
+}
+
+/// Filter: format a number with comma separators (e.g. `1234` → `"1,234"`).
+#[allow(clippy::needless_pass_by_value)]
+fn commafy_filter(value: minijinja::Value) -> String {
+    let n = value_as_usize(&value);
+    let s = alloc::format!("{n}");
+    let mut result = alloc::string::String::new();
+    for (i, c) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result.chars().rev().collect()
+}
+
+/// Filter: choose singular or plural form based on a count.
+///
+/// Usage: `{{ count|pluralize("schema", "schemas") }}`
+#[allow(clippy::needless_pass_by_value)]
+fn pluralize_filter(
+    value: minijinja::Value,
+    singular: alloc::string::String,
+    plural: alloc::string::String,
+) -> String {
+    if value_as_usize(&value) == 1 {
+        singular
+    } else {
+        plural
+    }
 }
 
 /// HTML-escape a string, escaping `& < > "` but not `/`.

@@ -1,9 +1,35 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": "{{ site.title }}",
+        "url": "{{ site.base_url }}",
+        "description": "{{ site.description }}"
+      },
+      {
+        "@type": "DataCatalog",
+        "name": "{{ site.title }}",
+        "url": "{{ site.base_url }}",
+        "description": "{{ site.description }}",
+        "provider": {
+          "@type": "Organization",
+          "name": "Lintel",
+          "url": "https://github.com/lintel-rs/lintel"
+        }
+      }
+    ]
+  }
+</script>
+{% endblock %} {% block content %}
 <div class="home-header">
   <h1>{{ site.title }}</h1>
   <span class="home-stats"
-    >{{ site.schema_count }} schemas &middot; {{ site.group_count }}
-    groups</span
+    >{{ site.schema_count|commafy }} {{ site.schema_count|pluralize("schema",
+    "schemas") }} &middot; {{ site.group_count|commafy }} {{
+    site.group_count|pluralize("group", "groups") }}</span
   >
 </div>
 

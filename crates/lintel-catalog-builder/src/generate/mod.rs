@@ -223,6 +223,7 @@ async fn generate_for_target(
         catalog_groups_vec,
     );
 
+    let site_description = target.site_description();
     let output_ctx = OutputContext {
         output_dir,
         config_path: ctx.config_path,
@@ -231,6 +232,7 @@ async fn generate_for_target(
         base_url,
         source_count: ctx.config.sources.len(),
         processed: ctx.processed,
+        site_description,
     };
 
     target.finalize(&output_ctx).await?;

@@ -3,5 +3,8 @@
   {% if group.description %}
   <p class="group-card-desc">{{ group.description }}</p>
   {% endif %}
-  <span class="group-card-count">{{ group.schema_count }} schemas</span>
+  <span class="group-card-count"
+    >{{ group.schema_count|commafy }} {{ group.schema_count|pluralize("schema",
+    "schemas") }}</span
+  >
 </a>
