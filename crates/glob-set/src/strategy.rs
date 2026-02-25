@@ -397,7 +397,7 @@ pub(crate) fn path_extension(path: &str) -> Option<&str> {
     let last_sep = path.rfind('/').map_or(0, |i| i + 1);
     let basename = &path[last_sep..];
     let dot = basename.rfind('.')?;
-    if dot == 0 || dot + 1 >= basename.len() {
+    if dot + 1 >= basename.len() {
         return None;
     }
     Some(&basename[dot..])
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn path_ext_dotfile() {
-        assert_eq!(path_extension(".gitignore"), None);
+        assert_eq!(path_extension(".gitignore"), Some(".gitignore"));
     }
 
     #[test]
