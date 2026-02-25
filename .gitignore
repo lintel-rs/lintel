@@ -18,3 +18,5 @@ devenv.local.yaml
 # Nix artifact
 /result
 
+.playwright-mcp/
+
