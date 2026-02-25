@@ -32,7 +32,6 @@ lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.7", path = "../lintel-validation-cache" }
 miette = { version = "7", features = ["fancy", "syntect-highlighter"] }
 schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
-schemastore = { version = "0.0.9", path = "../schemastore" }
 serde_json = "1"
 serde_yaml = "0.9"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

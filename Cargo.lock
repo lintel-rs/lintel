@@ -1599,7 +1599,6 @@ dependencies = [
  "lintel-validation-cache",
  "miette",
  "schema-catalog",
- "schemastore",
  "serde_json",
  "serde_yaml",
  "tokio",
@@ -1819,7 +1818,6 @@ dependencies = [
  "lintel-validation-cache",
  "miette",
  "schema-catalog",
- "schemastore",
  "serde_json",
  "serde_yaml",
  "tempfile",
@@ -2810,13 +2808,6 @@ dependencies = [
  "quote",
  "serde_derive_internals",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "schemastore"
-version = "0.0.9"
-dependencies = [
- "schema-catalog",
 ]
 
 [[package]]

@@ -181,7 +181,7 @@ async fn trace_catalog(
     if no_catalog {
         println!("  status: disabled (--no-catalog)");
     } else {
-        let catalog_url = schemastore::CATALOG_URL;
+        let catalog_url = lintel_validate::catalog::SCHEMASTORE_CATALOG_URL;
         let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
