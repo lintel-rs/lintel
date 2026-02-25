@@ -6,6 +6,9 @@ name: Build
 on:
   push:
     branches: [master]
+  pull_request:
+    paths:
+      - .github/workflows/build.yml
   workflow_call:
 
 concurrency:
@@ -44,14 +47,6 @@ jobs:
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
             nix-package: .#lintel-static
-            binary: lintel
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            nix-package: .#lintel
-            binary: lintel
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            nix-package: .#lintel
             binary: lintel
     steps:
       - uses: actions/checkout@v6
@@ -101,6 +96,10 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
             container: rust:bullseye
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     steps:
