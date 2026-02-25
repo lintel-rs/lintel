@@ -64,7 +64,7 @@ jobs:
 
       - name: Verify static linking
         if: contains(matrix.target, 'musl')
-        run: "! ldd ./result/bin/${{ matrix.binary }}"
+        run: ldd ./result/bin/${{ matrix.binary }} 2>&1 | grep -qE "statically linked|not a dynamic executable"
 
       - name: Package
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
