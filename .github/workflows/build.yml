@@ -37,14 +37,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            nix-package: .#lintel
-            binary: lintel
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-            nix-package: .#lintel
-            binary: lintel
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             nix-package: .#lintel-static
@@ -94,12 +86,23 @@ jobs:
   build-cargo:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
     strategy:
       matrix:
         include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            container: debian:buster-slim
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            container: debian:buster-slim
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     steps:
+      - name: Install build dependencies
+        if: matrix.container
+        run: apt-get update && apt-get install -y curl gcc git
+
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
@@ -112,7 +115,22 @@ jobs:
       - name: Build
         run: cargo build --release --package lintel --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Smoke test
+        if: "!contains(matrix.target, 'windows')"
+        run: ./target/${{ matrix.target }}/release/lintel version
+
+      - name: Verify glibc compatibility
+        if: matrix.container
+        run: |
+          ldd ./target/${{ matrix.target }}/release/lintel
+          ./target/${{ matrix.target }}/release/lintel version
+
+      - name: Package (tar.gz)
+        if: "!contains(matrix.target, 'windows')"
+        run: tar czf lintel-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release lintel
+
+      - name: Package (zip)
+        if: contains(matrix.target, 'windows')
         run: |
           cd target/${{ matrix.target }}/release
           Compress-Archive -Path lintel.exe -DestinationPath ../../../lintel-${{ matrix.target }}.zip
