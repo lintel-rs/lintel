@@ -1,8 +1,9 @@
 # Release workflow for the lintel CLI binary.
 # Triggered via workflow_dispatch by release-plz or manually.
 #
-# Builds native binaries (nix + cargo), creates a GitHub release,
-# publishes to NPM, and pushes multi-arch Docker images to GHCR.
+# Binary builds are handled by build.yml (push trigger) which auto-detects
+# the release and uploads assets. This workflow waits for those assets,
+# then publishes to NPM and pushes multi-arch Docker images to GHCR.
 
 name: Release Lintel
 
@@ -35,37 +36,43 @@ jobs:
             exit 1
           fi
 
-  build:
-    needs: validate
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
-
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v7
-        with:
-          merge-multiple: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ inputs.version }}
-          files: lintel-*
-          generate_release_notes: true
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v${{ inputs.version }} --repo ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create v${{ inputs.version }} --repo ${{ github.repository }} --generate-notes
 
   npm:
     name: Publish to NPM
-    needs: release
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
-        with:
-          merge-multiple: true
-          path: artifacts
+      - name: Wait for release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ inputs.version }}"
+          EXPECTED=7
+          for i in $(seq 1 60); do
+            COUNT=$(gh release view "$TAG" --json assets \
+              --jq '[.assets[] | select(.name | startswith("lintel-"))] | length')
+            if [ "$COUNT" -ge "$EXPECTED" ]; then
+              echo "All $COUNT assets available"
+              exit 0
+            fi
+            echo "Waiting for release assets ($COUNT/$EXPECTED, attempt $i/60)..."
+            sleep 30
+          done
+          echo "::error::Timed out waiting for release assets (got $COUNT, expected $EXPECTED)"
+          exit 1
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh release download "v${{ inputs.version }}" --dir artifacts --pattern 'lintel-*'
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -85,7 +92,7 @@ jobs:
 
   action:
     name: Update lintel-rs/action tags
-    needs: release
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Update version tags on lintel-rs/action
