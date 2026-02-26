@@ -174,14 +174,14 @@ async fn trace_catalog(
     cfg: &lintel_config::Config,
     no_catalog: bool,
     schema_cache_dir: &Path,
-) -> Vec<schemastore::CompiledCatalog> {
+) -> Vec<schema_catalog::CompiledCatalog> {
     println!();
     println!("catalog:");
     let compiled_catalogs = validate::fetch_compiled_catalogs(retriever, cfg, no_catalog).await;
     if no_catalog {
         println!("  status: disabled (--no-catalog)");
     } else {
-        let catalog_url = schemastore::CATALOG_URL;
+        let catalog_url = lintel_validate::catalog::SCHEMASTORE_CATALOG_URL;
         let catalog_hash = SchemaCache::hash_uri(catalog_url);
         let catalog_cache_path = schema_cache_dir.join(format!("{catalog_hash}.json"));
         println!("  url: {catalog_url}");
@@ -202,7 +202,7 @@ fn trace_schema_resolution(
     instance: &serde_json::Value,
     cfg: &lintel_config::Config,
     config_dir: &Path,
-    compiled_catalogs: &[schemastore::CompiledCatalog],
+    compiled_catalogs: &[schema_catalog::CompiledCatalog],
     path_str: &str,
     file_name: &str,
     file_path: &Path,

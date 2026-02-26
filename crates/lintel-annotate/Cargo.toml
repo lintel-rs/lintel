@@ -14,12 +14,12 @@ description = "Add schema annotations to JSON, YAML, and TOML files"
 workspace = true
 
 [dependencies]
-anyhow = "1"
-bpaf = { version = "0.9", features = ["derive"] }
+anyhow.workspace = true
+bpaf.workspace = true
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.6", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
-schemastore = { version = "0.0.9", path = "../schemastore" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-tracing = "0.1"
+schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing.workspace = true

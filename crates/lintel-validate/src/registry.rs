@@ -52,7 +52,7 @@ pub async fn fetch(
     for resolved in &urls {
         match cache.fetch(resolved).await {
             Ok((value, _status)) => {
-                let catalog = schemastore::parse_catalog(value)?;
+                let catalog = schema_catalog::parse_catalog_value(value)?;
                 return Ok(catalog);
             }
             Err(e) => last_err = Some(e),

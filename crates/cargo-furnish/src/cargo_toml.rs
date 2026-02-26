@@ -208,6 +208,7 @@ pub fn check_cargo_toml(
         doc: &doc,
         package,
         ws,
+        crate_dir,
         src: &src,
         pkg_span,
     };
@@ -225,6 +226,7 @@ struct CargoTomlCheck<'a> {
     doc: &'a DocumentMut,
     package: &'a Table,
     ws: &'a WorkspaceInfo,
+    crate_dir: &'a Path,
     src: &'a dyn Fn(&str) -> NamedSource<String>,
     pkg_span: (usize, usize),
 }
@@ -276,7 +278,14 @@ fn check_package_fields(
         }));
     }
 
+    // A crate-local LICENSE file allows overriding the workspace license.
+    let has_local_license = ctx.crate_dir.join("LICENSE").exists();
+
     for &field in WORKSPACE_INHERITABLE {
+        // Skip the license check if the crate ships its own LICENSE file.
+        if field == "license" && has_local_license {
+            continue;
+        }
         if ctx.ws.package_fields.contains(field)
             && let Some(item) = ctx.package.get(field)
             && !is_workspace_true(item)
@@ -364,6 +373,7 @@ fn resolve_metadata(existing: ExistingMetadata, update: &MetadataUpdate<'_>) -> 
 struct RebuildContext<'a> {
     original: &'a DocumentMut,
     ws: &'a WorkspaceInfo,
+    crate_dir: &'a Path,
     force: bool,
 }
 
@@ -386,6 +396,19 @@ fn update_package_fields(package: &mut Table, ctx: &RebuildContext<'_>, meta: &R
 
 fn insert_workspace_field(package: &mut Table, ctx: &RebuildContext<'_>, field: &str) {
     if !ctx.ws.package_fields.contains(field) {
+        return;
+    }
+    // A crate-local LICENSE file allows overriding the workspace license;
+    // preserve whatever value the crate already has.
+    if field == "license" && ctx.crate_dir.join("LICENSE").exists() {
+        if let Some(orig) = ctx
+            .original
+            .get("package")
+            .and_then(|p| p.as_table())
+            .and_then(|t| t.get(field))
+        {
+            package.insert(field, orig.clone());
+        }
         return;
     }
     if ctx.force {
@@ -451,6 +474,7 @@ pub fn fix_cargo_toml(
     let rebuild_ctx = RebuildContext {
         original: &original,
         ws,
+        crate_dir,
         force: update.force,
     };
     update_package_fields(package, &rebuild_ctx, &meta);

@@ -11,7 +11,7 @@ use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 use lintel_schema_cache::SchemaCache;
 use lintel_validate::parsers;
 use lintel_validate::validate;
-use schemastore::SchemaMatch;
+use schema_catalog::SchemaMatch;
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -351,7 +351,7 @@ fn resolve_schema<'a>(
     path_str: &str,
     file_name: &'a str,
     cfg: &'a lintel_config::Config,
-    catalogs: &'a [schemastore::CompiledCatalog],
+    catalogs: &'a [schema_catalog::CompiledCatalog],
 ) -> Option<ResolvedSchema<'a>> {
     if let Some(uri) = parser.extract_schema_uri(content, instance) {
         return Some(ResolvedSchema {
@@ -370,7 +370,7 @@ fn resolve_schema_path_only<'a>(
     path_str: &str,
     file_name: &'a str,
     cfg: &'a lintel_config::Config,
-    catalogs: &'a [schemastore::CompiledCatalog],
+    catalogs: &'a [schema_catalog::CompiledCatalog],
 ) -> Option<ResolvedSchema<'a>> {
     if let Some((pattern, url)) = cfg
         .schemas

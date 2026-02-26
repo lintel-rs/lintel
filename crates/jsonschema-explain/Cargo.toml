@@ -16,4 +16,4 @@ workspace = true
 [dependencies]
 ansi-term-styles = "0.1.0"
 markdown-to-ansi = "0.2.0"
-serde_json = "1"
+serde_json.workspace = true

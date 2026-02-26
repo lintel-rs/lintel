@@ -14,13 +14,13 @@ description = "Disk-backed cache for JSON Schema validation results"
 workspace = true
 
 [dependencies]
-dirs = "6"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
-tokio = { version = "1", features = ["fs"] }
+dirs = "6.0.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2 = "0.10.9"
+tokio = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
-anyhow = "1"
-tempfile = "3"
-tokio = { version = "1", features = ["rt", "macros", "fs"] }
+anyhow.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "fs"] }

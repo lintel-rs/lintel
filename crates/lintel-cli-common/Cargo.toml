@@ -14,5 +14,5 @@ description = "Shared CLI global options for Lintel command-line tools"
 workspace = true
 
 [dependencies]
-bpaf = { version = "0.9", features = ["derive", "bright-color"] }
-humantime = "2"
+bpaf = { workspace = true, features = ["bright-color"] }
+humantime = "2.3.0"

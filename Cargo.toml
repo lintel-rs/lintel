@@ -9,6 +9,33 @@ homepage = "https://github.com/lintel-rs/lintel"
 license = "Apache-2.0"
 repository = "https://github.com/lintel-rs/lintel"
 
+[workspace.dependencies]
+anyhow = "1.0.102"
+bpaf = { version = "0.9.23", features = ["derive"] }
+criterion = "0.8.2"
+glob = "0.3.3"
+glob-match = "0.2.1"
+ignore = "0.4.25"
+insta = { version = "1.46.3", features = ["filters"] }
+jsonschema = "0.42.1"
+miette = "7.6.0"
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] }
+schemars = "1.2.1"
+serde = "1.0.228"
+serde_json = "1.0.149"
+tempfile = "3.26.0"
+thiserror = "2.0.18"
+tokio = "1.49.0"
+toml = "1.0.3"
+toml_edit = "0.25.3"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-tree = "0.4.1"
+
+[profile.bench]
+lto = "fat"
+codegen-units = 1
+
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 complexity = { level = "deny", priority = -1 }

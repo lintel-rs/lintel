@@ -14,17 +14,17 @@ description = "Inspect JSON Schema documentation for specific properties"
 workspace = true
 
 [dependencies]
-anyhow = "1"
-bpaf = { version = "0.9", features = ["derive"] }
+anyhow.workspace = true
+bpaf.workspace = true
 jsonschema-explain = { version = "0.2.3", path = "../jsonschema-explain" }
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
 lintel-identify = { version = "0.0.8", path = "../lintel-identify" }
 lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
-serde_json = "1"
-tempfile = "3"
-terminal_size = "0.4"
-tracing = "0.1"
+reqwest.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+terminal_size = "0.4.3"
+tracing.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["rt", "macros"] }

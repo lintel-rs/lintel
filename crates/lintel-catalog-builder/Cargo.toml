@@ -14,28 +14,28 @@ description = "Build a custom schema catalog from local schemas and external sou
 workspace = true
 
 [dependencies]
-anyhow = "1"
-bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
-futures-util = "0.3"
-glob-match = "0.2"
-jsonschema = "0.42"
+anyhow.workspace = true
+bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"] }
+futures-util = "0.3.32"
+glob-match.workspace = true
+jsonschema.workspace = true
 jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
 lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
-percent-encoding = "2"
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+minijinja = { version = "2.16.0", features = ["builtins"] }
+percent-encoding = "2.3.2"
+pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
+reqwest.workspace = true
 schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
-schemars = "1"
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process"] }
-toml = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-tree = "0.4"
-url = "2"
-minijinja = { version = "2", features = ["builtins"] }
-pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+schemars.workspace = true
+semver = "1.0.27"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "process"] }
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-tree.workspace = true
+url = "2.5.8"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile.workspace = true

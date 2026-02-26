@@ -13,6 +13,9 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod compiled;
+pub use compiled::{CompiledCatalog, SchemaMatch};
+
 /// The default `$schema` URL for Lintel catalogs.
 pub const DEFAULT_SCHEMA_URL: &str =
     "https://catalog.lintel.tools/schemas/lintel/catalog/latest.json";
@@ -31,6 +34,7 @@ pub struct Catalog {
     #[serde(default, rename = "$schema")]
     pub schema: Option<String>,
     /// The catalog format version.
+    #[serde(default = "default_version")]
     pub version: u32,
     /// An optional human-readable title for the catalog.
     #[serde(default)]
@@ -98,6 +102,7 @@ pub struct SchemaEntry {
     #[schemars(example = example_schema_name())]
     pub name: String,
     /// A short description of what the schema validates.
+    #[serde(default)]
     pub description: String,
     /// The URL where the schema can be fetched.
     #[schemars(example = example_schema_url())]
@@ -118,6 +123,10 @@ pub struct SchemaEntry {
     /// Values are URLs to the versioned schema.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub versions: BTreeMap<String, String>,
+}
+
+fn default_version() -> u32 {
+    1
 }
 
 fn example_schema_name() -> String {
