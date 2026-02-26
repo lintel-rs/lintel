@@ -162,7 +162,7 @@ in
 Use the official [lintel-rs/action](https://github.com/lintel-rs/action):
 
 ```yaml
-- uses: lintel-rs/action@v1
+- uses: lintel-rs/action@v0
 ```
 
 ## License

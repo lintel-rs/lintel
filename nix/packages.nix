@@ -2,9 +2,36 @@
   craneLib,
   craneLibStatic ? null,
   pkgs,
-  src,
 }:
 let
+  inherit (pkgs) lib;
+
+  # Base source: Cargo sources + READMEs. Used for dependency caching and
+  # most package builds — kept minimal so template/testdata churn doesn't
+  # invalidate the shared dep cache.
+  src =
+    let
+      readmeFilter = path: _type: (builtins.match ".*README\\.md$" path) != null;
+    in
+    lib.cleanSourceWith {
+      src = ../.;
+      filter = path: type: (craneLib.filterCargoSources path type) || (readmeFilter path type);
+    };
+
+  # Extended source for lintel-catalog-builder: also includes the
+  # HTML/CSS/JS/XML templates that are embedded via include_str!.
+  srcWithTemplates =
+    let
+      readmeFilter = path: _type: (builtins.match ".*README\\.md$" path) != null;
+      templateFilter = path: _type: (builtins.match ".*\\.(html|css|js|xml)$" path) != null;
+    in
+    lib.cleanSourceWith {
+      src = ../.;
+      filter =
+        path: type:
+        (craneLib.filterCargoSources path type) || (readmeFilter path type) || (templateFilter path type);
+    };
+
   lintelMeta = craneLib.crateNameFromCargoToml { cargoToml = ../crates/lintel/Cargo.toml; };
 
   commonArgs = {
@@ -56,6 +83,7 @@ let
   };
 
   lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder {
+    src = srcWithTemplates;
     postInstall = ''
       installShellCompletion --cmd lintel-catalog-builder \
         --bash <($out/bin/lintel-catalog-builder --bpaf-complete-style-bash) \
