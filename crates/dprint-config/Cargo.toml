@@ -2,7 +2,7 @@
 name = "dprint-config"
 version = "0.0.1"
 authors.workspace = true
-categories = ["development-tools"]
+categories = ["development-tools", "no-std"]
 edition.workspace = true
 homepage.workspace = true
 keywords = ["dprint", "formatter", "config", "json-schema"]
