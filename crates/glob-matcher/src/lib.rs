@@ -1,19 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 // This crate is a minimal fork of `glob-match` 0.2.1 by Devon Govett (MIT).
-// Upstream style is preserved; suppress workspace lints that conflict with it.
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cognitive_complexity,
-    clippy::collapsible_if,
-    clippy::inline_always,
-    clippy::needless_lifetimes,
-    clippy::redundant_else,
-    clippy::similar_names,
-    clippy::struct_field_names,
-    clippy::too_many_lines,
-    clippy::unwrap_used
-)]
 extern crate alloc;
 
 mod syntax;
@@ -22,6 +9,7 @@ pub use syntax::{skip_braces, skip_char_class};
 use alloc::vec::Vec;
 use core::ops::Range;
 
+#[allow(clippy::inline_always)]
 #[inline(always)]
 fn is_separator(c: char) -> bool {
     c == '/' || c == '\\'
@@ -41,6 +29,7 @@ struct State {
     capture_index: usize,
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Default)]
 struct Wildcard {
     // Using u32 rather than usize for these results in 10% faster performance.
@@ -68,7 +57,7 @@ pub fn glob_match(glob: &str, path: &str) -> bool {
     glob_match_internal(glob, path, None)
 }
 
-pub fn glob_match_with_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<Capture>> {
+pub fn glob_match_with_captures(glob: &str, path: &str) -> Option<Vec<Capture>> {
     let mut captures = Vec::new();
     if glob_match_internal(glob, path, Some(&mut captures)) {
         return Some(captures);
@@ -76,11 +65,13 @@ pub fn glob_match_with_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<Cap
     None
 }
 
-fn glob_match_internal<'a>(
-    glob: &str,
-    path: &'a str,
-    mut captures: Option<&mut Vec<Capture>>,
-) -> bool {
+#[allow(
+    clippy::cognitive_complexity,
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::similar_names
+)]
+fn glob_match_internal(glob: &str, path: &str, mut captures: Option<&mut Vec<Capture>>) -> bool {
     // This algorithm is based on https://research.swtch.com/glob
     let glob = glob.as_bytes();
     let path = path.as_bytes();
@@ -112,10 +103,9 @@ fn glob_match_internal<'a>(
 
                     // If we are on a different glob index than before, start a new capture.
                     // Otherwise, extend the active one.
-                    if captures.is_some()
-                        && (captures.as_ref().unwrap().is_empty()
-                            || state.glob_index != state.wildcard.glob_index as usize)
-                    {
+                    if captures.as_ref().is_some_and(|c| {
+                        c.is_empty() || state.glob_index != state.wildcard.glob_index as usize
+                    }) {
                         state.wildcard.capture_index = state.capture_index as u32;
                         state.begin_capture(&mut captures, state.path_index..state.path_index);
                     } else {
@@ -165,11 +155,10 @@ fn glob_match_internal<'a>(
                     if brace_stack.length > 0
                         && state.glob_index < glob.len()
                         && matches!(glob[state.glob_index], b',' | b'}')
+                        && state.skip_braces(glob, &mut captures, false) == BraceState::Invalid
                     {
-                        if state.skip_braces(glob, &mut captures, false) == BraceState::Invalid {
-                            // invalid pattern!
-                            return false;
-                        }
+                        // invalid pattern!
+                        return false;
                     }
 
                     continue;
@@ -330,19 +319,18 @@ fn glob_match_internal<'a>(
                     if brace_stack.longest_brace_match > 0 {
                         state = brace_stack.pop(&state, &mut captures);
                         continue;
-                    } else {
-                        // Didn't match. Restore state, and check if we need to jump back to a star pattern.
-                        state = *brace_stack.last();
-                        brace_stack.length -= 1;
-                        if let Some(captures) = &mut captures {
-                            captures.truncate(state.capture_index);
-                        }
-                        if state.wildcard.path_index > 0
-                            && state.wildcard.path_index as usize <= path.len()
-                        {
-                            state.backtrack();
-                            continue;
-                        }
+                    }
+                    // Didn't match. Restore state, and check if we need to jump back to a star pattern.
+                    state = *brace_stack.last();
+                    brace_stack.length -= 1;
+                    if let Some(captures) = &mut captures {
+                        captures.truncate(state.capture_index);
+                    }
+                    if state.wildcard.path_index > 0
+                        && state.wildcard.path_index as usize <= path.len()
+                    {
+                        state.backtrack();
+                        continue;
                     }
                 }
             }
@@ -359,6 +347,7 @@ fn glob_match_internal<'a>(
     !negated
 }
 
+#[allow(clippy::inline_always)]
 #[inline(always)]
 fn unescape(c: &mut u8, glob: &[u8], glob_index: &mut usize) -> bool {
     if *c == b'\\' {
@@ -380,6 +369,7 @@ fn unescape(c: &mut u8, glob: &[u8], glob_index: &mut usize) -> bool {
 }
 
 impl State {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn skip_globstars(&mut self, glob: &[u8]) {
         let mut glob_index = self.glob_index + 2;
@@ -394,6 +384,7 @@ impl State {
         self.glob_index = glob_index - 2;
     }
 
+    #[allow(clippy::inline_always, clippy::cast_possible_truncation)]
     #[inline(always)]
     fn skip_to_separator(&mut self, path: &[u8], is_end_invalid: bool) {
         if self.path_index == path.len() {
@@ -414,6 +405,7 @@ impl State {
         self.globstar = self.wildcard;
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn backtrack(&mut self) {
         self.glob_index = self.wildcard.glob_index as usize;
@@ -421,6 +413,7 @@ impl State {
         self.capture_index = self.wildcard.capture_index as usize;
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn begin_capture(&self, captures: &mut Option<&mut Vec<Capture>>, capture: Capture) {
         if let Some(captures) = captures {
@@ -432,24 +425,27 @@ impl State {
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn extend_capture(&self, captures: &mut Option<&mut Vec<Capture>>) {
-        if let Some(captures) = captures {
-            if self.capture_index < captures.len() {
-                captures[self.capture_index].end = self.path_index;
-            }
+        if let Some(captures) = captures
+            && self.capture_index < captures.len()
+        {
+            captures[self.capture_index].end = self.path_index;
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn end_capture(&mut self, captures: &mut Option<&mut Vec<Capture>>) {
-        if let Some(captures) = captures {
-            if self.capture_index < captures.len() {
-                self.capture_index += 1;
-            }
+        if let Some(captures) = captures
+            && self.capture_index < captures.len()
+        {
+            self.capture_index += 1;
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn add_char_capture(&mut self, captures: &mut Option<&mut Vec<Capture>>) {
         self.end_capture(captures);
@@ -487,11 +483,12 @@ impl State {
                         }
                         capture_index += 1;
                     }
-                    if c == b'*' {
-                        if self.glob_index + 1 < glob.len() && glob[self.glob_index + 1] == b'*' {
-                            self.skip_globstars(glob);
-                            self.glob_index += 1;
-                        }
+                    if c == b'*'
+                        && self.glob_index + 1 < glob.len()
+                        && glob[self.glob_index + 1] == b'*'
+                    {
+                        self.skip_globstars(glob);
+                        self.glob_index += 1;
                     }
                 }
                 b']' => in_brackets = false,
@@ -524,6 +521,7 @@ impl Default for BraceStack {
 }
 
 impl BraceStack {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn push(&mut self, state: &State) -> State {
         // Push old state to the stack, and reset current state.
@@ -537,6 +535,7 @@ impl BraceStack {
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn pop(&mut self, state: &State, captures: &mut Option<&mut Vec<Capture>>) -> State {
         self.length -= 1;
@@ -559,6 +558,7 @@ impl BraceStack {
         state
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn last(&self) -> &State {
         &self.stack[self.length as usize - 1]
@@ -566,6 +566,7 @@ impl BraceStack {
 }
 
 #[cfg(test)]
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 mod tests {
     use super::*;
     use alloc::vec;
