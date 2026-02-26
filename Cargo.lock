@@ -605,6 +605,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dprint-config"
+version = "0.0.1"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dprint-core"
 version = "0.67.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1593,6 +1602,7 @@ dependencies = [
  "lintel-config",
  "lintel-explain",
  "lintel-format",
+ "lintel-github-action",
  "lintel-identify",
  "lintel-reporters",
  "lintel-schema-cache",
@@ -1646,7 +1656,9 @@ dependencies = [
  "jsonschema",
  "jsonschema-migrate",
  "lintel-schema-cache",
+ "minijinja",
  "percent-encoding",
+ "pulldown-cmark 0.13.1",
  "reqwest",
  "schema-catalog",
  "schemars",
@@ -1686,6 +1698,7 @@ name = "lintel-config"
 version = "0.0.6"
 dependencies = [
  "anyhow",
+ "dprint-config",
  "glob-match",
  "schemars",
  "serde",
@@ -1730,6 +1743,8 @@ dependencies = [
  "ansi-term-styles",
  "anyhow",
  "bpaf",
+ "dprint-config",
+ "dprint-core",
  "dprint-plugin-json",
  "dprint-plugin-markdown",
  "dprint-plugin-toml",
@@ -1739,8 +1754,11 @@ dependencies = [
  "lintel-config",
  "miette",
  "pretty_yaml",
+ "semver",
+ "serde_json",
  "similar",
  "thiserror 2.0.18",
+ "toml_edit",
 ]
 
 [[package]]
@@ -1749,11 +1767,12 @@ version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
+ "lintel-check",
+ "lintel-format",
  "lintel-validate",
  "reqwest",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -1962,6 +1981,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c54f3bcc034dd74496b5ca929fd0b710186672d5ff0b0f255a9ceb259042ece"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -2328,8 +2356,15 @@ checksum = "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6"
 dependencies = [
  "bitflags 2.11.0",
  "memchr",
+ "pulldown-cmark-escape",
  "unicase",
 ]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
 
 [[package]]
 name = "quick-xml"

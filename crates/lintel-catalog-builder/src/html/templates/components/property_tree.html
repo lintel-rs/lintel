@@ -1,0 +1,74 @@
+<div
+  class="property-item"
+  {%
+  if
+  property_id
+  %}
+  id="{{ property_id }}"
+  {%
+  endif
+  %}
+>
+  <div class="property-header">
+    <span class="property-name">{{ property.name }}</span>
+    {% if property.ref_anchor and property.schema_type %}
+    <a href="#{{ property.ref_anchor }}" class="type-badge type-badge-link"
+      >{{ property.schema_type }}</a
+    >
+    {% elif property.schema_type %}
+    <span class="type-badge">{{ property.schema_type }}</span>
+    {% endif %} {% if property.required %}<span class="required-badge"
+      >required</span
+    >{% endif %}
+  </div>
+  {% if property.description_html %}
+  <div class="desc-html">{{ property.description_html|safe }}</div>
+  {% endif %} {% if property.default %} {% if property.default_is_complex %}
+  <div class="property-meta"><span class="meta-label">Default:</span></div>
+  <pre class="code-block"><code>{{ property.default }}</code></pre>
+  {% else %}
+  <div class="property-meta">
+    <span class="meta-label">Default:</span> <code>{{ property.default }}</code>
+  </div>
+  {% endif %} {% endif %} {% if property.enum_values %}
+  <div class="property-meta">
+    <span class="meta-label">Values:</span> {% for val in property.enum_values
+    %}<code class="enum-value">{{ val }}</code>{% if not loop.last %} {% endif
+    %}{% endfor %}
+  </div>
+  {% endif %} {% if property.const_value %}
+  <div class="property-meta">
+    <span class="meta-label">Constant:</span>
+    <code>{{ property.const_value }}</code>
+  </div>
+  {% endif %} {% if property.examples %}
+  <div class="property-meta">
+    <span class="meta-label">Examples:</span> {% for ex in property.examples
+    %}<code>{{ ex }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </div>
+  {% endif %} {% if property.constraints %}
+  <div class="property-constraints">
+    {% for c in property.constraints %}<span class="constraint"
+      >{{ c.label }}={{ c.value }}</span
+    >{% endfor %}
+  </div>
+  {% endif %} {% for comp in property.compositions %}
+  <div class="inline-composition">
+    <span class="meta-label">{{ comp.label }}:</span>
+    {% for variant in comp.variants %}
+    <span class="inline-variant"
+      >{{ variant.label }}{% if variant.schema_type %}
+      <span class="type-badge">{{ variant.schema_type }}</span>{% endif %}</span
+    >{% if not loop.last %}, {% endif %} {% endfor %}
+  </div>
+  {% endfor %} {% if property.has_nested %}
+  <details class="nested-properties">
+    <summary>{{ property.properties|length }} nested properties</summary>
+    <div class="property-list">
+      {% for child in property.properties %} {% with property = child,
+      property_id = false %} {% include "components/property_tree.html" %} {%
+      endwith %} {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</div>

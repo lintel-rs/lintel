@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-use std::process::ExitCode;
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -8,30 +7,23 @@ use bpaf::Bpaf;
 use serde::Serialize;
 
 use lintel_validate::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
+use lintel_validate::merge_config;
 use lintel_validate::validate::{self, LintError};
-use lintel_validate::{ValidateArgs, merge_config, validate_args};
 
 // -----------------------------------------------------------------------
-// CLI
+// CLI args
 // -----------------------------------------------------------------------
 
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, version, fallback_to_usage, generate(cli))]
-#[allow(clippy::upper_case_acronyms)]
-/// Create a GitHub Check Run with Lintel validation annotations
-struct CLI {
-    #[bpaf(external(commands))]
-    command: Commands,
+#[bpaf(generate(github_action_args_inner))]
+pub struct GithubActionArgs {
+    #[bpaf(external(lintel_check::check_args))]
+    pub check: lintel_check::CheckArgs,
 }
 
-#[derive(Debug, Clone, Bpaf)]
-enum Commands {
-    /// Validate files and post results as a GitHub Check Run
-    Run(#[bpaf(external(validate_args))] ValidateArgs),
-
-    #[bpaf(command("version"))]
-    /// Print version information
-    Version,
+/// Construct the bpaf parser for `GithubActionArgs`.
+pub fn github_action_args() -> impl bpaf::Parser<GithubActionArgs> {
+    github_action_args_inner()
 }
 
 // -----------------------------------------------------------------------
@@ -73,32 +65,8 @@ struct Annotation {
 }
 
 // -----------------------------------------------------------------------
-// Main
+// Helpers
 // -----------------------------------------------------------------------
-
-#[tokio::main]
-async fn main() -> ExitCode {
-    let cli = cli().run();
-    match cli.command {
-        Commands::Version => {
-            println!("lintel-github-action {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
-        Commands::Run(args) => match run(args).await {
-            Ok(had_errors) => {
-                if had_errors {
-                    ExitCode::from(1)
-                } else {
-                    ExitCode::SUCCESS
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {e:#}");
-                ExitCode::from(2)
-            }
-        },
-    }
-}
 
 fn error_to_annotation(error: &LintError) -> Annotation {
     let path = error.path().replace('\\', "/");
@@ -253,8 +221,27 @@ async fn patch_remaining_annotations(
     Ok(())
 }
 
-async fn run(mut args: ValidateArgs) -> Result<bool> {
-    merge_config(&mut args);
+// -----------------------------------------------------------------------
+// Public runner
+// -----------------------------------------------------------------------
+
+/// Run lintel checks and post results as a GitHub Check Run.
+///
+/// Reads `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_SHA`, and
+/// (optionally) `GITHUB_API_URL` from the environment.
+///
+/// Returns `Ok(true)` if errors were found, `Ok(false)` if clean.
+///
+/// # Errors
+///
+/// Returns an error if environment variables are missing, validation
+/// fails to run, or the GitHub Checks API request fails.
+pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
+    // Save original args before merge_config modifies them.
+    let original_globs = args.check.validate.globs.clone();
+    let original_exclude = args.check.validate.exclude.clone();
+
+    merge_config(&mut args.check.validate);
 
     // Read required environment variables
     let token =
@@ -266,17 +253,34 @@ async fn run(mut args: ValidateArgs) -> Result<bool> {
         std::env::var("GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
 
     // Run validation
-    let lib_args = validate::ValidateArgs::from(&args);
+    let lib_args = validate::ValidateArgs::from(&args.check.validate);
     let start = Instant::now();
     let result = validate::run(&lib_args).await?;
     let elapsed = start.elapsed();
 
-    let had_errors = result.has_errors();
-    let error_count = result.errors.len();
     let files_checked = result.files_checked();
     let ms = elapsed.as_millis();
 
-    let annotations: Vec<Annotation> = result.errors.iter().map(error_to_annotation).collect();
+    // Convert validation errors to annotations
+    let mut annotations: Vec<Annotation> = result.errors.iter().map(error_to_annotation).collect();
+
+    // Check formatting (unless --fix was passed)
+    if !args.check.fix {
+        let format_diagnostics = lintel_format::check_format(&original_globs, &original_exclude)?;
+        for diag in &format_diagnostics {
+            annotations.push(Annotation {
+                path: diag.file_path().replace('\\', "/"),
+                start_line: 1,
+                end_line: 1,
+                annotation_level: "failure".to_string(),
+                message: "file is not properly formatted".to_string(),
+                title: Some("format error".to_string()),
+            });
+        }
+    }
+
+    let had_errors = !annotations.is_empty();
+    let error_count = annotations.len();
 
     let title = if error_count > 0 {
         format!("{error_count} error(s) found")

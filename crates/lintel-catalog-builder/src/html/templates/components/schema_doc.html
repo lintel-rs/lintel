@@ -1,0 +1,90 @@
+{% if schema_doc %}
+<section class="schema-doc">
+  {% if schema_doc.schema_type %}
+  <div class="schema-doc-type">
+    <span class="label">Type:</span>
+    <span class="type-badge">{{ schema_doc.schema_type }}</span>
+  </div>
+  {% endif %} {% if schema_doc.description_html %}
+  <div class="desc-html">{{ schema_doc.description_html|safe }}</div>
+  {% endif %} {% if schema_doc.properties %}
+  <h2 id="properties">Properties</h2>
+  <div class="property-list">
+    {% for prop in schema_doc.properties %} {% with property = prop, property_id
+    = "prop-" ~ prop.name %} {% include "components/property_tree.html" %} {%
+    endwith %} {% endfor %}
+  </div>
+  {% endif %} {% if schema_doc.items %}
+  <h2 id="items">Items</h2>
+  <div class="schema-doc-items">
+    {% if schema_doc.items.schema_type %}
+    <span class="type-badge">{{ schema_doc.items.schema_type }}</span>
+    {% endif %} {% if schema_doc.items.description_html %}
+    <div class="desc-html">{{ schema_doc.items.description_html|safe }}</div>
+    {% endif %} {% if schema_doc.items.properties %}
+    <div class="property-list">
+      {% for prop in schema_doc.items.properties %} {% with property = prop,
+      depth = 1 %} {% include "components/property_tree.html" %} {% endwith %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %} {% for comp in schema_doc.compositions %}
+  <h2 id="{{ comp.keyword }}">{{ comp.label }}</h2>
+  <div class="composition-block">
+    {% for variant in comp.variants %}
+    <div
+      class="variant-block{% if variant.is_expanded %} variant-expanded{% endif %}"
+    >
+      <div class="variant-header">
+        <span class="variant-index">{{ variant.index }}.</span>
+        <span class="variant-label">{{ variant.label }}</span>
+        {% if variant.schema_type %}<span class="type-badge"
+          >{{ variant.schema_type }}</span
+        >{% endif %}
+      </div>
+      {% if variant.description_html %}
+      <div class="desc-html">{{ variant.description_html|safe }}</div>
+      {% endif %} {% if variant.properties %}
+      <div class="property-list">
+        {% for prop in variant.properties %} {% with property = prop, depth = 1
+        %} {% include "components/property_tree.html" %} {% endwith %} {% endfor
+        %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %} {% if schema_doc.definitions %}
+  <h2 id="definitions">Definitions</h2>
+  {% for def in schema_doc.definitions %}
+  <div class="definition-block" id="{{ def.slug }}">
+    <div class="definition-header">
+      <span class="def-name">{{ def.name }}</span>
+      {% if def.schema_type %}<span class="type-badge"
+        >{{ def.schema_type }}</span
+      >{% endif %}
+    </div>
+    <div class="definition-body">
+      {% if def.description_html %}
+      <div class="desc-html">{{ def.description_html|safe }}</div>
+      {% endif %} {% if def.properties %}
+      <div class="property-list">
+        {% for prop in def.properties %} {% with property = prop, depth = 1 %}
+        {% include "components/property_tree.html" %} {% endwith %} {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %} {% endif %} {% if schema_doc.examples %}
+  <h2 id="examples">Examples</h2>
+  <div class="schema-examples">
+    {% for ex in schema_doc.examples %} {% if ex.is_complex %}
+    <pre class="code-block"><code>{{ ex.content }}</code></pre>
+    {% else %}
+    <code class="example-value">{{ ex.content }}</code>
+    {% endif %} {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}

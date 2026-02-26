@@ -1,0 +1,40 @@
+{% extends "base.html" %} {% block title %}{{ name }} - {{ site.title }}{%
+endblock %} {% block description %}{{ seo_description }}{% endblock %} {% block
+canonical %}{{ site.base_url }}schemas/{{ key }}/{% endblock %} {% block
+og_title %}{{ name }} - {{ site.title }}{% endblock %} {% block og_description
+%}{{ seo_description }}{% endblock %} {% block og_url %}{{ site.base_url
+}}schemas/{{ key }}/{% endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "{{ name }}",
+    "description": "{{ description }}",
+    "url": "{{ site.base_url }}schemas/{{ key }}/",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "{{ site.title }}",
+      "url": "{{ site.base_url }}"
+    }
+  }
+</script>
+{% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
+
+<article>
+  <header class="page-header">
+    <h1>{{ name }}</h1>
+    {% if description %}
+    <p class="page-description">{{ description }}</p>
+    {% endif %}
+    <span class="badge"
+      >{{ schemas|length|commafy }} {{ schemas|length|pluralize("schema",
+      "schemas") }}</span
+    >
+  </header>
+
+  <div class="schema-list">
+    {% for schema in schemas %} {% include "components/schema_card.html" %} {%
+    endfor %}
+  </div>
+</article>
+{% endblock %}

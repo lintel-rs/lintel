@@ -79,6 +79,23 @@ pub struct GitHubPagesConfig {
     pub cname: Option<String>,
 }
 
+/// Site-level configuration for a build target.
+///
+/// Controls metadata and hosting options that apply to the generated static
+/// site.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[schemars(title = "Site Config")]
+pub struct SiteConfig {
+    /// Human-readable description for the site, used in the HTML meta
+    /// description tag and JSON-LD structured data.
+    #[serde(default)]
+    pub description: Option<String>,
+    /// GitHub Pages hosting options.
+    #[serde(default)]
+    pub github: Option<GitHubPagesConfig>,
+}
+
 /// Output target configuration.
 ///
 /// Each target specifies where the built catalog and schema files are written.
@@ -99,10 +116,9 @@ pub enum TargetConfig {
         #[schemars(example = &"https://raw.githubusercontent.com/org/catalog/master/")]
         #[serde(rename = "base-url", alias = "base_url")]
         base_url: String,
-        /// Optional GitHub Pages settings. When present, a `.nojekyll` file is
-        /// created in the output directory.
+        /// Site-level configuration for description and hosting options.
         #[serde(default)]
-        github: Option<GitHubPagesConfig>,
+        site: Option<SiteConfig>,
     },
     /// Generate output optimized for GitHub Pages deployment.
     #[serde(rename = "github-pages")]
@@ -118,6 +134,9 @@ pub enum TargetConfig {
         /// Output directory path. Defaults to `docs/` if not specified.
         #[serde(default)]
         dir: Option<String>,
+        /// Site-level configuration for description and hosting options.
+        #[serde(default)]
+        site: Option<SiteConfig>,
     },
 }
 
@@ -205,6 +224,15 @@ pub struct SourceConfig {
     /// `{"schemas": [...]}`).
     #[schemars(example = &"https://www.schemastore.org/api/json/catalog.json")]
     pub url: String,
+    /// Filenames to exclude from this source.
+    ///
+    /// If any of a schema's `fileMatch` entries match one of these patterns
+    /// (using the same glob logic as `organize`), the schema is skipped
+    /// entirely. Use this to suppress source schemas that duplicate
+    /// explicitly configured group entries.
+    #[schemars(example = &["biome.jsonc"])]
+    #[serde(default)]
+    pub exclude_matches: Vec<String>,
     /// Rules for routing schemas from this source into local groups.
     ///
     /// Each key is a group identifier (matching a key in `[groups]`) and the
@@ -278,6 +306,10 @@ type = "dir"
 dir = "../catalog-generated"
 base-url = "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
 
+[target.local.site]
+description = "A test catalog"
+github.cname = "catalog.example.com"
+
 [target.pages]
 type = "github-pages"
 base-url = "https://catalog.lintel.tools/"
@@ -313,12 +345,20 @@ match = ["**.github**"]
         // Targets
         assert_eq!(config.target.len(), 2);
         match &config.target["local"] {
-            TargetConfig::Dir { dir, base_url, .. } => {
+            TargetConfig::Dir {
+                dir,
+                base_url,
+                site,
+            } => {
                 assert_eq!(dir, "../catalog-generated");
                 assert_eq!(
                     base_url,
                     "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
                 );
+                let site = site.as_ref().expect("site should be present");
+                assert_eq!(site.description.as_deref(), Some("A test catalog"));
+                let gh = site.github.as_ref().expect("github should be present");
+                assert_eq!(gh.cname.as_deref(), Some("catalog.example.com"));
             }
             TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
         }
@@ -378,6 +418,36 @@ base_url = "https://example.com/"
             }
             TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
         }
+    }
+
+    #[test]
+    fn parse_source_with_exclude_matches() {
+        let toml = r#"
+[catalog]
+
+[sources.schemastore]
+url = "https://www.schemastore.org/api/json/catalog.json"
+exclude-matches = ["biome.jsonc", "prettier.json"]
+
+[sources.schemastore.organize.github]
+match = ["**.github**"]
+"#;
+        let config = load_config(toml).expect("parse");
+        let ss = &config.sources["schemastore"];
+        assert_eq!(ss.exclude_matches, vec!["biome.jsonc", "prettier.json"]);
+    }
+
+    #[test]
+    fn parse_source_exclude_matches_defaults_empty() {
+        let toml = r#"
+[catalog]
+
+[sources.schemastore]
+url = "https://www.schemastore.org/api/json/catalog.json"
+"#;
+        let config = load_config(toml).expect("parse");
+        let ss = &config.sources["schemastore"];
+        assert!(ss.exclude_matches.is_empty());
     }
 
     #[test]

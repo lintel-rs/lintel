@@ -58,7 +58,7 @@
       in
       {
         checks = {
-          inherit (packages) lintel lintel-github-action;
+          inherit (packages) lintel;
         };
 
         packages =

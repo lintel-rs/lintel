@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use schema_catalog::SchemaEntry;
 use tracing::info;
 
-use crate::download::fetch_one;
+use crate::download::{ProcessedSchemas, fetch_one};
 use crate::refs::{RefRewriteContext, resolve_and_rewrite, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::SchemaDefinition;
 
@@ -21,6 +21,7 @@ pub(super) struct GroupSchemaContext<'a> {
     pub(super) group_dir: &'a Path,
     pub(super) group_key: &'a str,
     pub(super) trimmed_base: &'a str,
+    pub(super) processed: &'a ProcessedSchemas,
 }
 
 /// Process a single group schema entry: fetch schema + versions concurrently,
@@ -81,6 +82,7 @@ pub(super) async fn process_group_schema(
         base_url_for_shared: &shared_base_url,
         already_downloaded: &mut already_downloaded,
         source_url: schema_def.url.clone(),
+        processed: ctx.processed,
     };
 
     // Process schema result

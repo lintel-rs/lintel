@@ -11,6 +11,7 @@ mod catalog;
 mod commands;
 mod download;
 mod generate;
+mod html;
 mod refs;
 mod targets;
 

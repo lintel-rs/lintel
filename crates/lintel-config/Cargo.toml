@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 anyhow = "1"
+dprint-config = { version = "0.0.1", path = "../dprint-config" }
 glob-match = "0.2"
 schemars = "1"
 serde = { version = "1", features = ["derive"] }

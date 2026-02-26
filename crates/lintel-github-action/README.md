@@ -7,7 +7,7 @@
 
 Validate JSON, YAML, and TOML files against [JSON Schema](https://json-schema.org/) in your pull requests. Creates a GitHub Check Run named **Lintel** with inline annotations using the [Checks API](https://docs.github.com/en/rest/checks/runs).
 
-This is the binary behind the [`lintel-rs/action`](https://github.com/lintel-rs/action) GitHub Action.
+Available as `lintel github-action` in the main [`lintel`](https://crates.io/crates/lintel) binary and used by the [`lintel-rs/action`](https://github.com/lintel-rs/action) GitHub Action.
 
 ## Quick start
 
@@ -71,9 +71,9 @@ Place a `lintel.toml` in your repository root to configure schema mappings, excl
 
 ## How it works
 
-1. Downloads the `lintel-github-action` binary from the [action releases](https://github.com/lintel-rs/action/releases)
-2. Runs Lintel validation on your repository files
-3. Creates a GitHub Check Run with inline annotations on files with schema violations (batched at 50 per API call)
+1. Downloads the `lintel` binary from the [lintel releases](https://github.com/lintel-rs/lintel/releases)
+2. Runs `lintel github-action` (validation + format checks) on your repository files
+3. Creates a GitHub Check Run with inline annotations on files with schema violations or format issues (batched at 50 per API call)
 4. Reports pass/fail with a summary table
 
 ## Permissions
