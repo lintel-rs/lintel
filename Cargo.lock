@@ -486,6 +486,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dprint-config"
+version = "0.0.1"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dprint-core"
 version = "0.67.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,6 +1521,7 @@ name = "lintel-config"
 version = "0.0.6"
 dependencies = [
  "anyhow",
+ "dprint-config",
  "glob-match",
  "schemars",
  "serde",
@@ -1556,6 +1566,8 @@ dependencies = [
  "ansi-term-styles",
  "anyhow",
  "bpaf",
+ "dprint-config",
+ "dprint-core",
  "dprint-plugin-json",
  "dprint-plugin-markdown",
  "dprint-plugin-toml",
@@ -1565,8 +1577,11 @@ dependencies = [
  "lintel-config",
  "miette",
  "pretty_yaml",
+ "semver",
+ "serde_json",
  "similar",
  "thiserror 2.0.18",
+ "toml_edit",
 ]
 
 [[package]]
