@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.3...npm-release-binaries-v0.0.4) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Enable Cargo.toml sorting via dprint and remove ordering from cargo-furnish
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.2...npm-release-binaries-v0.0.3) - 2026-02-24
 
 ### Other
