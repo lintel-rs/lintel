@@ -44,9 +44,9 @@ Matching `some/**/needle.txt` against `some/a/bigger/path/to/the/crazy/needle.tx
 | Crate            | Time       | vs glob-matcher |
 | ---------------- | ---------- | --------------- |
 | **glob-matcher** | **109 ns** | 1.0x            |
-| glob-match 0.2.1 | 206 ns     | 1.9x slower     |
-| glob 0.3         | 310 ns     | 2.8x slower     |
-| globset 0.4      | 15,886 ns  | 146x slower     |
+| glob-match 0.2.1 | 208 ns     | 1.9x slower     |
+| glob 0.3         | 299 ns     | 2.7x slower     |
+| globset 0.4      | 15,777 ns  | 145x slower     |
 
 ## License
 
