@@ -2191,6 +2191,7 @@ mod tests {
     #[test]
     fn issue_9_globstar_wildcard_dot_in_path() {
         // https://github.com/devongovett/glob-match/issues/9
+        // https://github.com/devongovett/glob-match/pull/18
         assert!(glob_match("**/*.js", "a/b.c/c.js"));
         assert!(glob_match("/**/*a", "/a/a"));
         assert!(glob_match("**/**/*.js", "a/b.c/c.js"));
