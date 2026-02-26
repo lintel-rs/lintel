@@ -15,10 +15,10 @@ workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
-anyhow = "1"
-bpaf = { version = "0.9", features = ["autocomplete", "derive", "bright-color", "docgen"] }
-glob-match = "0.2"
-humantime = "2"
+anyhow.workspace = true
+bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"] }
+glob-match.workspace = true
+humantime = "2.3.0"
 lintel-annotate = { version = "0.0.11", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.12", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
@@ -31,15 +31,15 @@ lintel-reporters = { version = "0.0.10", path = "../lintel-reporters" }
 lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.7", path = "../lintel-validation-cache" }
-miette = { version = "7", features = ["fancy", "syntect-highlighter"] }
+miette = { workspace = true, features = ["fancy", "syntect-highlighter"] }
 schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
-serde_json = "1"
-serde_yaml = "0.9"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-toml = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-tree = "0.4"
+serde_json.workspace = true
+serde_yaml = "0.9.34"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-tree.workspace = true
 
 [dev-dependencies]
-insta = { version = "1", features = ["filters"] }
+insta.workspace = true

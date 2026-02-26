@@ -14,11 +14,11 @@ description = "GitHub Action support for Lintel — creates Check Runs with inli
 workspace = true
 
 [dependencies]
-anyhow = "1"
-bpaf = { version = "0.9", features = ["derive"] }
+anyhow.workspace = true
+bpaf.workspace = true
 lintel-check = { version = "0.0.12", path = "../lintel-check" }
 lintel-format = { version = "0.0.1", path = "../lintel-format" }
 lintel-validate = { version = "0.0.5", path = "../lintel-validate" }
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

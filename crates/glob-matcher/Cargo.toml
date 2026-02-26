@@ -1,14 +1,14 @@
 [package]
 name = "glob-matcher"
 version = "0.0.1"
-edition.workspace = true
 authors.workspace = true
-description = "A `no_std` fork of glob-match -- fast glob pattern matching"
-license = "MIT"
-repository.workspace = true
+categories = ["no-std"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["glob", "pattern", "matching"]
-categories = ["no-std"]
+license = "MIT"
+repository.workspace = true
+description = "A `no_std` fork of glob-match -- fast glob pattern matching"
 
 [lints]
 workspace = true
@@ -18,7 +18,7 @@ name = "bench"
 harness = false
 
 [dev-dependencies]
-criterion = "0.8.2"
-glob = "0.3.3"
-glob-match = "0.2.1"
+criterion.workspace = true
+glob.workspace = true
+glob-match.workspace = true
 globset = "0.4.18"

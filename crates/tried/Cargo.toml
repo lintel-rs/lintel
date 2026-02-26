@@ -1,24 +1,24 @@
 [package]
 name = "tried"
 version = "0.0.1"
-edition.workspace = true
 authors.workspace = true
-description = "A fast, compact double-array trie with `no_std` + `alloc` support. Fork of [yada](https://crates.io/crates/yada) providing O(key-length) exact-match and common-prefix search over a flat, cache-friendly byte buffer (4 bytes per node)."
-license.workspace = true
-repository.workspace = true
+categories = ["algorithms", "data-structures", "no-std", "text-processing"]
+edition.workspace = true
 homepage.workspace = true
 keywords = ["trie", "double-array", "prefix", "search", "no_std"]
-categories = ["algorithms", "data-structures", "no-std", "text-processing"]
+license.workspace = true
+repository.workspace = true
+description = "A fast, compact double-array trie with `no_std` + `alloc` support. Fork of [yada](https://crates.io/crates/yada) providing O(key-length) exact-match and common-prefix search over a flat, cache-friendly byte buffer (4 bytes per node)."
 
 [lints]
 workspace = true
 
 [dependencies]
-hashbrown = { version = "0.16", default-features = false, features = ["default-hasher"] }
+hashbrown = { version = "0.16.1", default-features = false, features = ["default-hasher"] }
 
 [[bench]]
 name = "bench"
 harness = false
 
 [dev-dependencies]
-criterion = "0.4.0"
+criterion = "0.8.2"
