@@ -1416,6 +1416,7 @@ dependencies = [
  "lintel-config",
  "lintel-explain",
  "lintel-format",
+ "lintel-github-action",
  "lintel-identify",
  "lintel-reporters",
  "lintel-schema-cache",
@@ -1572,11 +1573,12 @@ version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
+ "lintel-check",
+ "lintel-format",
  "lintel-validate",
  "reqwest",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

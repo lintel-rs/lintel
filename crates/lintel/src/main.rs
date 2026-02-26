@@ -10,6 +10,7 @@ use lintel_annotate::annotate_args;
 use lintel_check::{CheckArgs, check_args};
 use lintel_explain::explain_args;
 use lintel_format::{FormatArgs, format_args};
+use lintel_github_action::github_action_args;
 use lintel_identify::identify_args;
 use lintel_reporters::{ReporterKind, make_reporter};
 use lintel_validate::{ValidateArgs, validate_args};
@@ -140,6 +141,13 @@ enum Commands {
         #[bpaf(external(format_args))] FormatArgs,
     ),
 
+    #[bpaf(command("github-action"), hide)]
+    /// Run checks and post results as a GitHub Check Run
+    GithubAction(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(github_action_args))] lintel_github_action::GithubActionArgs,
+    ),
+
     #[bpaf(command("cache"), hide, fallback_to_usage)]
     /// Cache debugging tools
     Cache(
@@ -257,6 +265,10 @@ async fn main() -> ExitCode {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
+        Commands::GithubAction(global, mut args) => {
+            setup_tracing(&global);
+            commands::github_action::run(&mut args).await
+        }
         Commands::Cache(global, cmd) => {
             setup_tracing(&global);
             commands::cache::run(cmd, &global).await

@@ -138,8 +138,17 @@ pub fn format_content(path: &Path, content: &str) -> Result<Option<String>> {
     help("run `lintel check --fix` or `lintel format` to fix formatting")
 )]
 pub struct FormatDiagnostic {
+    /// Raw file path (no ANSI styling).
+    file_path: String,
     path: String,
     diff: String,
+}
+
+impl FormatDiagnostic {
+    /// The raw file path (without ANSI styling).
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
 }
 
 fn plural(n: usize) -> &'static str {
@@ -269,9 +278,10 @@ fn make_diagnostic(path_str: String, content: &str, formatted: &str) -> FormatDi
     let styled_path = if color {
         format!("\x1b[1;4;36m{path_str}\x1b[0m")
     } else {
-        path_str
+        path_str.clone()
     };
     FormatDiagnostic {
+        file_path: path_str,
         diff: generate_diff(content, formatted, color),
         path: styled_path,
     }

@@ -6,6 +6,9 @@ name: Build
 on:
   push:
     branches: [master]
+  pull_request:
+    paths:
+      - .github/workflows/build.yml
   workflow_call:
 
 concurrency:
@@ -37,14 +40,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            nix-package: .#lintel
-            binary: lintel
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-            nix-package: .#lintel
-            binary: lintel
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             nix-package: .#lintel-static
@@ -53,18 +48,6 @@ jobs:
             os: ubuntu-24.04-arm
             nix-package: .#lintel-static
             binary: lintel
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            nix-package: .#lintel
-            binary: lintel
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            nix-package: .#lintel
-            binary: lintel
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            nix-package: .#lintel-github-action-static
-            binary: lintel-github-action
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
@@ -81,9 +64,7 @@ jobs:
 
       - name: Verify static linking
         if: contains(matrix.target, 'musl')
-        run: |
-          file ./result/bin/${{ matrix.binary }}
-          file ./result/bin/${{ matrix.binary }} | grep -q "statically linked"
+        run: ldd ./result/bin/${{ matrix.binary }} 2>&1 | grep -qE "statically linked|not a dynamic executable"
 
       - name: Package
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
@@ -95,28 +76,60 @@ jobs:
           name: ${{ matrix.binary }}-${{ matrix.target }}
           path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
 
+  # Build GNU/Linux binaries in Docker using Debian 11 (bullseye) to support
+  # older versions of glibc. Inspired by Biome's build setup:
+  # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
   build-cargo:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
+    env:
+      RUSTFLAGS: "-C strip=symbols -C codegen-units=1"
     strategy:
       matrix:
         include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            container: rust:bullseye
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            container: rust:bullseye
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
+        if: "!matrix.container"
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "workspace"
+          shared-key: build-${{ matrix.target }}
 
       - name: Build
         run: cargo build --release --package lintel --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Smoke test
+        if: "!contains(matrix.target, 'windows')"
+        run: ./target/${{ matrix.target }}/release/lintel version
+
+      - name: Verify glibc compatibility
+        if: matrix.container
+        run: |
+          ldd ./target/${{ matrix.target }}/release/lintel
+          ./target/${{ matrix.target }}/release/lintel version
+
+      - name: Package (tar.gz)
+        if: "!contains(matrix.target, 'windows')"
+        run: tar czf lintel-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release lintel
+
+      - name: Package (zip)
+        if: contains(matrix.target, 'windows')
         run: |
           cd target/${{ matrix.target }}/release
           Compress-Archive -Path lintel.exe -DestinationPath ../../../lintel-${{ matrix.target }}.zip
