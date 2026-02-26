@@ -1,6 +1,6 @@
 [package]
 name = "lintel-catalog-builder"
-version = "0.0.9"
+version = "0.0.10"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -19,13 +19,13 @@ bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"]
 futures-util = "0.3.32"
 glob-match.workspace = true
 jsonschema.workspace = true
-jsonschema-migrate = { version = "0.1.0", path = "../jsonschema-migrate" }
-lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
+jsonschema-migrate = { version = "0.1.1", path = "../jsonschema-migrate" }
+lintel-schema-cache = { version = "0.0.11", path = "../lintel-schema-cache" }
 minijinja = { version = "2.16.0", features = ["builtins"] }
 percent-encoding = "2.3.2"
 pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
 reqwest.workspace = true
-schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+schema-catalog = { version = "0.0.6", path = "../schema-catalog" }
 schemars.workspace = true
 semver = "1.0.27"
 serde = { workspace = true, features = ["derive"] }

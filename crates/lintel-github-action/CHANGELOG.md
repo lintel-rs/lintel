@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.10...lintel-github-action-v0.0.11) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Convert lintel-github-action from standalone binary to library subcommand
+- Enable Cargo.toml sorting via dprint and remove ordering from cargo-furnish
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.9...lintel-github-action-v0.0.10) - 2026-02-24
 
 ### Other

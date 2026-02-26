@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.12...lintel-check-v0.0.13) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Enable Cargo.toml sorting via dprint and remove ordering from cargo-furnish
+- Merge origin/master into lintel-format
+- Add lintel-format crate with format and check --fix support
+
 ## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.11...lintel-check-v0.0.12) - 2026-02-24
 
 ### Other

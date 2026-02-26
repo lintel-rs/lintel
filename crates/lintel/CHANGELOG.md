@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/lintel-rs/lintel/compare/v0.0.12...v0.0.13) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Merge remote-tracking branch 'origin/master' into globset
+- Remove schemastore crate, inline CATALOG_URL into lintel-validate
+- Resolve merge conflicts: move CompiledCatalog to schema-catalog
+- Move CompiledCatalog and SchemaMatch from schemastore to schema-catalog
+
 ## [0.0.12](https://github.com/lintel-rs/lintel/compare/v0.0.11...v0.0.12) - 2026-02-24
 
 ### Other

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.5...schema-catalog-v0.0.6) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Merge remote-tracking branch 'origin/master' into globset
+- Add no-std category to no_std-compatible crates
+- Enable Cargo.toml sorting via dprint and remove ordering from cargo-furnish
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.4...schema-catalog-v0.0.5) - 2026-02-24
 
 ### Added

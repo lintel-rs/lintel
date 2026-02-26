@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.9...lintel-catalog-builder-v0.0.10) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Add site config, JSON-LD structured data, number formatting, and footer version
+- Add exclude-matches to source config and fix ref filename extensions
+- Merge origin/master into site-generator
+- Add static site generator with ProcessedSchemas for in-memory schema lookups
+
 ## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.8...lintel-catalog-builder-v0.0.9) - 2026-02-24
 
 ### Other
