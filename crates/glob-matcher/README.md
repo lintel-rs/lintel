@@ -39,14 +39,14 @@ assert!(!glob_match("*.rs", "src/main.rs"));
 
 ## Benchmarks
 
-Matching 17 patterns against a single path (`cargo bench -p glob-matcher`):
+Matching `some/**/needle.txt` against `some/a/bigger/path/to/the/crazy/needle.txt` (`cargo bench -p glob-matcher`):
 
 | Crate            | Time       | vs glob-matcher |
 | ---------------- | ---------- | --------------- |
-| **glob-matcher** | **108 ns** | 1.0x            |
-| glob-match 0.2.1 | 209 ns     | 1.9x slower     |
-| glob 0.3         | 307 ns     | 2.8x slower     |
-| globset 0.4      | 15,746 ns  | 146x slower     |
+| **glob-matcher** | **109 ns** | 1.0x            |
+| glob-match 0.2.1 | 206 ns     | 1.9x slower     |
+| glob 0.3         | 310 ns     | 2.8x slower     |
+| globset 0.4      | 15,886 ns  | 146x slower     |
 
 ## License
 
