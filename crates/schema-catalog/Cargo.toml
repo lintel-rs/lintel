@@ -2,7 +2,7 @@
 name = "schema-catalog"
 version = "0.0.5"
 authors.workspace = true
-categories = ["data-structures"]
+categories = ["data-structures", "no-std"]
 edition.workspace = true
 homepage.workspace = true
 keywords = ["json-schema", "catalog", "schemastore"]
