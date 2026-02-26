@@ -1,0 +1,40 @@
+{% extends "base.html" %} {% block title %}{{ name }} - {{ site.title }}{%
+endblock %} {% block description %}Shared dependency schema: {{ name }}{%
+endblock %} {% block canonical %}{{ site.base_url }}{{ name }}{% endblock %} {%
+block og_title %}{{ name }} - {{ site.title }}{% endblock %} {% block
+og_description %}Shared dependency schema: {{ name }}{% endblock %} {% block
+og_url %}{{ site.base_url }}{{ name }}{% endblock %} {% block content %} {%
+include "components/breadcrumb.html" %}
+
+<div class="schema-layout">
+  <article class="schema-detail">
+    <header class="page-header">
+      <h1>{{ name }}</h1>
+      <span class="badge">shared</span>
+    </header>
+
+    <table class="meta-table">
+      {% if schema_doc and schema_doc.schema_type %}
+      <tr>
+        <th>Type</th>
+        <td><span class="type-badge">{{ schema_doc.schema_type }}</span></td>
+      </tr>
+      {% endif %}
+      <tr>
+        <th>Schema URL</th>
+        <td class="url-cell"><a href="{{ json_url }}">{{ json_url }}</a></td>
+      </tr>
+      {% if parent_schema_name %}
+      <tr>
+        <th>Parent schema</th>
+        <td><a href="{{ parent_schema_url }}">{{ parent_schema_name }}</a></td>
+      </tr>
+      {% endif %}
+    </table>
+
+    {% include "components/schema_doc.html" %}
+  </article>
+
+  <nav class="page-outline" id="page-outline" aria-label="Page outline"></nav>
+</div>
+{% endblock %}

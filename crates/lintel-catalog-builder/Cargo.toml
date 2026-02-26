@@ -34,6 +34,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = "0.4"
 url = "2"
+minijinja = { version = "2", features = ["builtins"] }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 [dev-dependencies]
 tempfile = "3"

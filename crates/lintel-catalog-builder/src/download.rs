@@ -1,9 +1,69 @@
-use std::path::Path;
+use alloc::sync::Arc;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use anyhow::Result;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
+
+/// Thread-safe collection of all processed schema values, keyed by their
+/// path relative to the output directory (e.g. `schemas/github/workflow/latest.json`).
+#[derive(Clone)]
+pub struct ProcessedSchemas {
+    inner: Arc<Mutex<HashMap<String, serde_json::Value>>>,
+    output_dir: PathBuf,
+}
+
+impl ProcessedSchemas {
+    pub fn new(output_dir: &Path) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(HashMap::new())),
+            output_dir: output_dir.to_path_buf(),
+        }
+    }
+
+    /// Insert a processed schema value, keyed by its path relative to `output_dir`.
+    pub fn insert(&self, path: &Path, value: &serde_json::Value) {
+        let relative = path
+            .strip_prefix(&self.output_dir)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
+        self.inner
+            .lock()
+            .expect("ProcessedSchemas lock poisoned")
+            .insert(relative, value.clone());
+    }
+
+    /// Look up a schema by its relative path (e.g. `schemas/github/workflow/latest.json`).
+    pub fn get(&self, relative_path: &str) -> Option<serde_json::Value> {
+        self.inner
+            .lock()
+            .expect("ProcessedSchemas lock poisoned")
+            .get(relative_path)
+            .cloned()
+    }
+
+    /// Total count of all stored schemas.
+    pub fn len(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("ProcessedSchemas lock poisoned")
+            .len()
+    }
+
+    /// Return all relative paths stored.
+    pub fn keys(&self) -> Vec<String> {
+        self.inner
+            .lock()
+            .expect("ProcessedSchemas lock poisoned")
+            .keys()
+            .cloned()
+            .collect()
+    }
+}
 
 /// Maximum schema file size we'll download (10 MiB). Schemas larger than this
 /// are skipped and the catalog retains the original upstream URL.
@@ -121,9 +181,17 @@ fn reorder_schema_keys(value: &mut serde_json::Value) {
 /// Write a `serde_json::Value` to disk as pretty-printed JSON.
 /// Enforces [`MAX_SCHEMA_SIZE`]. Creates parent directories.
 /// Reorders top-level keys so well-known schema fields come first.
-pub async fn write_schema_json(value: &serde_json::Value, path: &Path) -> Result<()> {
+/// Also inserts the final value into `processed` for in-memory lookups.
+pub async fn write_schema_json(
+    value: &serde_json::Value,
+    path: &Path,
+    processed: &ProcessedSchemas,
+) -> Result<()> {
     let mut value = value.clone();
     reorder_schema_keys(&mut value);
+
+    processed.insert(path, &value);
+
     let text = serde_json::to_string_pretty(&value)?;
 
     if text.len() as u64 > MAX_SCHEMA_SIZE {

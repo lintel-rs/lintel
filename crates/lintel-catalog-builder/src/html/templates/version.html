@@ -1,0 +1,50 @@
+{% extends "base.html" %} {% block title %}{{ schema_name }} {{ version_name }}
+- {{ site.title }}{% endblock %} {% block description %}Version {{ version_name
+}} of {{ schema_name }}{% endblock %} {% block canonical %}{{ site.base_url }}{{
+page_url }}{% endblock %} {% block og_title %}{{ schema_name }} {{ version_name
+}} - {{ site.title }}{% endblock %} {% block og_description %}Version {{
+version_name }} of {{ schema_name }}{% endblock %} {% block og_url %}{{
+site.base_url }}{{ page_url }}{% endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "{{ schema_name }} {{ version_name }}",
+    "description": "Version {{ version_name }} of {{ schema_name }}",
+    "url": "{{ site.base_url }}{{ page_url }}",
+    "codeRepository": "{{ json_url }}",
+    "programmingLanguage": "JSON Schema",
+    "version": "{{ version_name }}",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "{{ site.title }}",
+      "url": "{{ site.base_url }}"
+    }
+  }
+</script>
+{% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
+
+<div class="schema-layout">
+  <article class="version-detail">
+    <header class="page-header">
+      <h1>{{ schema_name }}</h1>
+      <span class="badge">{{ version_name }}</span>
+    </header>
+
+    <section class="detail-section">
+      <h2>Schema URL</h2>
+      <div class="url-box">
+        <a href="{{ json_url }}">{{ json_url }}</a>
+      </div>
+    </section>
+
+    <div class="back-link">
+      <a href="{{ schema_page_url }}">&larr; Back to {{ schema_name }}</a>
+    </div>
+
+    {% include "components/schema_doc.html" %}
+  </article>
+
+  <nav class="page-outline" id="page-outline" aria-label="Page outline"></nav>
+</div>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %} {% block title %}{{ name }} - {{ site.title }}{%
+endblock %} {% block description %}{{ seo_description }}{% endblock %} {% block
+canonical %}{{ site.base_url }}{{ page_url }}{% endblock %} {% block og_title
+%}{{ name }} - {{ site.title }}{% endblock %} {% block og_description %}{{
+seo_description }}{% endblock %} {% block og_url %}{{ site.base_url }}{{
+page_url }}{% endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "{{ name }}",
+    "description": "{{ description }}",
+    "url": "{{ site.base_url }}{{ page_url }}",
+    "codeRepository": "{{ json_url }}",
+    "programmingLanguage": "JSON Schema",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "{{ site.title }}",
+      "url": "{{ site.base_url }}"
+    }
+  }
+</script>
+{% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
+
+<div class="schema-layout">
+  <article class="schema-detail">
+    <header class="page-header">
+      <h1>{{ name }}</h1>
+      {% if description_html %}
+      <div class="page-description desc-html">{{ description_html|safe }}</div>
+      {% endif %}
+    </header>
+
+    <table class="meta-table">
+      {% if schema_doc and schema_doc.schema_type %}
+      <tr>
+        <th>Type</th>
+        <td><span class="type-badge">{{ schema_doc.schema_type }}</span></td>
+      </tr>
+      {% endif %} {% if file_match %}
+      <tr>
+        <th>File match</th>
+        <td>
+          {% for pattern in file_match %}<code class="pattern-badge"
+            >{{ pattern }}</code
+          >
+          {% endfor %}
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <th>Schema URL</th>
+        <td class="url-cell"><a href="{{ json_url }}">{{ json_url }}</a></td>
+      </tr>
+      {% if source_url %}
+      <tr>
+        <th>Source</th>
+        <td class="url-cell">
+          <a href="{{ source_url }}" rel="noopener noreferrer"
+            >{{ source_url }}</a
+          >
+        </td>
+      </tr>
+      {% endif %}
+    </table>
+
+    {% if versions %}
+    <section class="detail-section">
+      <h2 id="versions">Versions</h2>
+      <div class="version-list">
+        {% for version in versions %}
+        <a href="{{ site.base_path }}{{ version.url }}" class="version-link"
+          >{{ version.name }}</a
+        >
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="lintel-section">
+      <h2 id="lintel">Validate with Lintel</h2>
+      <pre class="code-block"><code>npx @lintel/lintel check</code></pre>
+    </section>
+
+    {% include "components/schema_doc.html" %}
+  </article>
+
+  <nav class="page-outline" id="page-outline" aria-label="Page outline"></nav>
+</div>
+{% endblock %}

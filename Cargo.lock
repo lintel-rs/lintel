@@ -1470,7 +1470,9 @@ dependencies = [
  "jsonschema",
  "jsonschema-migrate",
  "lintel-schema-cache",
+ "minijinja",
  "percent-encoding",
+ "pulldown-cmark 0.13.1",
  "reqwest",
  "schema-catalog",
  "schemars",
@@ -1788,6 +1790,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c54f3bcc034dd74496b5ca929fd0b710186672d5ff0b0f255a9ceb259042ece"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -2114,8 +2125,15 @@ checksum = "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6"
 dependencies = [
  "bitflags",
  "memchr",
+ "pulldown-cmark-escape",
  "unicase",
 ]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
 
 [[package]]
 name = "quick-xml"
