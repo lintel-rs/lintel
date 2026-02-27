@@ -86,6 +86,11 @@ fn process_file(
         return FileOutcome::Skipped;
     };
 
+    // JSONL files don't support inline annotations; use lintel.toml mappings instead.
+    if fmt == parsers::FileFormat::Jsonl {
+        return FileOutcome::Skipped;
+    }
+
     let parser = parsers::parser_for(fmt);
     let Ok(instance) = parser.parse(&content, &path_str) else {
         return FileOutcome::Skipped;

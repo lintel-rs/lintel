@@ -191,7 +191,14 @@ pub async fn resolve_schema_for_content(
         return Ok(None);
     };
 
-    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
+    let from_inline = matches!(resolved.source, SchemaSource::Inline);
+    let (schema_uri, is_remote) = finalize_uri(
+        &resolved.uri,
+        &cfg.rewrite,
+        &config_dir,
+        file_path,
+        from_inline,
+    );
 
     let display_name = resolved
         .catalog_match
@@ -246,7 +253,14 @@ pub async fn resolve_schema_for_path(
         return Ok(None);
     };
 
-    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
+    let from_inline = matches!(resolved.source, SchemaSource::Inline);
+    let (schema_uri, is_remote) = finalize_uri(
+        &resolved.uri,
+        &cfg.rewrite,
+        &config_dir,
+        file_path,
+        from_inline,
+    );
 
     let display_name = resolved
         .catalog_match
@@ -312,7 +326,14 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
         return Ok(false);
     };
 
-    let (schema_uri, is_remote) = finalize_uri(&resolved.uri, &cfg.rewrite, &config_dir, file_path);
+    let from_inline = matches!(resolved.source, SchemaSource::Inline);
+    let (schema_uri, is_remote) = finalize_uri(
+        &resolved.uri,
+        &cfg.rewrite,
+        &config_dir,
+        file_path,
+        from_inline,
+    );
 
     let display_name = resolved
         .catalog_match
@@ -401,11 +422,17 @@ fn resolve_schema_path_only<'a>(
 }
 
 /// Apply rewrites, resolve relative paths, and determine whether the URI is remote.
+///
+/// When `from_inline` is true, relative paths resolve against the file's parent
+/// directory (inline `$schema`). Otherwise they resolve against the config
+/// directory where `lintel.toml` lives.
+#[allow(clippy::too_many_arguments)]
 fn finalize_uri(
     raw_uri: &str,
     rewrites: &HashMap<String, String>,
     config_dir: &Path,
     file_path: &Path,
+    from_inline: bool,
 ) -> (String, bool) {
     let schema_uri = lintel_config::apply_rewrites(raw_uri, rewrites);
     let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
@@ -414,9 +441,13 @@ fn finalize_uri(
     let schema_uri = if is_remote {
         schema_uri
     } else {
-        file_path
-            .parent()
-            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
+        let base_dir = if from_inline {
+            file_path.parent()
+        } else {
+            Some(config_dir)
+        };
+        base_dir
+            .map(|dir| dir.join(&schema_uri).to_string_lossy().to_string())
             .unwrap_or(schema_uri)
     };
 

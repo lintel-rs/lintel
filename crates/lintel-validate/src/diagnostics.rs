@@ -54,6 +54,14 @@ pub enum LintError {
         schema_path: String,
     },
 
+    #[error("{path}: mismatched $schema on line {line_number}: {message}")]
+    #[diagnostic(code(lintel::jsonl::schema_mismatch))]
+    SchemaMismatch {
+        path: String,
+        line_number: usize,
+        message: String,
+    },
+
     #[error("{path}: {message}")]
     #[diagnostic(code(lintel::io))]
     Io { path: String, message: String },
@@ -83,6 +91,7 @@ impl LintError {
         match self {
             LintError::Parse { src, .. } => src.name(),
             LintError::Validation { path, .. }
+            | LintError::SchemaMismatch { path, .. }
             | LintError::Io { path, .. }
             | LintError::SchemaFetch { path, .. }
             | LintError::SchemaCompile { path, .. } => path,
@@ -94,6 +103,7 @@ impl LintError {
         match self {
             LintError::Parse { message, .. }
             | LintError::Validation { message, .. }
+            | LintError::SchemaMismatch { message, .. }
             | LintError::Io { message, .. }
             | LintError::SchemaFetch { message, .. }
             | LintError::SchemaCompile { message, .. } => message,
@@ -104,7 +114,8 @@ impl LintError {
     pub fn offset(&self) -> usize {
         match self {
             LintError::Parse { span, .. } | LintError::Validation { span, .. } => span.offset(),
-            LintError::Io { .. }
+            LintError::SchemaMismatch { .. }
+            | LintError::Io { .. }
             | LintError::SchemaFetch { .. }
             | LintError::SchemaCompile { .. } => 0,
         }
@@ -334,6 +345,14 @@ mod tests {
                     schema_path: String::new(),
                 },
                 "lintel::validation",
+            ),
+            (
+                LintError::SchemaMismatch {
+                    path: String::new(),
+                    line_number: 0,
+                    message: String::new(),
+                },
+                "lintel::jsonl::schema_mismatch",
             ),
             (
                 LintError::Io {

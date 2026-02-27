@@ -1,8 +1,7 @@
 ---
 source: crates/lintel/tests/e2e.rs
-assertion_line: 46
 expression: text
 ---
-error: expected `,` or `}` at line 5 column 5
-Checked 1 files in [TIME]. 1 error(s) found.
+error: ./tsconfig.json: Expected comma on line 4 column 25
+Checked 0 files in [TIME]. 1 error(s) found.
 exit code: 1
