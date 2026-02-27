@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -525,7 +525,7 @@ pub struct FormatArgs {
     #[bpaf(long("exclude"), argument("PATTERN"))]
     pub exclude: Vec<String>,
 
-    #[bpaf(positional("PATH"))]
+    #[bpaf(positional("PATH"), complete_shell(ShellComp::File { mask: None }))]
     pub globs: Vec<String>,
 }
 

@@ -6,7 +6,7 @@ extern crate alloc;
 use std::time::Instant;
 
 use anyhow::Result;
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 
 use lintel_cli_common::CliCacheOptions;
 
@@ -36,7 +36,7 @@ pub struct ValidateArgs {
     #[bpaf(external(lintel_cli_common::cli_cache_options))]
     pub cache: CliCacheOptions,
 
-    #[bpaf(positional("PATH"))]
+    #[bpaf(positional("PATH"), complete_shell(ShellComp::File { mask: None }))]
     pub globs: Vec<String>,
 }
 
