@@ -17,7 +17,7 @@ glob = "0.3.3"
 glob-match = "0.2.1"
 ignore = "0.4.25"
 insta = { version = "1.46.3", features = ["filters"] }
-jsonschema = "0.42.1"
+jsonschema = "0.42.2"
 miette = "7.6.0"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] }
 schemars = "1.2.1"
