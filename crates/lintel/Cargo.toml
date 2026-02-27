@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 ansi-term-styles = "0.1.0"
 anyhow.workspace = true
-bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"] }
+bpaf = { workspace = true, features = ["bright-color", "docgen"] }
 glob-match.workspace = true
 humantime = "2.3.0"
 lintel-annotate = { version = "0.0.13", path = "../lintel-annotate" }

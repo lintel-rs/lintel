@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 
 use lintel_cli_common::CliCacheOptions;
 use lintel_schema_cache::SchemaCache;
@@ -29,7 +29,7 @@ pub struct AnnotateArgs {
     #[bpaf(long("update"), switch)]
     pub update: bool,
 
-    #[bpaf(positional("PATH"))]
+    #[bpaf(positional("PATH"), complete_shell(ShellComp::File { mask: None }))]
     pub globs: Vec<String>,
 }
 

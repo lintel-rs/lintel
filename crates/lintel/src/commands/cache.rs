@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 use lintel_cli_common::CLIGlobalOptions;
 
 use lintel_schema_cache::{CacheStatus, SchemaCache};
@@ -22,7 +22,7 @@ pub enum CacheCommand {
 
 #[derive(Debug, Clone, Bpaf)]
 pub struct InspectSchemaArgs {
-    #[bpaf(long("cache-dir"), argument("DIR"))]
+    #[bpaf(long("cache-dir"), argument("DIR"), complete_shell(ShellComp::Dir { mask: None }))]
     pub cache_dir: Option<String>,
 
     /// Schema URL to inspect
@@ -32,7 +32,7 @@ pub struct InspectSchemaArgs {
 
 #[derive(Debug, Clone, Bpaf)]
 pub struct TraceArgs {
-    #[bpaf(long("cache-dir"), argument("DIR"))]
+    #[bpaf(long("cache-dir"), argument("DIR"), complete_shell(ShellComp::Dir { mask: None }))]
     pub cache_dir: Option<String>,
 
     /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
@@ -43,7 +43,7 @@ pub struct TraceArgs {
     pub no_catalog: bool,
 
     /// File to trace
-    #[bpaf(positional("FILE"))]
+    #[bpaf(positional("FILE"), complete_shell(ShellComp::File { mask: None }))]
     pub file: String,
 }
 

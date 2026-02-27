@@ -11,7 +11,7 @@ repository = "https://github.com/lintel-rs/lintel"
 
 [workspace.dependencies]
 anyhow = "1.0.102"
-bpaf = { version = "0.9.23", features = ["derive"] }
+bpaf = { version = "0.9.23", features = ["autocomplete", "derive"] }
 criterion = "0.8.2"
 glob = "0.3.3"
 glob-match = "0.2.1"

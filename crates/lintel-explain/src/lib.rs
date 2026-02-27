@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 
 use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 
@@ -20,19 +20,19 @@ pub struct ExplainArgs {
     /// Schema URL or local file path to explain.
     /// Can be combined with `--file` or `--path` to override schema resolution
     /// while still validating the data file.
-    #[bpaf(long("schema"), argument("URL|FILE"))]
+    #[bpaf(long("schema"), argument("URL|FILE"), complete_shell(ShellComp::File { mask: None }))]
     pub schema: Option<String>,
 
     /// Data file (local path or URL) to resolve the schema from and validate.
     /// The file must exist (or be fetchable). For URLs, the filename is used
     /// for catalog matching.
-    #[bpaf(long("file"), argument("FILE|URL"))]
+    #[bpaf(long("file"), argument("FILE|URL"), complete_shell(ShellComp::File { mask: None }))]
     pub file: Option<String>,
 
     /// File path or URL to resolve the schema from using catalogs.
     /// Local files need not exist; if the file exists (or is a URL), it is
     /// also validated.
-    #[bpaf(long("path"), argument("FILE|URL"))]
+    #[bpaf(long("path"), argument("FILE|URL"), complete_shell(ShellComp::File { mask: None }))]
     pub resolve_path: Option<String>,
 
     #[bpaf(external(lintel_cli_common::cli_cache_options))]
@@ -53,7 +53,7 @@ pub struct ExplainArgs {
     /// Examples:
     /// - `lintel explain package.json`       — explains the schema for `package.json`
     /// - `lintel explain --file f.yaml name`  — explains the `name` property
-    #[bpaf(positional("FILE|POINTER"))]
+    #[bpaf(positional("FILE|POINTER"), complete_shell(ShellComp::File { mask: None }))]
     pub positional: Option<String>,
 
     /// JSON Pointer (`/properties/name`) or `JSONPath` (`$.name`) to a sub-schema.
