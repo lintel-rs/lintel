@@ -1,19 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
-// This crate is a minimal fork of `glob-match` 0.2.1 by Devon Govett (MIT).
-// Upstream style is preserved; suppress workspace lints that conflict with it.
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cognitive_complexity,
-    clippy::collapsible_if,
-    clippy::inline_always,
-    clippy::needless_lifetimes,
-    clippy::redundant_else,
-    clippy::similar_names,
-    clippy::struct_field_names,
-    clippy::too_many_lines,
-    clippy::unwrap_used
-)]
 extern crate alloc;
 
 mod syntax;
@@ -22,6 +8,7 @@ pub use syntax::{skip_braces, skip_char_class};
 use alloc::vec::Vec;
 use core::ops::Range;
 
+#[allow(clippy::inline_always)]
 #[inline(always)]
 fn is_separator(c: char) -> bool {
     c == '/' || c == '\\'
@@ -29,24 +16,25 @@ fn is_separator(c: char) -> bool {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct State {
-    // These store character indices into the glob and path strings.
+    /// Character index into the path string.
     path_index: usize,
+    /// Character index into the glob string.
     glob_index: usize,
 
-    // When we hit a * or **, we store the state for backtracking.
+    /// When we hit a * or **, we store the state for backtracking.
     wildcard: Wildcard,
     globstar: Wildcard,
 
-    // The current index into the captures list.
+    /// The current index into the captures list.
     capture_index: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Wildcard {
-    // Using u32 rather than usize for these results in 10% faster performance.
-    glob_index: u32,
-    path_index: u32,
-    capture_index: u32,
+    /// Using u32 rather than usize for these results in 10% faster performance.
+    glob: u32,
+    path: u32,
+    capture: u32,
 }
 
 #[derive(PartialEq)]
@@ -65,362 +53,468 @@ struct BraceStack {
 type Capture = Range<usize>;
 
 pub fn glob_match(glob: &str, path: &str) -> bool {
-    glob_match_internal(glob, path, None)
+    Matcher::new(glob, path).run(None)
 }
 
-pub fn glob_match_with_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<Capture>> {
+pub fn glob_match_with_captures(glob: &str, path: &str) -> Option<Vec<Capture>> {
     let mut captures = Vec::new();
-    if glob_match_internal(glob, path, Some(&mut captures)) {
+    if Matcher::new(glob, path).run(Some(&mut captures)) {
         return Some(captures);
     }
     None
 }
 
-fn glob_match_internal<'a>(
-    glob: &str,
-    path: &'a str,
-    mut captures: Option<&mut Vec<Capture>>,
-) -> bool {
-    // This algorithm is based on https://research.swtch.com/glob
-    let glob = glob.as_bytes();
-    let path = path.as_bytes();
+enum Step {
+    Continue,
+    Return(bool),
+    Backtrack,
+}
 
-    let mut state = State::default();
+struct Matcher<'a> {
+    glob: &'a [u8],
+    path: &'a [u8],
+    state: State,
+    brace_stack: BraceStack,
+}
 
-    // Store the state when we see an opening '{' brace in a stack.
-    // Up to 10 nested braces are supported.
-    let mut brace_stack = BraceStack::default();
-
-    // First, check if the pattern is negated with a leading '!' character.
-    // Multiple negations can occur.
-    let mut negated = false;
-    while state.glob_index < glob.len() && glob[state.glob_index] == b'!' {
-        negated = !negated;
-        state.glob_index += 1;
+#[allow(clippy::similar_names)]
+impl<'a> Matcher<'a> {
+    fn new(glob: &'a str, path: &'a str) -> Self {
+        Matcher {
+            glob: glob.as_bytes(),
+            path: path.as_bytes(),
+            state: State::default(),
+            brace_stack: BraceStack::default(),
+        }
     }
 
-    while state.glob_index < glob.len() || state.path_index < path.len() {
-        if state.glob_index < glob.len() {
-            match glob[state.glob_index] {
-                b'*' => {
-                    let is_globstar =
-                        state.glob_index + 1 < glob.len() && glob[state.glob_index + 1] == b'*';
-                    if is_globstar {
-                        // Coalesce multiple ** segments into one.
-                        state.skip_globstars(glob);
-                    }
-
-                    // If we are on a different glob index than before, start a new capture.
-                    // Otherwise, extend the active one.
-                    if captures.is_some()
-                        && (captures.as_ref().unwrap().is_empty()
-                            || state.glob_index != state.wildcard.glob_index as usize)
-                    {
-                        state.wildcard.capture_index = state.capture_index as u32;
-                        state.begin_capture(&mut captures, state.path_index..state.path_index);
-                    } else {
-                        state.extend_capture(&mut captures);
-                    }
-
-                    state.wildcard.glob_index = state.glob_index as u32;
-                    state.wildcard.path_index = state.path_index as u32 + 1;
-
-                    // ** allows path separators, whereas * does not.
-                    // However, ** must be a full path component, i.e. a/**/b not a**b.
-                    let mut in_globstar = false;
-                    if is_globstar {
-                        state.glob_index += 2;
-                        let is_end_invalid = state.glob_index != glob.len()
-                            && !(brace_stack.length > 0
-                                && matches!(glob[state.glob_index], b'}' | b','));
-                        let preceded_by_sep = state.glob_index < 3
-                            || glob[state.glob_index - 3] == b'/'
-                            || (brace_stack.length > 0
-                                && matches!(glob[state.glob_index - 3], b'{' | b','));
-                        if preceded_by_sep && (!is_end_invalid || glob[state.glob_index] == b'/') {
-                            if is_end_invalid {
-                                state.end_capture(&mut captures);
-                                state.glob_index += 1;
-                            }
-                            state.skip_to_separator(path, is_end_invalid);
-                            in_globstar = true;
-                        }
-                    } else {
-                        state.glob_index += 1;
-                    }
-
-                    if state.path_index < path.len() && is_separator(path[state.path_index] as char)
-                    {
-                        if in_globstar {
-                            state.path_index += 1;
-                        } else if state.globstar.path_index > 0 && state.path_index < path.len() {
-                            state.wildcard = state.globstar;
-                        } else {
-                            state.wildcard.path_index = 0;
-                        }
-                    }
-
-                    // If the next char is a special brace separator,
-                    // skip to the end of the braces so we don't try to match it.
-                    if brace_stack.length > 0
-                        && state.glob_index < glob.len()
-                        && matches!(glob[state.glob_index], b',' | b'}')
-                    {
-                        if state.skip_braces(glob, &mut captures, false) == BraceState::Invalid {
-                            // invalid pattern!
-                            return false;
-                        }
-                    }
-
-                    continue;
-                }
-                b'?' if state.path_index < path.len() => {
-                    if !is_separator(path[state.path_index] as char) {
-                        state.add_char_capture(&mut captures);
-                        state.glob_index += 1;
-                        state.path_index += 1;
-                        continue;
-                    }
-                }
-                b'[' if state.path_index < path.len() => {
-                    state.glob_index += 1;
-                    let c = path[state.path_index];
-
-                    // Check if the character class is negated.
-                    let mut negated = false;
-                    if state.glob_index < glob.len()
-                        && matches!(glob[state.glob_index], b'^' | b'!')
-                    {
-                        negated = true;
-                        state.glob_index += 1;
-                    }
-
-                    // Try each range.
-                    let mut first = true;
-                    let mut is_match = false;
-                    while state.glob_index < glob.len() && (first || glob[state.glob_index] != b']')
-                    {
-                        let mut low = glob[state.glob_index];
-                        if !unescape(&mut low, glob, &mut state.glob_index) {
-                            // Invalid pattern!
-                            return false;
-                        }
-                        state.glob_index += 1;
-
-                        // If there is a - and the following character is not ], read the range end character.
-                        let high = if state.glob_index + 1 < glob.len()
-                            && glob[state.glob_index] == b'-'
-                            && glob[state.glob_index + 1] != b']'
-                        {
-                            state.glob_index += 1;
-                            let mut high = glob[state.glob_index];
-                            if !unescape(&mut high, glob, &mut state.glob_index) {
-                                // Invalid pattern!
-                                return false;
-                            }
-                            state.glob_index += 1;
-                            high
-                        } else {
-                            low
-                        };
-
-                        if low <= c && c <= high {
-                            is_match = true;
-                        }
-                        first = false;
-                    }
-                    if state.glob_index >= glob.len() {
-                        // invalid pattern!
-                        return false;
-                    }
-                    state.glob_index += 1;
-                    if is_match != negated {
-                        state.add_char_capture(&mut captures);
-                        state.path_index += 1;
-                        continue;
-                    }
-                }
-                b'{' => {
-                    if brace_stack.length as usize >= brace_stack.stack.len() {
-                        // Invalid pattern! Too many nested braces.
-                        return false;
-                    }
-
-                    state.end_capture(&mut captures);
-                    state.begin_capture(&mut captures, state.path_index..state.path_index);
-
-                    // Push old state to the stack, and reset current state.
-                    state = brace_stack.push(&state);
-                    continue;
-                }
-                b'}' if brace_stack.length > 0 => {
-                    // If we hit the end of the braces, we matched the last option.
-                    brace_stack.longest_brace_match = brace_stack
-                        .longest_brace_match
-                        .max(state.path_index as u32 + 1);
-                    state.glob_index += 1;
-                    state = brace_stack.pop(&state, &mut captures);
-                    continue;
-                }
-                b',' if brace_stack.length > 0 => {
-                    // If we hit a comma, we matched one of the options!
-                    // But we still need to check the others in case there is a longer match.
-                    brace_stack.longest_brace_match = brace_stack
-                        .longest_brace_match
-                        .max(state.path_index as u32 + 1);
-                    state.path_index = brace_stack.last().path_index;
-                    state.glob_index += 1;
-                    state.wildcard = Wildcard::default();
-                    state.globstar = Wildcard::default();
-                    continue;
-                }
-                mut c if state.path_index < path.len() => {
-                    // Match escaped characters as literals.
-                    if !unescape(&mut c, glob, &mut state.glob_index) {
-                        // Invalid pattern!
-                        return false;
-                    }
-
-                    let is_match = if c == b'/' {
-                        is_separator(path[state.path_index] as char)
-                    } else {
-                        path[state.path_index] == c
-                    };
-
-                    if is_match {
-                        state.end_capture(&mut captures);
-
-                        if brace_stack.length > 0
-                            && state.glob_index > 0
-                            && glob[state.glob_index - 1] == b'}'
-                        {
-                            brace_stack.longest_brace_match = state.path_index as u32 + 1;
-                            state = brace_stack.pop(&state, &mut captures);
-                        }
-                        state.glob_index += 1;
-                        state.path_index += 1;
-
-                        if c == b'/' {
-                            state.wildcard = state.globstar;
-                        }
-                        continue;
-                    }
-                }
-                _ => {}
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn unescape(&mut self, c: &mut u8) -> bool {
+        if *c == b'\\' {
+            self.state.glob_index += 1;
+            if self.state.glob_index >= self.glob.len() {
+                // Invalid pattern!
+                return false;
+            }
+            *c = match self.glob[self.state.glob_index] {
+                b'a' => b'\x61', // \a → literal 'a' (not BEL)
+                b'b' => b'\x08',
+                b'n' => b'\n',
+                b'r' => b'\r',
+                b't' => b'\t',
+                c => c,
             }
         }
+        true
+    }
 
-        // If we didn't match, restore state to the previous star pattern.
-        if state.wildcard.path_index > 0 && state.wildcard.path_index as usize <= path.len() {
-            state.backtrack();
-            continue;
+    // This algorithm is based on https://research.swtch.com/glob
+    fn run(&mut self, mut captures: Option<&mut Vec<Capture>>) -> bool {
+        // First, check if the pattern is negated with a leading '!' character.
+        let mut negated = false;
+        while self.state.glob_index < self.glob.len() && self.glob[self.state.glob_index] == b'!' {
+            negated = !negated;
+            self.state.glob_index += 1;
         }
 
-        if brace_stack.length > 0 {
-            // If in braces, find next option and reset path to index where we saw the '{'
-            match state.skip_braces(glob, &mut captures, true) {
-                BraceState::Invalid => return false,
-                BraceState::Comma => {
-                    state.path_index = brace_stack.last().path_index;
-                    continue;
-                }
-                BraceState::EndBrace => {
-                    // Hit the end. Pop the stack.
-                    // If we matched a previous option, use that.
-                    if brace_stack.longest_brace_match > 0 {
-                        state = brace_stack.pop(&state, &mut captures);
-                        continue;
-                    } else {
-                        // Didn't match. Restore state, and check if we need to jump back to a star pattern.
-                        state = *brace_stack.last();
-                        brace_stack.length -= 1;
-                        if let Some(captures) = &mut captures {
-                            captures.truncate(state.capture_index);
-                        }
-                        if state.wildcard.path_index > 0
-                            && state.wildcard.path_index as usize <= path.len()
-                        {
-                            state.backtrack();
+        while self.state.glob_index < self.glob.len() || self.state.path_index < self.path.len() {
+            if self.state.glob_index < self.glob.len() {
+                match self.glob[self.state.glob_index] {
+                    b'*' => match self.match_star(&mut captures) {
+                        Step::Continue => continue,
+                        Step::Return(v) => return v,
+                        Step::Backtrack => {}
+                    },
+                    b'?' if self.state.path_index < self.path.len() => {
+                        if !is_separator(self.path[self.state.path_index] as char) {
+                            self.state.add_char_capture(&mut captures);
+                            self.state.glob_index += 1;
+                            self.state.path_index += 1;
                             continue;
                         }
                     }
+                    b'[' if self.state.path_index < self.path.len() => {
+                        match self.match_bracket(&mut captures) {
+                            Step::Continue => continue,
+                            Step::Return(v) => return v,
+                            Step::Backtrack => {}
+                        }
+                    }
+                    b'{' => {
+                        if self.brace_stack.length as usize >= self.brace_stack.stack.len() {
+                            return false;
+                        }
+                        self.state.end_capture(&mut captures);
+                        self.state.begin_capture(
+                            &mut captures,
+                            self.state.path_index..self.state.path_index,
+                        );
+                        let snap = self.state;
+                        self.state = self.brace_stack.push(&snap);
+                        continue;
+                    }
+                    b'}' if self.brace_stack.length > 0 => {
+                        #[allow(clippy::cast_possible_truncation)]
+                        {
+                            self.brace_stack.longest_brace_match = self
+                                .brace_stack
+                                .longest_brace_match
+                                .max(self.state.path_index as u32 + 1);
+                        }
+                        self.state.glob_index += 1;
+                        let snap = self.state;
+                        self.state = self.brace_stack.pop(&snap, &mut captures);
+                        continue;
+                    }
+                    b',' if self.brace_stack.length > 0 => {
+                        #[allow(clippy::cast_possible_truncation)]
+                        {
+                            self.brace_stack.longest_brace_match = self
+                                .brace_stack
+                                .longest_brace_match
+                                .max(self.state.path_index as u32 + 1);
+                        }
+                        self.state.path_index = self.brace_stack.last().path_index;
+                        self.state.glob_index += 1;
+                        self.state.wildcard = Wildcard::default();
+                        self.state.globstar = Wildcard::default();
+                        continue;
+                    }
+                    _ if self.state.path_index < self.path.len() => {
+                        match self.match_literal(&mut captures) {
+                            Step::Continue => continue,
+                            Step::Return(v) => return v,
+                            Step::Backtrack => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            match self.try_backtrack(&mut captures, negated) {
+                Step::Continue => {}
+                Step::Return(v) => return v,
+                Step::Backtrack => unreachable!(),
+            }
+        }
+
+        if self.brace_stack.length > 0
+            && self.state.glob_index > 0
+            && self.glob[self.state.glob_index - 1] == b'}'
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                self.brace_stack.longest_brace_match = self.state.path_index as u32 + 1;
+            }
+            let snap = self.state;
+            self.brace_stack.pop(&snap, &mut captures);
+        }
+
+        !negated
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn match_star(&mut self, captures: &mut Option<&mut Vec<Capture>>) -> Step {
+        let is_globstar = self.state.glob_index + 1 < self.glob.len()
+            && self.glob[self.state.glob_index + 1] == b'*';
+        if is_globstar {
+            self.skip_globstars();
+        }
+
+        // If we are on a different glob index than before, start a new capture.
+        // Otherwise, extend the active one.
+        if captures.as_ref().is_some_and(|c| {
+            c.is_empty() || self.state.glob_index != self.state.wildcard.glob as usize
+        }) {
+            self.state.wildcard.capture = self.state.capture_index as u32;
+            self.state
+                .begin_capture(captures, self.state.path_index..self.state.path_index);
+        } else {
+            self.state.extend_capture(captures);
+        }
+
+        self.state.wildcard.glob = self.state.glob_index as u32;
+        self.state.wildcard.path = self.state.path_index as u32 + 1;
+
+        // ** allows path separators, whereas * does not.
+        // However, ** must be a full path component, i.e. a/**/b not a**b.
+        let mut in_globstar = false;
+        if is_globstar {
+            self.state.glob_index += 2;
+            let is_end_invalid = self.state.glob_index != self.glob.len()
+                && !(self.brace_stack.length > 0
+                    && matches!(self.glob[self.state.glob_index], b'}' | b','));
+            let preceded_by_sep = self.state.glob_index < 3
+                || self.glob[self.state.glob_index - 3] == b'/'
+                || (self.brace_stack.length > 0
+                    && matches!(self.glob[self.state.glob_index - 3], b'{' | b','));
+            if preceded_by_sep && (!is_end_invalid || self.glob[self.state.glob_index] == b'/') {
+                if is_end_invalid {
+                    self.state.end_capture(captures);
+                    self.state.glob_index += 1;
+                }
+                self.skip_to_separator(is_end_invalid);
+                in_globstar = true;
+            }
+        } else {
+            self.state.glob_index += 1;
+        }
+
+        if self.state.path_index < self.path.len()
+            && is_separator(self.path[self.state.path_index] as char)
+        {
+            if in_globstar {
+                self.state.path_index += 1;
+            } else if self.state.globstar.path > 0 && self.state.path_index < self.path.len() {
+                self.state.wildcard = self.state.globstar;
+            } else {
+                self.state.wildcard.path = 0;
+            }
+        }
+
+        // If the next char is a special brace separator,
+        // skip to the end of the braces so we don't try to match it.
+        if self.brace_stack.length > 0
+            && self.state.glob_index < self.glob.len()
+            && matches!(self.glob[self.state.glob_index], b',' | b'}')
+            && self.skip_braces(captures, false) == BraceState::Invalid
+        {
+            return Step::Return(false);
+        }
+
+        Step::Continue
+    }
+
+    fn match_bracket(&mut self, captures: &mut Option<&mut Vec<Capture>>) -> Step {
+        self.state.glob_index += 1;
+        let c = self.path[self.state.path_index];
+
+        // Check if the character class is negated.
+        let mut negated = false;
+        if self.state.glob_index < self.glob.len()
+            && matches!(self.glob[self.state.glob_index], b'^' | b'!')
+        {
+            negated = true;
+            self.state.glob_index += 1;
+        }
+
+        // Try each range.
+        let mut first = true;
+        let mut is_match = false;
+        while self.state.glob_index < self.glob.len()
+            && (first || self.glob[self.state.glob_index] != b']')
+        {
+            let mut low = self.glob[self.state.glob_index];
+            if !self.unescape(&mut low) {
+                return Step::Return(false);
+            }
+            self.state.glob_index += 1;
+
+            // If there is a - and the following character is not ], read the range end character.
+            let high = if self.state.glob_index + 1 < self.glob.len()
+                && self.glob[self.state.glob_index] == b'-'
+                && self.glob[self.state.glob_index + 1] != b']'
+            {
+                self.state.glob_index += 1;
+                let mut high = self.glob[self.state.glob_index];
+                if !self.unescape(&mut high) {
+                    return Step::Return(false);
+                }
+                self.state.glob_index += 1;
+                high
+            } else {
+                low
+            };
+
+            if low <= c && c <= high {
+                is_match = true;
+            }
+            first = false;
+        }
+        if self.state.glob_index >= self.glob.len() {
+            return Step::Return(false);
+        }
+        self.state.glob_index += 1;
+        if is_match != negated {
+            self.state.add_char_capture(captures);
+            self.state.path_index += 1;
+            return Step::Continue;
+        }
+        Step::Backtrack
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn match_literal(&mut self, captures: &mut Option<&mut Vec<Capture>>) -> Step {
+        let mut c = self.glob[self.state.glob_index];
+        if !self.unescape(&mut c) {
+            return Step::Return(false);
+        }
+
+        let is_match = if c == b'/' {
+            is_separator(self.path[self.state.path_index] as char)
+        } else {
+            self.path[self.state.path_index] == c
+        };
+
+        if is_match {
+            self.state.end_capture(captures);
+
+            if self.brace_stack.length > 0
+                && self.state.glob_index > 0
+                && self.glob[self.state.glob_index - 1] == b'}'
+            {
+                self.brace_stack.longest_brace_match = self.state.path_index as u32 + 1;
+                let snap = self.state;
+                self.state = self.brace_stack.pop(&snap, captures);
+            }
+            self.state.glob_index += 1;
+            self.state.path_index += 1;
+
+            if c == b'/' {
+                self.state.wildcard = self.state.globstar;
+            }
+            return Step::Continue;
+        }
+        Step::Backtrack
+    }
+
+    fn try_backtrack(&mut self, captures: &mut Option<&mut Vec<Capture>>, negated: bool) -> Step {
+        // If we didn't match, restore state to the previous star pattern.
+        if self.state.wildcard.path > 0 && self.state.wildcard.path as usize <= self.path.len() {
+            self.state.backtrack();
+            return Step::Continue;
+        }
+
+        if self.brace_stack.length > 0 {
+            match self.skip_braces(captures, true) {
+                BraceState::Invalid => return Step::Return(false),
+                BraceState::Comma => {
+                    self.state.path_index = self.brace_stack.last().path_index;
+                    return Step::Continue;
+                }
+                BraceState::EndBrace => {
+                    if self.brace_stack.longest_brace_match > 0 {
+                        let snap = self.state;
+                        self.state = self.brace_stack.pop(&snap, captures);
+                        return Step::Continue;
+                    }
+                    self.state = *self.brace_stack.last();
+                    self.brace_stack.length -= 1;
+                    if let Some(captures) = captures {
+                        captures.truncate(self.state.capture_index);
+                    }
+                    if self.state.wildcard.path > 0
+                        && self.state.wildcard.path as usize <= self.path.len()
+                    {
+                        self.state.backtrack();
+                        return Step::Continue;
+                    }
                 }
             }
         }
 
-        return negated;
+        Step::Return(negated)
     }
 
-    if brace_stack.length > 0 && state.glob_index > 0 && glob[state.glob_index - 1] == b'}' {
-        brace_stack.longest_brace_match = state.path_index as u32 + 1;
-        brace_stack.pop(&state, &mut captures);
-    }
-
-    !negated
-}
-
-#[inline(always)]
-fn unescape(c: &mut u8, glob: &[u8], glob_index: &mut usize) -> bool {
-    if *c == b'\\' {
-        *glob_index += 1;
-        if *glob_index >= glob.len() {
-            // Invalid pattern!
-            return false;
-        }
-        *c = match glob[*glob_index] {
-            b'a' => b'\x61',
-            b'b' => b'\x08',
-            b'n' => b'\n',
-            b'r' => b'\r',
-            b't' => b'\t',
-            c => c,
-        }
-    }
-    true
-}
-
-impl State {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn skip_globstars(&mut self, glob: &[u8]) {
-        let mut glob_index = self.glob_index + 2;
-        // Only entire path components can be skipped.
-        while glob_index + 4 <= glob.len() && &glob[glob_index..glob_index + 4] == b"/**/" {
+    fn skip_globstars(&mut self) {
+        let mut glob_index = self.state.glob_index + 2;
+        while glob_index + 4 <= self.glob.len() && &self.glob[glob_index..glob_index + 4] == b"/**/"
+        {
             glob_index += 3;
         }
-        // A trailing '**' can also match multiple trailing path components.
-        if glob_index + 3 == glob.len() && &glob[glob_index..] == b"/**" {
+        if glob_index + 3 == self.glob.len() && &self.glob[glob_index..] == b"/**" {
             glob_index += 3;
         }
-        self.glob_index = glob_index - 2;
+        self.state.glob_index = glob_index - 2;
     }
 
+    #[allow(clippy::inline_always, clippy::cast_possible_truncation)]
     #[inline(always)]
-    fn skip_to_separator(&mut self, path: &[u8], is_end_invalid: bool) {
-        if self.path_index == path.len() {
-            self.wildcard.path_index += 1;
+    fn skip_to_separator(&mut self, is_end_invalid: bool) {
+        if self.state.path_index == self.path.len() {
+            self.state.wildcard.path += 1;
             return;
         }
 
-        let mut path_index = self.path_index + 1;
-        while path_index < path.len() && !is_separator(path[path_index] as char) {
+        let mut path_index = self.state.path_index + 1;
+        while path_index < self.path.len() && !is_separator(self.path[path_index] as char) {
             path_index += 1;
         }
 
-        if is_end_invalid && path_index == path.len() {
+        if is_end_invalid && path_index == self.path.len() {
             path_index += 1;
         }
 
-        self.wildcard.path_index = path_index as u32;
-        self.globstar = self.wildcard;
+        self.state.wildcard.path = path_index as u32;
+        self.state.globstar = self.state.wildcard;
     }
 
+    fn skip_braces(
+        &mut self,
+        captures: &mut Option<&mut Vec<Capture>>,
+        stop_on_comma: bool,
+    ) -> BraceState {
+        let mut braces = 1;
+        let mut in_brackets = false;
+        let mut capture_index = self.state.capture_index + 1;
+        while self.state.glob_index < self.glob.len() && braces > 0 {
+            match self.glob[self.state.glob_index] {
+                b'{' if !in_brackets => braces += 1,
+                b'}' if !in_brackets => braces -= 1,
+                b',' if stop_on_comma && braces == 1 && !in_brackets => {
+                    self.state.glob_index += 1;
+                    return BraceState::Comma;
+                }
+                c @ (b'*' | b'?' | b'[') if !in_brackets => {
+                    if c == b'[' {
+                        in_brackets = true;
+                    }
+                    if let Some(captures) = captures {
+                        if capture_index < captures.len() {
+                            captures[capture_index] = self.state.path_index..self.state.path_index;
+                        } else {
+                            captures.push(self.state.path_index..self.state.path_index);
+                        }
+                        capture_index += 1;
+                    }
+                    if c == b'*'
+                        && self.state.glob_index + 1 < self.glob.len()
+                        && self.glob[self.state.glob_index + 1] == b'*'
+                    {
+                        self.skip_globstars();
+                        self.state.glob_index += 1;
+                    }
+                }
+                b']' => in_brackets = false,
+                b'\\' => {
+                    self.state.glob_index += 1;
+                }
+                _ => {}
+            }
+            self.state.glob_index += 1;
+        }
+
+        if braces != 0 {
+            return BraceState::Invalid;
+        }
+
+        BraceState::EndBrace
+    }
+}
+
+impl State {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn backtrack(&mut self) {
-        self.glob_index = self.wildcard.glob_index as usize;
-        self.path_index = self.wildcard.path_index as usize;
-        self.capture_index = self.wildcard.capture_index as usize;
+        self.glob_index = self.wildcard.glob as usize;
+        self.path_index = self.wildcard.path as usize;
+        self.capture_index = self.wildcard.capture as usize;
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn begin_capture(&self, captures: &mut Option<&mut Vec<Capture>>, capture: Capture) {
         if let Some(captures) = captures {
@@ -432,82 +526,32 @@ impl State {
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn extend_capture(&self, captures: &mut Option<&mut Vec<Capture>>) {
-        if let Some(captures) = captures {
-            if self.capture_index < captures.len() {
-                captures[self.capture_index].end = self.path_index;
-            }
+        if let Some(captures) = captures
+            && self.capture_index < captures.len()
+        {
+            captures[self.capture_index].end = self.path_index;
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn end_capture(&mut self, captures: &mut Option<&mut Vec<Capture>>) {
-        if let Some(captures) = captures {
-            if self.capture_index < captures.len() {
-                self.capture_index += 1;
-            }
+        if let Some(captures) = captures
+            && self.capture_index < captures.len()
+        {
+            self.capture_index += 1;
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn add_char_capture(&mut self, captures: &mut Option<&mut Vec<Capture>>) {
         self.end_capture(captures);
         self.begin_capture(captures, self.path_index..self.path_index + 1);
         self.capture_index += 1;
-    }
-
-    fn skip_braces(
-        &mut self,
-        glob: &[u8],
-        captures: &mut Option<&mut Vec<Capture>>,
-        stop_on_comma: bool,
-    ) -> BraceState {
-        let mut braces = 1;
-        let mut in_brackets = false;
-        let mut capture_index = self.capture_index + 1;
-        while self.glob_index < glob.len() && braces > 0 {
-            match glob[self.glob_index] {
-                // Skip nested braces.
-                b'{' if !in_brackets => braces += 1,
-                b'}' if !in_brackets => braces -= 1,
-                b',' if stop_on_comma && braces == 1 && !in_brackets => {
-                    self.glob_index += 1;
-                    return BraceState::Comma;
-                }
-                c @ (b'*' | b'?' | b'[') if !in_brackets => {
-                    if c == b'[' {
-                        in_brackets = true;
-                    }
-                    if let Some(captures) = captures {
-                        if capture_index < captures.len() {
-                            captures[capture_index] = self.path_index..self.path_index;
-                        } else {
-                            captures.push(self.path_index..self.path_index);
-                        }
-                        capture_index += 1;
-                    }
-                    if c == b'*' {
-                        if self.glob_index + 1 < glob.len() && glob[self.glob_index + 1] == b'*' {
-                            self.skip_globstars(glob);
-                            self.glob_index += 1;
-                        }
-                    }
-                }
-                b']' => in_brackets = false,
-                b'\\' => {
-                    self.glob_index += 1;
-                }
-                _ => {}
-            }
-            self.glob_index += 1;
-        }
-
-        if braces != 0 {
-            return BraceState::Invalid;
-        }
-
-        BraceState::EndBrace
     }
 }
 
@@ -524,6 +568,7 @@ impl Default for BraceStack {
 }
 
 impl BraceStack {
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn push(&mut self, state: &State) -> State {
         // Push old state to the stack, and reset current state.
@@ -537,6 +582,7 @@ impl BraceStack {
         }
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn pop(&mut self, state: &State, captures: &mut Option<&mut Vec<Capture>>) -> State {
         self.length -= 1;
@@ -559,6 +605,7 @@ impl BraceStack {
         state
     }
 
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     fn last(&self) -> &State {
         &self.stack[self.length as usize - 1]
@@ -571,7 +618,7 @@ mod tests {
     use alloc::vec;
 
     #[test]
-    fn basic() {
+    fn basic_wildcards() {
         assert!(glob_match("abc", "abc"));
         assert!(glob_match("*", "abc"));
         assert!(glob_match("*", ""));
@@ -586,7 +633,10 @@ mod tests {
         assert!(glob_match("a*b*c*d*e*", "axbxcxdxexxx"));
         assert!(glob_match("a*b?c*x", "abxbbxdbxebxczzx"));
         assert!(!glob_match("a*b?c*x", "abxbbxdbxebxczzy"));
+    }
 
+    #[test]
+    fn basic_paths() {
         assert!(glob_match("a/*/test", "a/foo/test"));
         assert!(!glob_match("a/*/test", "a/foo/bar/test"));
         assert!(glob_match("a/**/test", "a/foo/test"));
@@ -594,7 +644,10 @@ mod tests {
         assert!(glob_match("a/**/b/c", "a/foo/bar/b/c"));
         assert!(glob_match("a\\*b", "a*b"));
         assert!(!glob_match("a\\*b", "axb"));
+    }
 
+    #[test]
+    fn basic_char_classes() {
         assert!(glob_match("[abc]", "a"));
         assert!(glob_match("[abc]", "b"));
         assert!(glob_match("[abc]", "c"));
@@ -608,13 +661,19 @@ mod tests {
         assert!(!glob_match("[?]", "a"));
         assert!(glob_match("[*]", "*"));
         assert!(!glob_match("[*]", "a"));
+    }
 
+    #[test]
+    fn basic_char_ranges() {
         assert!(glob_match("[a-cx]", "a"));
         assert!(glob_match("[a-cx]", "b"));
         assert!(glob_match("[a-cx]", "c"));
         assert!(!glob_match("[a-cx]", "d"));
         assert!(glob_match("[a-cx]", "x"));
+    }
 
+    #[test]
+    fn basic_negated_classes() {
         assert!(!glob_match("[^abc]", "a"));
         assert!(!glob_match("[^abc]", "b"));
         assert!(!glob_match("[^abc]", "c"));
@@ -628,7 +687,10 @@ mod tests {
         assert!(glob_match("a*b*[cy]*d*e*", "axbxcxdxexxx"));
         assert!(glob_match("a*b*[cy]*d*e*", "axbxyxdxexxx"));
         assert!(glob_match("a*b*[cy]*d*e*", "axbxxxyxdxexxx"));
+    }
 
+    #[test]
+    fn basic_braces() {
         assert!(glob_match("test.{jpg,png}", "test.jpg"));
         assert!(glob_match("test.{jpg,png}", "test.png"));
         assert!(glob_match("test.{j*g,p*g}", "test.jpg"));
@@ -653,7 +715,10 @@ mod tests {
         assert!(glob_match("test/{*foo,*bar}/baz", "test/xxxxbar/baz"));
         assert!(glob_match("test/{foo/**,bar}/baz", "test/bar/baz"));
         assert!(!glob_match("test/{foo/**,bar}/baz", "test/bar/test/baz"));
+    }
 
+    #[test]
+    fn basic_complex() {
         assert!(!glob_match("*.txt", "some/big/path/to/the/needle.txt"));
         assert!(glob_match(
             "some/**/needle.{js,tsx,mdx,ts,jsx,txt}",
@@ -685,7 +750,7 @@ mod tests {
     // replace: assert!($1glob_match("$3", "$2"));
 
     #[test]
-    fn bash() {
+    fn bash_a_star() {
         assert!(!glob_match("a*", "*"));
         assert!(!glob_match("a*", "**"));
         assert!(!glob_match("a*", "\\*"));
@@ -698,7 +763,10 @@ mod tests {
         assert!(glob_match("a*", "a"));
         assert!(glob_match("a*", "ab"));
         assert!(glob_match("a*", "abc"));
+    }
 
+    #[test]
+    fn bash_escaped_a_star() {
         assert!(!glob_match("\\a*", "*"));
         assert!(!glob_match("\\a*", "**"));
         assert!(!glob_match("\\a*", "\\*"));
@@ -745,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_escaping() {
+    fn bash_escaping_caret() {
         assert!(!glob_match("\\^", "*"));
         assert!(!glob_match("\\^", "**"));
         assert!(!glob_match("\\^", "\\*"));
@@ -765,7 +833,10 @@ mod tests {
         assert!(!glob_match("\\^", "d"));
         assert!(!glob_match("\\^", "dd"));
         assert!(!glob_match("\\^", "de"));
+    }
 
+    #[test]
+    fn bash_escaping_backslash_star() {
         assert!(glob_match("\\*", "*"));
         // assert!(glob_match("\\*", "\\*"));
         assert!(!glob_match("\\*", "**"));
@@ -785,7 +856,10 @@ mod tests {
         assert!(!glob_match("\\*", "d"));
         assert!(!glob_match("\\*", "dd"));
         assert!(!glob_match("\\*", "de"));
+    }
 
+    #[test]
+    fn bash_escaping_a_backslash_star() {
         assert!(!glob_match("a\\*", "*"));
         assert!(!glob_match("a\\*", "**"));
         assert!(!glob_match("a\\*", "\\*"));
@@ -805,7 +879,10 @@ mod tests {
         assert!(!glob_match("a\\*", "d"));
         assert!(!glob_match("a\\*", "dd"));
         assert!(!glob_match("a\\*", "de"));
+    }
 
+    #[test]
+    fn bash_escaping_star_q_star() {
         assert!(glob_match("*q*", "aqa"));
         assert!(glob_match("*q*", "aaqaa"));
         assert!(!glob_match("*q*", "*"));
@@ -827,7 +904,10 @@ mod tests {
         assert!(!glob_match("*q*", "d"));
         assert!(!glob_match("*q*", "dd"));
         assert!(!glob_match("*q*", "de"));
+    }
 
+    #[test]
+    fn bash_escaping_escaped_star_star() {
         assert!(glob_match("\\**", "*"));
         assert!(glob_match("\\**", "**"));
         assert!(!glob_match("\\**", "\\*"));
@@ -850,7 +930,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_classes() {
+    fn bash_classes_negated_non_matching() {
         assert!(!glob_match("a*[^c]", "*"));
         assert!(!glob_match("a*[^c]", "**"));
         assert!(!glob_match("a*[^c]", "\\*"));
@@ -864,6 +944,10 @@ mod tests {
         assert!(!glob_match("a*[^c]", "bcd"));
         assert!(!glob_match("a*[^c]", "bdir/"));
         assert!(!glob_match("a*[^c]", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_negated_remaining() {
         assert!(!glob_match("a*[^c]", "c"));
         assert!(!glob_match("a*[^c]", "ca"));
         assert!(!glob_match("a*[^c]", "cb"));
@@ -878,7 +962,10 @@ mod tests {
 
         assert!(glob_match("a[X-]b", "a-b"));
         assert!(glob_match("a[X-]b", "aXb"));
+    }
 
+    #[test]
+    fn bash_classes_range_negated_first_half() {
         assert!(!glob_match("[a-y]*[^c]", "*"));
         assert!(glob_match("[a-y]*[^c]", "a*"));
         assert!(!glob_match("[a-y]*[^c]", "**"));
@@ -897,16 +984,17 @@ mod tests {
         assert!(glob_match("[a-y]*[^c]", "bcd"));
         assert!(glob_match("[a-y]*[^c]", "bdir/"));
         assert!(!glob_match("[a-y]*[^c]", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_range_negated_second_half() {
         assert!(!glob_match("[a-y]*[^c]", "c"));
         assert!(glob_match("[a-y]*[^c]", "ca"));
         assert!(glob_match("[a-y]*[^c]", "cb"));
         assert!(!glob_match("[a-y]*[^c]", "d"));
         assert!(glob_match("[a-y]*[^c]", "dd"));
-        assert!(glob_match("[a-y]*[^c]", "dd"));
-        assert!(glob_match("[a-y]*[^c]", "dd"));
         assert!(glob_match("[a-y]*[^c]", "de"));
         assert!(glob_match("[a-y]*[^c]", "baz"));
-        assert!(glob_match("[a-y]*[^c]", "bzz"));
         assert!(glob_match("[a-y]*[^c]", "bzz"));
         // assert(!isMatch('bzz', '[a-y]*[^c]', { regex: true }));
         assert!(!glob_match("[a-y]*[^c]", "BZZ"));
@@ -915,7 +1003,10 @@ mod tests {
 
         assert!(glob_match("a\\*b/*", "a*b/ooo"));
         assert!(glob_match("a\\*?/*", "a*b/ooo"));
+    }
 
+    #[test]
+    fn bash_classes_single_char() {
         assert!(!glob_match("a[b]c", "*"));
         assert!(!glob_match("a[b]c", "**"));
         assert!(!glob_match("a[b]c", "\\*"));
@@ -940,7 +1031,10 @@ mod tests {
         assert!(!glob_match("a[b]c", "BZZ"));
         assert!(!glob_match("a[b]c", "beware"));
         assert!(!glob_match("a[b]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_quoted() {
         assert!(!glob_match("a[\"b\"]c", "*"));
         assert!(!glob_match("a[\"b\"]c", "**"));
         assert!(!glob_match("a[\"b\"]c", "\\*"));
@@ -965,7 +1059,10 @@ mod tests {
         assert!(!glob_match("a[\"b\"]c", "BZZ"));
         assert!(!glob_match("a[\"b\"]c", "beware"));
         assert!(!glob_match("a[\"b\"]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_escaped_double_backslash() {
         assert!(!glob_match("a[\\\\b]c", "*"));
         assert!(!glob_match("a[\\\\b]c", "**"));
         assert!(!glob_match("a[\\\\b]c", "\\*"));
@@ -990,7 +1087,10 @@ mod tests {
         assert!(!glob_match("a[\\\\b]c", "BZZ"));
         assert!(!glob_match("a[\\\\b]c", "beware"));
         assert!(!glob_match("a[\\\\b]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_escaped_single_backslash() {
         assert!(!glob_match("a[\\b]c", "*"));
         assert!(!glob_match("a[\\b]c", "**"));
         assert!(!glob_match("a[\\b]c", "\\*"));
@@ -1015,7 +1115,10 @@ mod tests {
         assert!(!glob_match("a[\\b]c", "BZZ"));
         assert!(!glob_match("a[\\b]c", "beware"));
         assert!(!glob_match("a[\\b]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_range_and_question_range() {
         assert!(!glob_match("a[b-d]c", "*"));
         assert!(!glob_match("a[b-d]c", "**"));
         assert!(!glob_match("a[b-d]c", "\\*"));
@@ -1040,7 +1143,10 @@ mod tests {
         assert!(!glob_match("a[b-d]c", "BZZ"));
         assert!(!glob_match("a[b-d]c", "beware"));
         assert!(!glob_match("a[b-d]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_range_and_question_qmark_non_matching() {
         assert!(!glob_match("a?c", "*"));
         assert!(!glob_match("a?c", "**"));
         assert!(!glob_match("a?c", "\\*"));
@@ -1054,6 +1160,10 @@ mod tests {
         assert!(!glob_match("a?c", "bcd"));
         assert!(!glob_match("a?c", "bdir/"));
         assert!(!glob_match("a?c", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_range_and_question_qmark_remaining() {
         assert!(!glob_match("a?c", "c"));
         assert!(!glob_match("a?c", "ca"));
         assert!(!glob_match("a?c", "cb"));
@@ -1067,7 +1177,10 @@ mod tests {
         assert!(!glob_match("a?c", "BewAre"));
 
         assert!(glob_match("*/man*/bash.*", "man/man1/bash.1"));
+    }
 
+    #[test]
+    fn bash_classes_negated_range() {
         assert!(glob_match("[^a-c]*", "*"));
         assert!(glob_match("[^a-c]*", "**"));
         assert!(!glob_match("[^a-c]*", "a"));
@@ -1115,7 +1228,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_extra_stars() {
+    fn bash_extra_stars_simple() {
         assert!(!glob_match("a**c", "bbc"));
         assert!(glob_match("a**c", "abc"));
         assert!(!glob_match("a**c", "bbd"));
@@ -1136,7 +1249,10 @@ mod tests {
 
         assert!(glob_match("?*****?c", "bbc"));
         assert!(glob_match("?*****?c", "abc"));
+    }
 
+    #[test]
+    fn bash_extra_stars_complex() {
         assert!(glob_match("?***?****c", "bbc"));
         assert!(glob_match("?***?****c", "abc"));
         assert!(!glob_match("?***?****c", "bbd"));
@@ -1162,7 +1278,7 @@ mod tests {
     }
 
     #[test]
-    fn stars() {
+    fn stars_basic() {
         assert!(!glob_match("*.js", "a/b/c/z.js"));
         assert!(!glob_match("*.js", "a/b/z.js"));
         assert!(!glob_match("*.js", "a/z.js"));
@@ -1192,7 +1308,10 @@ mod tests {
 
         assert!(glob_match("*abc*", "one abc two"));
         assert!(glob_match("a*b", "a         b"));
+    }
 
+    #[test]
+    fn stars_dot_patterns_single() {
         assert!(!glob_match("*a*", "foo"));
         assert!(glob_match("*a*", "bar"));
         assert!(glob_match("*abc*", "oneabctwo"));
@@ -1211,7 +1330,10 @@ mod tests {
         assert!(glob_match("*.b", "a.b"));
         assert!(glob_match("a.*", "a.b"));
         assert!(glob_match("a.b", "a.b"));
+    }
 
+    #[test]
+    fn stars_dot_patterns_double() {
         assert!(!glob_match("**-bc-**", "a-b.c-d"));
         assert!(glob_match("**-**.**-**", "a-b.c-d"));
         assert!(glob_match("**-b**c-**", "a-b.c-d"));
@@ -1227,7 +1349,10 @@ mod tests {
         assert!(glob_match("**.b", "a.b"));
         assert!(glob_match("a.**", "a.b"));
         assert!(glob_match("a.b", "a.b"));
+    }
 
+    #[test]
+    fn stars_paths_positive() {
         assert!(glob_match("*/*", "/ab"));
         assert!(glob_match(".", "."));
         assert!(!glob_match("a/", "a/.b"));
@@ -1252,7 +1377,10 @@ mod tests {
         assert!(glob_match("*", "aaa"));
         assert!(glob_match("*", "ab"));
         assert!(glob_match("ab", "ab"));
+    }
 
+    #[test]
+    fn stars_paths_negative() {
         assert!(!glob_match("*/*/*", "aaa"));
         assert!(!glob_match("*/*/*", "aaa/bb/aa/rr"));
         assert!(!glob_match("aaa*", "aaa/bba/ccc"));
@@ -1267,7 +1395,10 @@ mod tests {
         assert!(glob_match("aaa/*", "aaa/bbb"));
         assert!(glob_match("*/*z*/*/*i", "ab/zzz/ejkl/hi"));
         assert!(glob_match("*j*i", "abzzzejklhi"));
+    }
 
+    #[test]
+    fn stars_depth_matching_shallow() {
         assert!(glob_match("*", "a"));
         assert!(glob_match("*", "b"));
         assert!(!glob_match("*", "a/a"));
@@ -1284,7 +1415,10 @@ mod tests {
         assert!(!glob_match("*/*/*", "a/a"));
         assert!(glob_match("*/*/*", "a/a/a"));
         assert!(!glob_match("*/*/*", "a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_depth_matching_deep() {
         assert!(!glob_match("*/*/*/*", "a"));
         assert!(!glob_match("*/*/*/*", "a/a"));
         assert!(!glob_match("*/*/*/*", "a/a/a"));
@@ -1298,7 +1432,10 @@ mod tests {
         assert!(!glob_match("*/*/*/*/*", "a/a/a/a"));
         assert!(glob_match("*/*/*/*/*", "a/a/a/a/a"));
         assert!(!glob_match("*/*/*/*/*", "a/a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_prefix_depth_single() {
         assert!(!glob_match("a/*", "a"));
         assert!(glob_match("a/*", "a/a"));
         assert!(!glob_match("a/*", "a/a/a"));
@@ -1311,7 +1448,10 @@ mod tests {
         assert!(!glob_match("a/*/*", "b/a/a"));
         assert!(!glob_match("a/*/*", "a/a/a/a"));
         assert!(!glob_match("a/*/*", "a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_prefix_depth_multi() {
         assert!(!glob_match("a/*/*/*", "a"));
         assert!(!glob_match("a/*/*/*", "a/a"));
         assert!(!glob_match("a/*/*/*", "a/a/a"));
@@ -1324,7 +1464,10 @@ mod tests {
         assert!(!glob_match("a/*/*/*/*", "a/a/b"));
         assert!(!glob_match("a/*/*/*/*", "a/a/a/a"));
         assert!(glob_match("a/*/*/*/*", "a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_prefix_depth_named() {
         assert!(!glob_match("a/*/a", "a"));
         assert!(!glob_match("a/*/a", "a/a"));
         assert!(glob_match("a/*/a", "a/a/a"));
@@ -1345,7 +1488,10 @@ mod tests {
         assert!(glob_match("*/**/a", "a/a/a"));
         assert!(glob_match("*/**/a", "a/a/a/a"));
         assert!(glob_match("*/**/a", "a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_trailing_slash() {
         assert!(!glob_match("*/", "a"));
         assert!(!glob_match("*/*", "a"));
         assert!(!glob_match("a/*", "a"));
@@ -1362,7 +1508,10 @@ mod tests {
         assert!(glob_match("*{,/}", "a/"));
         assert!(glob_match("*/*", "a/a"));
         assert!(glob_match("a/*", "a/a"));
+    }
 
+    #[test]
+    fn stars_txt_patterns() {
         assert!(!glob_match("a/**/*.txt", "a.txt"));
         assert!(glob_match("a/**/*.txt", "a/x/y.txt"));
         assert!(!glob_match("a/**/*.txt", "a/x/y/z"));
@@ -1390,7 +1539,10 @@ mod tests {
         assert!(!glob_match("**/", "foo/bar"));
         assert!(!glob_match("**/*/", "foo/bar"));
         assert!(!glob_match("*/*/", "foo/bar"));
+    }
 
+    #[test]
+    fn stars_doublestar_paths_positive() {
         assert!(glob_match("**/..", "/home/foo/.."));
         assert!(glob_match("**/a", "a"));
         assert!(glob_match("**", "a/a"));
@@ -1412,7 +1564,10 @@ mod tests {
         assert!(glob_match("**/*/", "foo/bar/"));
         assert!(glob_match("*/**", "foo/bar/"));
         assert!(glob_match("*/*/", "foo/bar/"));
+    }
 
+    #[test]
+    fn stars_doublestar_paths_negative() {
         assert!(!glob_match("*/foo", "bar/baz/foo"));
         assert!(!glob_match("**/bar/*", "deep/foo/bar"));
         assert!(!glob_match("*/bar/**", "deep/foo/bar/baz/x"));
@@ -1428,7 +1583,10 @@ mod tests {
         assert!(glob_match("/*", "/ef"));
         assert!(glob_match("a/**/j/**/z/*.md", "a/b/j/c/z/x.md"));
         assert!(glob_match("a/**/j/**/z/*.md", "a/j/z/x.md"));
+    }
 
+    #[test]
+    fn stars_doublestar_paths_deep() {
         assert!(glob_match("**/foo", "bar/baz/foo"));
         assert!(glob_match("**/bar/*", "deep/foo/bar/baz"));
         assert!(glob_match("**/bar/**", "deep/foo/bar/baz/"));
@@ -1444,7 +1602,7 @@ mod tests {
     }
 
     #[test]
-    fn globstars() {
+    fn globstars_js() {
         assert!(glob_match("**/*.js", "a/b/c/d.js"));
         assert!(glob_match("**/*.js", "a/b/c.js"));
         assert!(glob_match("**/*.js", "a/b.js"));
@@ -1465,7 +1623,10 @@ mod tests {
         assert!(glob_match("a/**b**/c", "a/aba/c"));
         assert!(glob_match("a/**b**/c", "a/b/c"));
         assert!(glob_match("a/b/c**/*.js", "a/b/c/d.js"));
+    }
 
+    #[test]
+    fn globstars_depth_negative() {
         assert!(!glob_match("a/**/*", "a"));
         assert!(!glob_match("a/**/**/*", "a"));
         assert!(!glob_match("a/**/**/**/*", "a"));
@@ -1480,6 +1641,10 @@ mod tests {
         assert!(!glob_match("**/a", "a/b"));
         assert!(!glob_match("**/a", "a/x/y"));
         assert!(!glob_match("**/a", "a/b/c/d"));
+    }
+
+    #[test]
+    fn globstars_depth_positive() {
         assert!(glob_match("**", "a"));
         assert!(glob_match("**/a", "a"));
         // assert!(glob_match("a/**", "a"));
@@ -1495,6 +1660,10 @@ mod tests {
         assert!(glob_match("a/**/**/*", "a/b"));
         assert!(glob_match("a/**/**/**/*", "a/b"));
         assert!(glob_match("a/**/b", "a/b"));
+    }
+
+    #[test]
+    fn globstars_depth_deep() {
         assert!(glob_match("**", "a/b/c"));
         assert!(glob_match("**/*", "a/b/c"));
         assert!(glob_match("**/**", "a/b/c"));
@@ -1508,6 +1677,10 @@ mod tests {
         assert!(glob_match("a/**/*", "a/b/c/d"));
         assert!(glob_match("a/**/**/*", "a/b/c/d"));
         assert!(glob_match("a/**/**/**/*", "a/b/c/d"));
+    }
+
+    #[test]
+    fn globstars_deep_paths_md() {
         assert!(glob_match("a/b/**/c/**/*.*", "a/b/c/d.e"));
         assert!(glob_match("a/**/f/*.md", "a/b/c/d/e/f/g.md"));
         assert!(glob_match("a/**/f/**/k/*.md", "a/b/c/d/e/f/g/h/i/j/k/l.md"));
@@ -1531,6 +1704,10 @@ mod tests {
             "foo/bar/baz/one/two/three/image.png"
         ));
         assert!(!glob_match("a/b/**/f", "a/b/c/d/"));
+    }
+
+    #[test]
+    fn globstars_deep_paths_general() {
         // assert!(glob_match("a/**", "a"));
         assert!(glob_match("**", "a"));
         assert!(glob_match("a{,/**}", "a"));
@@ -1552,7 +1729,10 @@ mod tests {
         assert!(glob_match("a/b/**/d/**/*.*", "a/b/c/d/g/g/e.f"));
         assert!(glob_match("a/b-*/**/z.js", "a/b-c/z.js"));
         assert!(glob_match("a/b-*/**/z.js", "a/b-c/d/e/z.js"));
+    }
 
+    #[test]
+    fn globstars_mixed_positive() {
         assert!(glob_match("*/*", "a/b"));
         assert!(glob_match("a/b/c/*.md", "a/b/c/xyz.md"));
         assert!(glob_match("a/*/c/*.md", "a/bb.bb/c/xyz.md"));
@@ -1574,6 +1754,10 @@ mod tests {
         assert!(!glob_match("a/**/", "a/b/c/d"));
         assert!(!glob_match("a/**/", "a/bb"));
         assert!(!glob_match("a/**/", "a/cb"));
+    }
+
+    #[test]
+    fn globstars_mixed_js_and_paths() {
         assert!(glob_match("/**", "/a/b"));
         assert!(glob_match("**/*", "a.b"));
         assert!(glob_match("**/*", "a.js"));
@@ -1594,7 +1778,10 @@ mod tests {
         assert!(glob_match("**/*", "ab/c"));
         assert!(glob_match("**/*", "ab/c/d"));
         assert!(glob_match("**/*", "abc.js"));
+    }
 
+    #[test]
+    fn globstars_negative_and_positive_neg() {
         assert!(!glob_match("**/", "a"));
         assert!(!glob_match("**/a/*", "a"));
         assert!(!glob_match("**/a/*/*", "a"));
@@ -1613,6 +1800,10 @@ mod tests {
         assert!(!glob_match("**/", "a/b/c/d"));
         assert!(!glob_match("**/d/*", "a/b/c/d"));
         assert!(!glob_match("b/**", "a/b/c/d"));
+    }
+
+    #[test]
+    fn globstars_negative_and_positive_pos_a() {
         assert!(glob_match("**", "a"));
         assert!(glob_match("**/**", "a"));
         assert!(glob_match("**/**/*", "a"));
@@ -1630,6 +1821,10 @@ mod tests {
         assert!(glob_match("a/**", "a/b"));
         assert!(glob_match("a/**/*", "a/b"));
         assert!(glob_match("a/**/**/*", "a/b"));
+    }
+
+    #[test]
+    fn globstars_negative_and_positive_pos_deep() {
         assert!(glob_match("**", "a/b/c"));
         assert!(glob_match("**/**", "a/b/c"));
         assert!(glob_match("**/**/*", "a/b/c"));
@@ -1662,7 +1857,7 @@ mod tests {
     }
 
     #[test]
-    fn negation() {
+    fn negation_basic() {
         assert!(!glob_match("!*", "abc"));
         assert!(!glob_match("!abc", "abc"));
         assert!(!glob_match("*!.md", "bar.md"));
@@ -1683,14 +1878,20 @@ mod tests {
         assert!(glob_match("foo!.md", "foo!.md"));
         assert!(glob_match("*!*.md", "foo!bar.md"));
         assert!(glob_match("*b*.md", "foobar.md"));
+    }
 
+    #[test]
+    fn negation_double_bang() {
         assert!(!glob_match("a!!b", "a"));
         assert!(!glob_match("a!!b", "aa"));
         assert!(!glob_match("a!!b", "a/b"));
         assert!(!glob_match("a!!b", "a!b"));
         assert!(glob_match("a!!b", "a!!b"));
         assert!(!glob_match("a!!b", "a/!!/b"));
+    }
 
+    #[test]
+    fn negation_path() {
         assert!(!glob_match("!a/b", "a/b"));
         assert!(glob_match("!a/b", "a"));
         assert!(glob_match("!a/b", "a.b"));
@@ -1699,7 +1900,10 @@ mod tests {
         assert!(glob_match("!a/b", "b/a"));
         assert!(glob_match("!a/b", "b/b"));
         assert!(glob_match("!a/b", "b/c"));
+    }
 
+    #[test]
+    fn negation_multiple_bangs() {
         assert!(!glob_match("!abc", "abc"));
         assert!(glob_match("!!abc", "abc"));
         assert!(!glob_match("!!!abc", "abc"));
@@ -1708,7 +1912,10 @@ mod tests {
         assert!(glob_match("!!!!!!abc", "abc"));
         assert!(!glob_match("!!!!!!!abc", "abc"));
         assert!(glob_match("!!!!!!!!abc", "abc"));
+    }
 
+    #[test]
+    fn negation_star_slash_negative() {
         // assert!(!glob_match("!(*/*)", "a/a"));
         // assert!(!glob_match("!(*/*)", "a/b"));
         // assert!(!glob_match("!(*/*)", "a/c"));
@@ -1734,6 +1941,10 @@ mod tests {
         assert!(!glob_match("!*/c", "b/c"));
         assert!(!glob_match("!*a*", "bar"));
         assert!(!glob_match("!*a*", "fab"));
+    }
+
+    #[test]
+    fn negation_a_slash_negative() {
         // assert!(!glob_match("!a/(*)", "a/a"));
         // assert!(!glob_match("!a/(*)", "a/b"));
         // assert!(!glob_match("!a/(*)", "a/c"));
@@ -1742,6 +1953,10 @@ mod tests {
         assert!(!glob_match("!a/*", "a/b"));
         assert!(!glob_match("!a/*", "a/c"));
         assert!(!glob_match("!f*b", "fab"));
+    }
+
+    #[test]
+    fn negation_star_slash_positive() {
         // assert!(glob_match("!(*/*)", "a"));
         // assert!(glob_match("!(*/*)", "a.b"));
         // assert!(glob_match("!(*/b)", "a"));
@@ -1778,6 +1993,10 @@ mod tests {
         assert!(glob_match("!*/c", "b/a"));
         assert!(glob_match("!*/c", "b/b"));
         assert!(glob_match("!*a*", "foo"));
+    }
+
+    #[test]
+    fn negation_a_slash_positive() {
         // assert!(glob_match("!a/(*)", "a"));
         // assert!(glob_match("!a/(*)", "a.b"));
         // assert!(glob_match("!a/(*)", "b/a"));
@@ -1797,7 +2016,10 @@ mod tests {
         assert!(glob_match("!a/*", "b/c"));
         assert!(glob_match("!f*b", "bar"));
         assert!(glob_match("!f*b", "foo"));
+    }
 
+    #[test]
+    fn negation_md_extension() {
         assert!(!glob_match("!.md", ".md"));
         assert!(glob_match("!**/*.md", "a.js"));
         // assert!(!glob_match("!**/*.md", "b.md"));
@@ -1809,7 +2031,10 @@ mod tests {
         assert!(glob_match("!*.md", "abc.txt"));
         assert!(!glob_match("!*.md", "foo.md"));
         assert!(glob_match("!.md", "foo.md"));
+    }
 
+    #[test]
+    fn negation_path_patterns() {
         assert!(glob_match("!*.md", "a.js"));
         assert!(glob_match("!*.md", "b.txt"));
         assert!(!glob_match("!*.md", "c.md"));
@@ -1828,7 +2053,10 @@ mod tests {
         assert!(!glob_match("!a/*.txt", "a/a.txt"));
         assert!(!glob_match("!a/*.txt", "a/b.txt"));
         assert!(!glob_match("!a/*.txt", "a/c.txt"));
+    }
 
+    #[test]
+    fn negation_globstar_md() {
         assert!(glob_match("!*.md", "a.js"));
         assert!(glob_match("!*.md", "b.txt"));
         assert!(!glob_match("!*.md", "c.md"));
@@ -1861,7 +2089,7 @@ mod tests {
     }
 
     #[test]
-    fn question_mark() {
+    fn question_mark_single_multi() {
         assert!(glob_match("?", "a"));
         assert!(!glob_match("?", "aa"));
         assert!(!glob_match("?", "ab"));
@@ -1879,7 +2107,10 @@ mod tests {
         assert!(!glob_match("???", "ab"));
         assert!(glob_match("???", "aaa"));
         assert!(!glob_match("???", "abcdefg"));
+    }
 
+    #[test]
+    fn question_mark_with_literals() {
         assert!(!glob_match("a?c", "aaa"));
         assert!(glob_match("a?c", "aac"));
         assert!(glob_match("a?c", "abc"));
@@ -1890,7 +2121,10 @@ mod tests {
         assert!(!glob_match("ab?", "abcd"));
         assert!(!glob_match("ab?", "abbb"));
         assert!(glob_match("a?b", "acb"));
+    }
 
+    #[test]
+    fn question_mark_paths() {
         assert!(!glob_match("a/?/c/?/e.md", "a/bb/c/dd/e.md"));
         assert!(glob_match("a/??/c/??/e.md", "a/bb/c/dd/e.md"));
         assert!(!glob_match("a/??/c.md", "a/bbb/c.md"));
@@ -1905,7 +2139,7 @@ mod tests {
     }
 
     #[test]
-    fn braces() {
+    fn braces_basic() {
         assert!(glob_match("{a,b,c}", "a"));
         assert!(glob_match("{a,b,c}", "b"));
         assert!(glob_match("{a,b,c}", "c"));
@@ -1922,7 +2156,10 @@ mod tests {
         assert!(glob_match("a{b,bc}.txt", "abc.txt"));
 
         assert!(glob_match("foo[{a,b}]baz", "foo{baz"));
+    }
 
+    #[test]
+    fn braces_empty_alternative() {
         assert!(!glob_match("a{,b}.txt", "abc.txt"));
         assert!(!glob_match("a{a,b,}.txt", "abc.txt"));
         assert!(!glob_match("a{b,}.txt", "abc.txt"));
@@ -1932,7 +2169,10 @@ mod tests {
         assert!(glob_match("a{a,b,}.txt", "aa.txt"));
         assert!(glob_match("a{,b}.txt", "ab.txt"));
         assert!(glob_match("a{b,}.txt", "ab.txt"));
+    }
 
+    #[test]
+    fn braces_slash_alternatives() {
         // assert!(glob_match("{a/,}a/**", "a"));
         assert!(glob_match("a{a,b/}*.txt", "aa.txt"));
         assert!(glob_match("a{a,b/}*.txt", "ab/.txt"));
@@ -1949,7 +2189,10 @@ mod tests {
         assert!(glob_match("a{,/}*.txt", "ab.txt"));
         assert!(glob_match("a{,/}*.txt", "a/b.txt"));
         assert!(glob_match("a{,/}*.txt", "a/ab.txt"));
+    }
 
+    #[test]
+    fn braces_nested_foo_db() {
         assert!(glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "a.txt"));
         assert!(!glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "adb.txt"));
         assert!(glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "a.db.txt"));
@@ -1975,7 +2218,10 @@ mod tests {
         assert!(glob_match("{*,*.{foo,db},\\(bar\\)}", "a"));
         assert!(!glob_match("{,*.{foo,db},\\(bar\\)}", "adb"));
         assert!(glob_match("{,*.{foo,db},\\(bar\\)}", "a.db"));
+    }
 
+    #[test]
+    fn braces_globstar_paths() {
         assert!(!glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/c/xyz.md"));
         assert!(!glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/d/xyz.md"));
         assert!(glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/cd/xyz.md"));
@@ -1989,7 +2235,10 @@ mod tests {
 
         assert!(glob_match("*{*a,b}", "xba"));
         assert!(glob_match("*{*a,b}", "xb"));
+    }
 
+    #[test]
+    fn braces_star_question_combos() {
         assert!(!glob_match("*??", "a"));
         assert!(!glob_match("*???", "aa"));
         assert!(glob_match("*???", "aaa"));
@@ -2012,7 +2261,10 @@ mod tests {
         assert!(glob_match("*****?", "zzz"));
         assert!(glob_match("*****?", "bbb"));
         assert!(glob_match("*****?", "aaaa"));
+    }
 
+    #[test]
+    fn braces_star_question_combos_two() {
         assert!(!glob_match("*****??", "a"));
         assert!(glob_match("*****??", "aa"));
         assert!(glob_match("*****??", "abc"));
@@ -2034,7 +2286,10 @@ mod tests {
         assert!(glob_match("?***?****c", "abc"));
         assert!(!glob_match("?***?****c", "bbb"));
         assert!(!glob_match("?***?****c", "zzz"));
+    }
 
+    #[test]
+    fn braces_complex_star_patterns() {
         assert!(glob_match("?***?****?", "abc"));
         assert!(glob_match("?***?****?", "bbb"));
         assert!(glob_match("?***?****?", "zzz"));
@@ -2048,7 +2303,10 @@ mod tests {
         assert!(glob_match("a**?**cd**?**??***k", "abcdecdhjk"));
         assert!(glob_match("a**?**cd**?**??***k**", "abcdecdhjk"));
         assert!(glob_match("a****c**?**??*****", "abcdecdhjk"));
+    }
 
+    #[test]
+    fn braces_question_path_patterns() {
         assert!(!glob_match("a/?/c/?/*/e.md", "a/b/c/d/e.md"));
         assert!(glob_match("a/?/c/?/*/e.md", "a/b/c/d/e/e.md"));
         assert!(glob_match("a/?/c/?/*/e.md", "a/b/c/d/efghijk/e.md"));
@@ -2067,13 +2325,13 @@ mod tests {
         assert!(glob_match("a/bbb/ab???md", "a/bbb/abcd.md"));
     }
 
-    #[test]
-    fn captures() {
-        fn test_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<&'a str>> {
-            glob_match_with_captures(glob, path)
-                .map(|v| v.into_iter().map(|capture| &path[capture]).collect())
-        }
+    fn test_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<&'a str>> {
+        glob_match_with_captures(glob, path)
+            .map(|v| v.into_iter().map(|capture| &path[capture]).collect())
+    }
 
+    #[test]
+    fn captures_basic() {
         assert_eq!(test_captures("a/b", "a/b"), Some(vec![]));
         assert_eq!(test_captures("a/*/c", "a/bx/c"), Some(vec!["bx"]));
         assert_eq!(test_captures("a/*/c", "a/test/c"), Some(vec!["test"]));
@@ -2120,7 +2378,10 @@ mod tests {
             test_captures("a/{b,c[}]*}", "a/c}xx"),
             Some(vec!["c}xx", "}", "xx"])
         );
+    }
 
+    #[test]
+    fn captures_globstar() {
         // assert\.deepEqual\(([!])?capture\('(.*?)', ['"](.*?)['"]\), (.*)?\);
         // assert_eq!(test_captures("$2", "$3"), Some(vec!$4));
 
@@ -2191,6 +2452,7 @@ mod tests {
     #[test]
     fn issue_9_globstar_wildcard_dot_in_path() {
         // https://github.com/devongovett/glob-match/issues/9
+        // https://github.com/devongovett/glob-match/pull/18
         assert!(glob_match("**/*.js", "a/b.c/c.js"));
         assert!(glob_match("/**/*a", "/a/a"));
         assert!(glob_match("**/**/*.js", "a/b.c/c.js"));
