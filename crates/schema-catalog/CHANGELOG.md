@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.6...schema-catalog-v0.0.7) - 2026-02-27
+
+### Other
+
+- Release 0.1.0 for glob-matcher, glob-set, and tried
+- Add fileMatch and parsers to x-lintel metadata
+
 ## [0.0.6](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.5...schema-catalog-v0.0.6) - 2026-02-26
 
 ### Other

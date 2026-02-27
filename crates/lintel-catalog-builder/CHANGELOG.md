@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.10...lintel-catalog-builder-v0.0.11) - 2026-02-27
+
+### Other
+
+- Merge pull request #112 from lintel-rs/more-site-improvements
+- Add static/ directory support to catalog builder
+- Merge remote-tracking branch 'origin/master' into site-improvements
+- Improve catalog builder: flatten target config, enhance HTML templates, add project scaffolding
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.9...lintel-catalog-builder-v0.0.10) - 2026-02-26
 
 ### Other

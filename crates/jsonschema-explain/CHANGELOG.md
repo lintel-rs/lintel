@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.4...jsonschema-explain-v0.2.5) - 2026-02-27
+
+### Other
+
+- Merge pull request #104 from lintel-rs/lintel-explain-docs
+- Add SCHEMA and TITLE sections to explain output, extract sections module
+
 ## [0.2.4](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.3...jsonschema-explain-v0.2.4) - 2026-02-26
 
 ### Other
