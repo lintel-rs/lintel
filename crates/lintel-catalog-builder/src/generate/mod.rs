@@ -13,8 +13,8 @@ use tracing::{info, warn};
 
 use crate::catalog::build_output_catalog;
 use crate::download::ProcessedSchemas;
-use crate::targets::{AnyTarget, OutputContext, Target};
-use lintel_catalog_builder::config::{CatalogConfig, load_config};
+use crate::targets::{self, OutputContext};
+use lintel_catalog_builder::config::{CatalogConfig, TargetConfig, load_config};
 
 use groups::{GroupSchemaContext, process_group_schema};
 use sources::{SourceContext, process_source};
@@ -81,8 +81,7 @@ pub async fn run(
         }
 
         info!(target = %target_name, "building target");
-        let target = AnyTarget::from(target_config.clone());
-        let output_dir = target.output_dir(target_name, config_dir);
+        let output_dir = targets::output_dir(target_config, config_dir);
 
         // Clean the output directory before generating to remove stale files.
         if output_dir.exists() {
@@ -104,7 +103,7 @@ pub async fn run(
             processed: &processed,
         };
 
-        generate_for_target(&ctx, &target, &output_dir)
+        generate_for_target(&ctx, target_config, &output_dir)
             .await
             .with_context(|| format!("failed to build target '{target_name}'"))?;
 
@@ -119,10 +118,10 @@ pub async fn run(
 #[allow(clippy::too_many_lines)]
 async fn generate_for_target(
     ctx: &GenerateContext<'_>,
-    target: &AnyTarget,
+    target: &TargetConfig,
     output_dir: &Path,
 ) -> Result<()> {
-    let base_url = target.base_url();
+    let base_url = &target.base_url;
     let schemas_dir = output_dir.join("schemas");
     let mut entries: Vec<SchemaEntry> = Vec::new();
     let mut output_paths: HashSet<PathBuf> = HashSet::new();
@@ -223,7 +222,11 @@ async fn generate_for_target(
         catalog_groups_vec,
     );
 
-    let site_description = target.site_description();
+    let site_description = target.site.as_ref().and_then(|s| s.description.as_deref());
+    let ga_tracking_id = target
+        .site
+        .as_ref()
+        .and_then(|s| s.ga_tracking_id.as_deref());
     let output_ctx = OutputContext {
         output_dir,
         config_path: ctx.config_path,
@@ -233,9 +236,10 @@ async fn generate_for_target(
         source_count: ctx.config.sources.len(),
         processed: ctx.processed,
         site_description,
+        ga_tracking_id,
     };
 
-    target.finalize(&output_ctx).await?;
+    targets::finalize(target, &output_ctx).await?;
 
     Ok(())
 }

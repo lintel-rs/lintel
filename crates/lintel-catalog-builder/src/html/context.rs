@@ -21,6 +21,8 @@ pub struct SiteInfo {
     pub group_count: usize,
     /// Package version for the footer.
     pub version: String,
+    /// Google Analytics measurement ID, if configured.
+    pub ga_tracking_id: Option<String>,
 }
 
 /// Context for the home page template.
@@ -167,6 +169,7 @@ pub fn build_site_info(ctx: &OutputContext<'_>) -> SiteInfo {
         schema_count,
         group_count: ctx.catalog.groups.len(),
         version: String::from(env!("CARGO_PKG_VERSION")),
+        ga_tracking_id: ctx.ga_tracking_id.map(String::from),
     }
 }
 
