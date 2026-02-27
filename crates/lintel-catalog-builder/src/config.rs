@@ -62,6 +62,18 @@ pub struct CatalogMeta {
     #[schemars(example = &"Lintel Schema Catalog")]
     #[serde(default)]
     pub title: Option<String>,
+
+    /// Base URL for local schema source files.
+    ///
+    /// When set, local schemas (those without a `url`) get their `x-lintel`
+    /// `source` field constructed as `{source-base-url}/schemas/{group}/{key}.json`.
+    /// This is typically a raw GitHub URL pointing to the catalog repository.
+    ///
+    /// When omitted, local schemas use a relative path like
+    /// `schemas/{group}/{key}.json`.
+    #[schemars(example = &"https://raw.githubusercontent.com/lintel-rs/catalog/master")]
+    #[serde(default)]
+    pub source_base_url: Option<String>,
 }
 
 /// Options for GitHub Pages hosting.
@@ -448,6 +460,28 @@ url = "https://www.schemastore.org/api/json/catalog.json"
         let config = load_config(toml).expect("parse");
         let ss = &config.sources["schemastore"];
         assert!(ss.exclude_matches.is_empty());
+    }
+
+    #[test]
+    fn parse_source_base_url() {
+        let toml = r#"
+[catalog]
+source-base-url = "https://raw.githubusercontent.com/lintel-rs/catalog/master"
+"#;
+        let config = load_config(toml).expect("parse");
+        assert_eq!(
+            config.catalog.source_base_url.as_deref(),
+            Some("https://raw.githubusercontent.com/lintel-rs/catalog/master")
+        );
+    }
+
+    #[test]
+    fn source_base_url_defaults_to_none() {
+        let toml = r"
+[catalog]
+";
+        let config = load_config(toml).expect("parse");
+        assert!(config.catalog.source_base_url.is_none());
     }
 
     #[test]

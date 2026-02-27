@@ -146,6 +146,7 @@ async fn generate_for_target(
             group_key,
             trimmed_base,
             processed: ctx.processed,
+            source_base_url: ctx.config.catalog.source_base_url.as_deref(),
         };
         for (key, schema_def) in &group_config.schemas {
             let entry =
