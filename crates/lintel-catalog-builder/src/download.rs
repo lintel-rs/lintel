@@ -76,8 +76,10 @@ const MAX_SCHEMA_SIZE: u64 = 10 * 1024 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct LintelExtra {
     /// Original URL the schema was fetched from.
+    #[serde(default)]
     pub source: String,
     /// SHA-256 hex digest of the raw schema content before any transformations.
+    #[serde(default)]
     pub source_sha256: String,
     /// `true` when the schema fails validation after transformation.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -156,6 +158,15 @@ pub fn inject_lintel_extra_from_cache(
     };
     extra.source_sha256 = hash;
     inject_lintel_extra(value, extra);
+}
+
+/// Parse the `x-lintel` extension from a schema's root object.
+///
+/// Returns `None` if the key is missing or cannot be deserialized.
+pub fn parse_lintel_extra(value: &serde_json::Value) -> Option<LintelExtra> {
+    value
+        .get("x-lintel")
+        .and_then(|v| serde_json::from_value::<LintelExtra>(v.clone()).ok())
 }
 
 /// Fetch a schema via the cache. Returns the parsed `Value` and cache status.

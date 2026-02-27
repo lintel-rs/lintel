@@ -13,7 +13,8 @@ use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
 use super::util::{
-    extract_schema_meta, prefetch_versions, process_fetched_versions, resolve_latest_id,
+    extract_file_match, extract_schema_meta, prefetch_versions, process_fetched_versions,
+    resolve_latest_id,
 };
 
 /// Context for processing a single group schema entry.
@@ -114,6 +115,17 @@ pub(super) async fn process_group_schema(
         None
     };
 
+    // Resolve file_match: config takes priority, then fall back to the schema's fileMatch.
+    // For local schemas we can extract from the text now; for remote schemas we
+    // update ref_ctx after fetching.
+    let mut file_match = schema_def.file_match.clone();
+    if file_match.is_empty()
+        && let Some((_, _, text)) = &lintel_source
+        && let Ok(val) = serde_json::from_str::<serde_json::Value>(text)
+    {
+        file_match = extract_file_match(&val);
+    }
+
     let mut ref_ctx = RefRewriteContext {
         cache: ctx.generate.cache,
         shared_dir: &shared_dir,
@@ -124,7 +136,7 @@ pub(super) async fn process_group_schema(
         lintel_source: lintel_source
             .as_ref()
             .map(|(id, hash, _)| (id.clone(), hash.clone())),
-        file_match: schema_def.file_match.clone(),
+        file_match: file_match.clone(),
     };
 
     // Process schema result
@@ -132,6 +144,15 @@ pub(super) async fn process_group_schema(
         let (mut value, status) =
             schema_fetch_result.expect("fetch result must exist when URL is present")?;
         info!(url = %url, status = %status, "downloaded group schema");
+
+        // Extract fileMatch from fetched schema if config didn't provide any
+        if ref_ctx.file_match.is_empty() {
+            let schema_file_match = extract_file_match(&value);
+            if !schema_file_match.is_empty() {
+                file_match = schema_file_match;
+                ref_ctx.file_match.clone_from(&file_match);
+            }
+        }
 
         // Use version URL as $id if latest content matches a version
         let schema_base_url = format!("{}/schemas/{}/{key}", ctx.trimmed_base, ctx.group_key,);
@@ -174,7 +195,7 @@ pub(super) async fn process_group_schema(
         description,
         url: schema_url,
         source_url: schema_def.url.clone(),
-        file_match: schema_def.file_match.clone(),
+        file_match,
         versions: version_urls,
     })
 }

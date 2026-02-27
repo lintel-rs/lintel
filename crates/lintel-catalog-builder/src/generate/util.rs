@@ -153,6 +153,32 @@ pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>
     (title, description)
 }
 
+/// Extract the `fileMatch` array from a JSON Schema value.
+///
+/// Checks `x-lintel.fileMatch` first (our own metadata), then falls back
+/// to a root-level `fileMatch` array (used by some upstream schemas).
+/// Returns an empty `Vec` if neither is present.
+pub(super) fn extract_file_match(value: &serde_json::Value) -> Vec<String> {
+    // Prefer x-lintel.fileMatch (our structured metadata)
+    if let Some(extra) = crate::download::parse_lintel_extra(value)
+        && !extra.file_match.is_empty()
+    {
+        return extra.file_match;
+    }
+
+    // Fall back to root-level fileMatch (upstream schemas)
+    value
+        .get("fileMatch")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Convert a key like `"github"` to title case (`"Github"`).
 pub(super) fn title_case(s: &str) -> String {
     let mut chars = s.chars();
