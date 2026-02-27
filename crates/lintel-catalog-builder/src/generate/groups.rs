@@ -124,6 +124,7 @@ pub(super) async fn process_group_schema(
         lintel_source: lintel_source
             .as_ref()
             .map(|(id, hash, _)| (id.clone(), hash.clone())),
+        file_match: schema_def.file_match.clone(),
     };
 
     // Process schema result
