@@ -117,21 +117,16 @@ fn is_schema_invalid(value: &serde_json::Value) -> bool {
 
 /// Inject `x-lintel` metadata into a schema's root object.
 ///
-/// Looks up the content hash for `source_url` from the cache. If the hash is
-/// not available (e.g. the schema was never fetched via HTTP), no metadata is
-/// injected. Also validates the schema and sets `invalid: true` if it fails
-/// compilation.
-pub fn inject_lintel_extra(value: &mut serde_json::Value, source_url: &str, cache: &SchemaCache) {
-    let Some(hash) = cache.content_hash(source_url) else {
-        return;
-    };
+/// Takes the source identifier and pre-computed SHA-256 hash directly.
+/// Validates the schema and sets `invalid: true` if it fails compilation.
+pub fn inject_lintel_extra(value: &mut serde_json::Value, source: &str, source_sha256: String) {
     let invalid = is_schema_invalid(value);
     if invalid {
-        warn!(source = %source_url, "schema is invalid after transformation");
+        warn!(source = %source, "schema is invalid after transformation");
     }
     let extra = LintelExtra {
-        source: source_url.to_string(),
-        source_sha256: hash,
+        source: source.to_string(),
+        source_sha256,
         invalid,
     };
     if let Some(obj) = value.as_object_mut() {
@@ -140,6 +135,21 @@ pub fn inject_lintel_extra(value: &mut serde_json::Value, source_url: &str, cach
             serde_json::to_value(extra).expect("LintelExtra is always serializable"),
         );
     }
+}
+
+/// Inject `x-lintel` metadata using the HTTP cache to look up the content hash.
+///
+/// If the hash is not available (e.g. the schema was never fetched via HTTP),
+/// no metadata is injected.
+pub fn inject_lintel_extra_from_cache(
+    value: &mut serde_json::Value,
+    source_url: &str,
+    cache: &SchemaCache,
+) {
+    let Some(hash) = cache.content_hash(source_url) else {
+        return;
+    };
+    inject_lintel_extra(value, source_url, hash);
 }
 
 /// Fetch a schema via the cache. Returns the parsed `Value` and cache status.

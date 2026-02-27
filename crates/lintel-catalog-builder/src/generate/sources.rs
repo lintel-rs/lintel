@@ -255,6 +255,7 @@ async fn process_one_source_schema(
                 already_downloaded: &mut already_downloaded,
                 source_url: Some(source_url.clone()),
                 processed: ctx.processed,
+                lintel_source: None,
             };
 
             debug!(schema = %info.name, "processing schema refs");

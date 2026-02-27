@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use lintel_schema_cache::SchemaCache;
 use schema_catalog::SchemaEntry;
 use tracing::info;
 
@@ -22,6 +23,21 @@ pub(super) struct GroupSchemaContext<'a> {
     pub(super) group_key: &'a str,
     pub(super) trimmed_base: &'a str,
     pub(super) processed: &'a ProcessedSchemas,
+    /// Base URL for local schema sources (e.g. raw GitHub URL).
+    pub(super) source_base_url: Option<&'a str>,
+}
+
+/// Build the `x-lintel` source identifier for a local schema.
+///
+/// If `source_base_url` is configured, returns a full URL like
+/// `https://raw.githubusercontent.com/.../schemas/group/key.json`.
+/// Otherwise returns the relative path.
+fn local_source_id(ctx: &GroupSchemaContext<'_>, relative_path: &str) -> String {
+    if let Some(base) = ctx.source_base_url {
+        format!("{}/{relative_path}", base.trim_end_matches('/'))
+    } else {
+        relative_path.to_string()
+    }
 }
 
 /// Process a single group schema entry: fetch schema + versions concurrently,
@@ -76,6 +92,28 @@ pub(super) async fn process_group_schema(
         ctx.trimmed_base, ctx.group_key
     );
     let mut already_downloaded: HashMap<String, String> = HashMap::new();
+
+    // For local schemas, pre-compute source identifier and content hash
+    let lintel_source = if schema_def.url.is_none() {
+        let relative_source = format!("schemas/{}/{key}.json", ctx.group_key);
+        let source_path = ctx.generate.config_dir.join(&relative_source);
+        if !source_path.exists() {
+            bail!(
+                "local schema not found: {} (expected for group={}, key={key})",
+                source_path.display(),
+                ctx.group_key,
+            );
+        }
+        let text = tokio::fs::read_to_string(&source_path)
+            .await
+            .with_context(|| format!("failed to read local schema {}", source_path.display()))?;
+        let source_id = local_source_id(ctx, &relative_source);
+        let hash = SchemaCache::hash_content(&text);
+        Some((source_id, hash, text))
+    } else {
+        None
+    };
+
     let mut ref_ctx = RefRewriteContext {
         cache: ctx.generate.cache,
         shared_dir: &shared_dir,
@@ -83,6 +121,9 @@ pub(super) async fn process_group_schema(
         already_downloaded: &mut already_downloaded,
         source_url: schema_def.url.clone(),
         processed: ctx.processed,
+        lintel_source: lintel_source
+            .as_ref()
+            .map(|(id, hash, _)| (id.clone(), hash.clone())),
     };
 
     // Process schema result
@@ -104,24 +145,11 @@ pub(super) async fn process_group_schema(
         resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &resolved_url).await?;
         serde_json::to_string_pretty(&value)?
     } else {
-        let source_path = ctx
-            .generate
-            .config_dir
-            .join("schemas")
-            .join(ctx.group_key)
-            .join(format!("{key}.json"));
-        if !source_path.exists() {
-            bail!(
-                "local schema not found: {} (expected for group={}, key={key})",
-                source_path.display(),
-                ctx.group_key,
-            );
-        }
-        let text: String = tokio::fs::read_to_string(&source_path)
-            .await
-            .with_context(|| format!("failed to read local schema {}", source_path.display()))?;
-        resolve_and_rewrite(&mut ref_ctx, &text, &dest_path, &schema_url).await?;
-        text
+        let (_, _, text) = lintel_source
+            .as_ref()
+            .expect("computed above for local schemas");
+        resolve_and_rewrite(&mut ref_ctx, text, &dest_path, &schema_url).await?;
+        text.clone()
     };
 
     // Process pre-fetched versions

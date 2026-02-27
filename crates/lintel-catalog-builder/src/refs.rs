@@ -20,6 +20,12 @@ pub struct RefRewriteContext<'a> {
     /// relative `$ref` values (e.g. `./rule.json`) against the schema's origin.
     pub source_url: Option<String>,
     pub processed: &'a ProcessedSchemas,
+    /// Pre-computed source identifier and SHA-256 hash for `x-lintel` injection.
+    ///
+    /// Used for local schemas that aren't in the HTTP cache. When set, this
+    /// takes priority over cache-based injection from `source_url`.
+    /// Format: `(source_identifier, sha256_hex)`.
+    pub lintel_source: Option<(String, String)>,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -285,6 +291,18 @@ fn resolve_all_relative_refs(
     resolved
 }
 
+/// Inject `x-lintel` metadata into a schema value.
+///
+/// Uses `lintel_source` (pre-computed source + hash) if available, otherwise
+/// falls back to cache-based injection from `source_url`.
+fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
+    if let Some((source, hash)) = &ctx.lintel_source {
+        crate::download::inject_lintel_extra(value, source, hash.clone());
+    } else if let Some(ref source_url) = ctx.source_url {
+        crate::download::inject_lintel_extra_from_cache(value, source_url, ctx.cache);
+    }
+}
+
 /// Download all `$ref` dependencies for a schema, rewrite URLs to local paths,
 /// and write the updated schema. Handles transitive dependencies via BFS
 /// concurrent resolution.
@@ -334,9 +352,7 @@ pub async fn resolve_and_rewrite_value(
     if external_refs.is_empty() && resolved_relative.is_empty() {
         // No external refs — still fix invalid URI references
         fix_ref_uris(value);
-        if let Some(ref source_url) = ctx.source_url {
-            crate::download::inject_lintel_extra(value, source_url, ctx.cache);
-        }
+        inject_lintel(value, ctx);
         crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
         return Ok(());
     }
@@ -370,9 +386,7 @@ pub async fn resolve_and_rewrite_value(
     // Rewrite refs in the root schema and write it
     rewrite_refs(value, &url_map);
     fix_ref_uris(value);
-    if let Some(ref source_url) = ctx.source_url {
-        crate::download::inject_lintel_extra(value, source_url, ctx.cache);
-    }
+    inject_lintel(value, ctx);
     crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
 
     // Process and write each dependency
@@ -516,7 +530,7 @@ async fn write_dep_schemas(
         rewrite_refs(&mut dep_value, &dep_url_map);
         fix_ref_uris(&mut dep_value);
         if let Some(ref source_url) = source_url {
-            crate::download::inject_lintel_extra(&mut dep_value, source_url, ctx.cache);
+            crate::download::inject_lintel_extra_from_cache(&mut dep_value, source_url, ctx.cache);
         }
         crate::download::write_schema_json(&dep_value, &dep_dest, ctx.processed).await?;
     }
