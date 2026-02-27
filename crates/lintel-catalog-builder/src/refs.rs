@@ -28,6 +28,9 @@ pub struct RefRewriteContext<'a> {
     pub lintel_source: Option<(String, String)>,
     /// Glob patterns from the catalog entry, injected into `x-lintel.fileMatch`.
     pub file_match: Vec<String>,
+    /// Explicit parsers extracted from `x-lintel.parsers`.
+    /// When non-empty, used as-is; otherwise derived from `file_match` extensions.
+    pub parsers: Vec<schema_catalog::FileFormat>,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -298,7 +301,11 @@ fn resolve_all_relative_refs(
 /// Uses `lintel_source` (pre-computed source + hash) if available, otherwise
 /// falls back to cache-based injection from `source_url`.
 fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
-    let parsers = crate::download::parsers_from_file_match(&ctx.file_match);
+    let parsers = if ctx.parsers.is_empty() {
+        crate::download::parsers_from_file_match(&ctx.file_match)
+    } else {
+        ctx.parsers.clone()
+    };
     if let Some((source, hash)) = &ctx.lintel_source {
         crate::download::inject_lintel_extra(
             value,
