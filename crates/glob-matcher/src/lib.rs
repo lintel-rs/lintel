@@ -16,7 +16,7 @@ fn is_separator(c: char) -> bool {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct State {
-    /// Character indices into the glob and path strings.
+    /// Character index into the path string.
     path_index: usize,
     /// Character index into the glob string.
     glob_index: usize,
@@ -64,34 +64,12 @@ pub fn glob_match_with_captures(glob: &str, path: &str) -> Option<Vec<Capture>> 
     None
 }
 
-#[allow(clippy::inline_always)]
-#[inline(always)]
-fn unescape(c: &mut u8, glob: &[u8], glob_index: &mut usize) -> bool {
-    if *c == b'\\' {
-        *glob_index += 1;
-        if *glob_index >= glob.len() {
-            // Invalid pattern!
-            return false;
-        }
-        *c = match glob[*glob_index] {
-            b'a' => b'\x61',
-            b'b' => b'\x08',
-            b'n' => b'\n',
-            b'r' => b'\r',
-            b't' => b'\t',
-            c => c,
-        }
-    }
-    true
-}
-
 enum Step {
     Continue,
     Return(bool),
     Backtrack,
 }
 
-#[allow(clippy::similar_names)]
 struct Matcher<'a> {
     glob: &'a [u8],
     path: &'a [u8],
@@ -108,6 +86,27 @@ impl<'a> Matcher<'a> {
             state: State::default(),
             brace_stack: BraceStack::default(),
         }
+    }
+
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn unescape(&mut self, c: &mut u8) -> bool {
+        if *c == b'\\' {
+            self.state.glob_index += 1;
+            if self.state.glob_index >= self.glob.len() {
+                // Invalid pattern!
+                return false;
+            }
+            *c = match self.glob[self.state.glob_index] {
+                b'a' => b'\x61', // \a → literal 'a' (not BEL)
+                b'b' => b'\x08',
+                b'n' => b'\n',
+                b'r' => b'\r',
+                b't' => b'\t',
+                c => c,
+            }
+        }
+        true
     }
 
     // This algorithm is based on https://research.swtch.com/glob
@@ -307,7 +306,7 @@ impl<'a> Matcher<'a> {
             && (first || self.glob[self.state.glob_index] != b']')
         {
             let mut low = self.glob[self.state.glob_index];
-            if !unescape(&mut low, self.glob, &mut self.state.glob_index) {
+            if !self.unescape(&mut low) {
                 return Step::Return(false);
             }
             self.state.glob_index += 1;
@@ -319,7 +318,7 @@ impl<'a> Matcher<'a> {
             {
                 self.state.glob_index += 1;
                 let mut high = self.glob[self.state.glob_index];
-                if !unescape(&mut high, self.glob, &mut self.state.glob_index) {
+                if !self.unescape(&mut high) {
                     return Step::Return(false);
                 }
                 self.state.glob_index += 1;
@@ -348,7 +347,7 @@ impl<'a> Matcher<'a> {
     #[allow(clippy::cast_possible_truncation)]
     fn match_literal(&mut self, captures: &mut Option<&mut Vec<Capture>>) -> Step {
         let mut c = self.glob[self.state.glob_index];
-        if !unescape(&mut c, self.glob, &mut self.state.glob_index) {
+        if !self.unescape(&mut c) {
             return Step::Return(false);
         }
 
@@ -614,7 +613,6 @@ impl BraceStack {
 }
 
 #[cfg(test)]
-#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 mod tests {
     use super::*;
     use alloc::vec;
@@ -838,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_escaping_literal_star() {
+    fn bash_escaping_backslash_star() {
         assert!(glob_match("\\*", "*"));
         // assert!(glob_match("\\*", "\\*"));
         assert!(!glob_match("\\*", "**"));
@@ -858,7 +856,10 @@ mod tests {
         assert!(!glob_match("\\*", "d"));
         assert!(!glob_match("\\*", "dd"));
         assert!(!glob_match("\\*", "de"));
+    }
 
+    #[test]
+    fn bash_escaping_a_backslash_star() {
         assert!(!glob_match("a\\*", "*"));
         assert!(!glob_match("a\\*", "**"));
         assert!(!glob_match("a\\*", "\\*"));
@@ -929,7 +930,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_classes_negated() {
+    fn bash_classes_negated_non_matching() {
         assert!(!glob_match("a*[^c]", "*"));
         assert!(!glob_match("a*[^c]", "**"));
         assert!(!glob_match("a*[^c]", "\\*"));
@@ -943,6 +944,10 @@ mod tests {
         assert!(!glob_match("a*[^c]", "bcd"));
         assert!(!glob_match("a*[^c]", "bdir/"));
         assert!(!glob_match("a*[^c]", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_negated_remaining() {
         assert!(!glob_match("a*[^c]", "c"));
         assert!(!glob_match("a*[^c]", "ca"));
         assert!(!glob_match("a*[^c]", "cb"));
@@ -960,7 +965,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_classes_range_negated() {
+    fn bash_classes_range_negated_first_half() {
         assert!(!glob_match("[a-y]*[^c]", "*"));
         assert!(glob_match("[a-y]*[^c]", "a*"));
         assert!(!glob_match("[a-y]*[^c]", "**"));
@@ -979,16 +984,17 @@ mod tests {
         assert!(glob_match("[a-y]*[^c]", "bcd"));
         assert!(glob_match("[a-y]*[^c]", "bdir/"));
         assert!(!glob_match("[a-y]*[^c]", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_range_negated_second_half() {
         assert!(!glob_match("[a-y]*[^c]", "c"));
         assert!(glob_match("[a-y]*[^c]", "ca"));
         assert!(glob_match("[a-y]*[^c]", "cb"));
         assert!(!glob_match("[a-y]*[^c]", "d"));
         assert!(glob_match("[a-y]*[^c]", "dd"));
-        assert!(glob_match("[a-y]*[^c]", "dd"));
-        assert!(glob_match("[a-y]*[^c]", "dd"));
         assert!(glob_match("[a-y]*[^c]", "de"));
         assert!(glob_match("[a-y]*[^c]", "baz"));
-        assert!(glob_match("[a-y]*[^c]", "bzz"));
         assert!(glob_match("[a-y]*[^c]", "bzz"));
         // assert(!isMatch('bzz', '[a-y]*[^c]', { regex: true }));
         assert!(!glob_match("[a-y]*[^c]", "BZZ"));
@@ -1056,7 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_classes_escaped() {
+    fn bash_classes_escaped_double_backslash() {
         assert!(!glob_match("a[\\\\b]c", "*"));
         assert!(!glob_match("a[\\\\b]c", "**"));
         assert!(!glob_match("a[\\\\b]c", "\\*"));
@@ -1081,7 +1087,10 @@ mod tests {
         assert!(!glob_match("a[\\\\b]c", "BZZ"));
         assert!(!glob_match("a[\\\\b]c", "beware"));
         assert!(!glob_match("a[\\\\b]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_escaped_single_backslash() {
         assert!(!glob_match("a[\\b]c", "*"));
         assert!(!glob_match("a[\\b]c", "**"));
         assert!(!glob_match("a[\\b]c", "\\*"));
@@ -1109,7 +1118,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_classes_range_and_question() {
+    fn bash_classes_range_and_question_range() {
         assert!(!glob_match("a[b-d]c", "*"));
         assert!(!glob_match("a[b-d]c", "**"));
         assert!(!glob_match("a[b-d]c", "\\*"));
@@ -1134,7 +1143,10 @@ mod tests {
         assert!(!glob_match("a[b-d]c", "BZZ"));
         assert!(!glob_match("a[b-d]c", "beware"));
         assert!(!glob_match("a[b-d]c", "BewAre"));
+    }
 
+    #[test]
+    fn bash_classes_range_and_question_qmark_non_matching() {
         assert!(!glob_match("a?c", "*"));
         assert!(!glob_match("a?c", "**"));
         assert!(!glob_match("a?c", "\\*"));
@@ -1148,6 +1160,10 @@ mod tests {
         assert!(!glob_match("a?c", "bcd"));
         assert!(!glob_match("a?c", "bdir/"));
         assert!(!glob_match("a?c", "Beware"));
+    }
+
+    #[test]
+    fn bash_classes_range_and_question_qmark_remaining() {
         assert!(!glob_match("a?c", "c"));
         assert!(!glob_match("a?c", "ca"));
         assert!(!glob_match("a?c", "cb"));
@@ -1295,7 +1311,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_dot_patterns() {
+    fn stars_dot_patterns_single() {
         assert!(!glob_match("*a*", "foo"));
         assert!(glob_match("*a*", "bar"));
         assert!(glob_match("*abc*", "oneabctwo"));
@@ -1314,7 +1330,10 @@ mod tests {
         assert!(glob_match("*.b", "a.b"));
         assert!(glob_match("a.*", "a.b"));
         assert!(glob_match("a.b", "a.b"));
+    }
 
+    #[test]
+    fn stars_dot_patterns_double() {
         assert!(!glob_match("**-bc-**", "a-b.c-d"));
         assert!(glob_match("**-**.**-**", "a-b.c-d"));
         assert!(glob_match("**-b**c-**", "a-b.c-d"));
@@ -1333,7 +1352,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_paths() {
+    fn stars_paths_positive() {
         assert!(glob_match("*/*", "/ab"));
         assert!(glob_match(".", "."));
         assert!(!glob_match("a/", "a/.b"));
@@ -1358,7 +1377,10 @@ mod tests {
         assert!(glob_match("*", "aaa"));
         assert!(glob_match("*", "ab"));
         assert!(glob_match("ab", "ab"));
+    }
 
+    #[test]
+    fn stars_paths_negative() {
         assert!(!glob_match("*/*/*", "aaa"));
         assert!(!glob_match("*/*/*", "aaa/bb/aa/rr"));
         assert!(!glob_match("aaa*", "aaa/bba/ccc"));
@@ -1376,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_depth_matching() {
+    fn stars_depth_matching_shallow() {
         assert!(glob_match("*", "a"));
         assert!(glob_match("*", "b"));
         assert!(!glob_match("*", "a/a"));
@@ -1393,7 +1415,10 @@ mod tests {
         assert!(!glob_match("*/*/*", "a/a"));
         assert!(glob_match("*/*/*", "a/a/a"));
         assert!(!glob_match("*/*/*", "a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_depth_matching_deep() {
         assert!(!glob_match("*/*/*/*", "a"));
         assert!(!glob_match("*/*/*/*", "a/a"));
         assert!(!glob_match("*/*/*/*", "a/a/a"));
@@ -1410,7 +1435,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_prefix_depth() {
+    fn stars_prefix_depth_single() {
         assert!(!glob_match("a/*", "a"));
         assert!(glob_match("a/*", "a/a"));
         assert!(!glob_match("a/*", "a/a/a"));
@@ -1423,7 +1448,10 @@ mod tests {
         assert!(!glob_match("a/*/*", "b/a/a"));
         assert!(!glob_match("a/*/*", "a/a/a/a"));
         assert!(!glob_match("a/*/*", "a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_prefix_depth_multi() {
         assert!(!glob_match("a/*/*/*", "a"));
         assert!(!glob_match("a/*/*/*", "a/a"));
         assert!(!glob_match("a/*/*/*", "a/a/a"));
@@ -1436,7 +1464,10 @@ mod tests {
         assert!(!glob_match("a/*/*/*/*", "a/a/b"));
         assert!(!glob_match("a/*/*/*/*", "a/a/a/a"));
         assert!(glob_match("a/*/*/*/*", "a/a/a/a/a"));
+    }
 
+    #[test]
+    fn stars_prefix_depth_named() {
         assert!(!glob_match("a/*/a", "a"));
         assert!(!glob_match("a/*/a", "a/a"));
         assert!(glob_match("a/*/a", "a/a/a"));
@@ -1460,7 +1491,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_trailing_and_txt() {
+    fn stars_trailing_slash() {
         assert!(!glob_match("*/", "a"));
         assert!(!glob_match("*/*", "a"));
         assert!(!glob_match("a/*", "a"));
@@ -1477,7 +1508,10 @@ mod tests {
         assert!(glob_match("*{,/}", "a/"));
         assert!(glob_match("*/*", "a/a"));
         assert!(glob_match("a/*", "a/a"));
+    }
 
+    #[test]
+    fn stars_txt_patterns() {
         assert!(!glob_match("a/**/*.txt", "a.txt"));
         assert!(glob_match("a/**/*.txt", "a/x/y.txt"));
         assert!(!glob_match("a/**/*.txt", "a/x/y/z"));
@@ -1508,7 +1542,7 @@ mod tests {
     }
 
     #[test]
-    fn stars_doublestar_paths() {
+    fn stars_doublestar_paths_positive() {
         assert!(glob_match("**/..", "/home/foo/.."));
         assert!(glob_match("**/a", "a"));
         assert!(glob_match("**", "a/a"));
@@ -1530,7 +1564,10 @@ mod tests {
         assert!(glob_match("**/*/", "foo/bar/"));
         assert!(glob_match("*/**", "foo/bar/"));
         assert!(glob_match("*/*/", "foo/bar/"));
+    }
 
+    #[test]
+    fn stars_doublestar_paths_negative() {
         assert!(!glob_match("*/foo", "bar/baz/foo"));
         assert!(!glob_match("**/bar/*", "deep/foo/bar"));
         assert!(!glob_match("*/bar/**", "deep/foo/bar/baz/x"));
@@ -1546,7 +1583,10 @@ mod tests {
         assert!(glob_match("/*", "/ef"));
         assert!(glob_match("a/**/j/**/z/*.md", "a/b/j/c/z/x.md"));
         assert!(glob_match("a/**/j/**/z/*.md", "a/j/z/x.md"));
+    }
 
+    #[test]
+    fn stars_doublestar_paths_deep() {
         assert!(glob_match("**/foo", "bar/baz/foo"));
         assert!(glob_match("**/bar/*", "deep/foo/bar/baz"));
         assert!(glob_match("**/bar/**", "deep/foo/bar/baz/"));
@@ -1586,7 +1626,7 @@ mod tests {
     }
 
     #[test]
-    fn globstars_depth() {
+    fn globstars_depth_negative() {
         assert!(!glob_match("a/**/*", "a"));
         assert!(!glob_match("a/**/**/*", "a"));
         assert!(!glob_match("a/**/**/**/*", "a"));
@@ -1601,6 +1641,10 @@ mod tests {
         assert!(!glob_match("**/a", "a/b"));
         assert!(!glob_match("**/a", "a/x/y"));
         assert!(!glob_match("**/a", "a/b/c/d"));
+    }
+
+    #[test]
+    fn globstars_depth_positive() {
         assert!(glob_match("**", "a"));
         assert!(glob_match("**/a", "a"));
         // assert!(glob_match("a/**", "a"));
@@ -1616,6 +1660,10 @@ mod tests {
         assert!(glob_match("a/**/**/*", "a/b"));
         assert!(glob_match("a/**/**/**/*", "a/b"));
         assert!(glob_match("a/**/b", "a/b"));
+    }
+
+    #[test]
+    fn globstars_depth_deep() {
         assert!(glob_match("**", "a/b/c"));
         assert!(glob_match("**/*", "a/b/c"));
         assert!(glob_match("**/**", "a/b/c"));
@@ -1632,7 +1680,7 @@ mod tests {
     }
 
     #[test]
-    fn globstars_deep_paths() {
+    fn globstars_deep_paths_md() {
         assert!(glob_match("a/b/**/c/**/*.*", "a/b/c/d.e"));
         assert!(glob_match("a/**/f/*.md", "a/b/c/d/e/f/g.md"));
         assert!(glob_match("a/**/f/**/k/*.md", "a/b/c/d/e/f/g/h/i/j/k/l.md"));
@@ -1656,6 +1704,10 @@ mod tests {
             "foo/bar/baz/one/two/three/image.png"
         ));
         assert!(!glob_match("a/b/**/f", "a/b/c/d/"));
+    }
+
+    #[test]
+    fn globstars_deep_paths_general() {
         // assert!(glob_match("a/**", "a"));
         assert!(glob_match("**", "a"));
         assert!(glob_match("a{,/**}", "a"));
@@ -1680,7 +1732,7 @@ mod tests {
     }
 
     #[test]
-    fn globstars_mixed() {
+    fn globstars_mixed_positive() {
         assert!(glob_match("*/*", "a/b"));
         assert!(glob_match("a/b/c/*.md", "a/b/c/xyz.md"));
         assert!(glob_match("a/*/c/*.md", "a/bb.bb/c/xyz.md"));
@@ -1702,6 +1754,10 @@ mod tests {
         assert!(!glob_match("a/**/", "a/b/c/d"));
         assert!(!glob_match("a/**/", "a/bb"));
         assert!(!glob_match("a/**/", "a/cb"));
+    }
+
+    #[test]
+    fn globstars_mixed_js_and_paths() {
         assert!(glob_match("/**", "/a/b"));
         assert!(glob_match("**/*", "a.b"));
         assert!(glob_match("**/*", "a.js"));
@@ -1725,7 +1781,7 @@ mod tests {
     }
 
     #[test]
-    fn globstars_negative_and_positive() {
+    fn globstars_negative_and_positive_neg() {
         assert!(!glob_match("**/", "a"));
         assert!(!glob_match("**/a/*", "a"));
         assert!(!glob_match("**/a/*/*", "a"));
@@ -1744,6 +1800,10 @@ mod tests {
         assert!(!glob_match("**/", "a/b/c/d"));
         assert!(!glob_match("**/d/*", "a/b/c/d"));
         assert!(!glob_match("b/**", "a/b/c/d"));
+    }
+
+    #[test]
+    fn globstars_negative_and_positive_pos_a() {
         assert!(glob_match("**", "a"));
         assert!(glob_match("**/**", "a"));
         assert!(glob_match("**/**/*", "a"));
@@ -1761,6 +1821,10 @@ mod tests {
         assert!(glob_match("a/**", "a/b"));
         assert!(glob_match("a/**/*", "a/b"));
         assert!(glob_match("a/**/**/*", "a/b"));
+    }
+
+    #[test]
+    fn globstars_negative_and_positive_pos_deep() {
         assert!(glob_match("**", "a/b/c"));
         assert!(glob_match("**/**", "a/b/c"));
         assert!(glob_match("**/**/*", "a/b/c"));
@@ -1793,7 +1857,7 @@ mod tests {
     }
 
     #[test]
-    fn negation() {
+    fn negation_basic() {
         assert!(!glob_match("!*", "abc"));
         assert!(!glob_match("!abc", "abc"));
         assert!(!glob_match("*!.md", "bar.md"));
@@ -1814,14 +1878,20 @@ mod tests {
         assert!(glob_match("foo!.md", "foo!.md"));
         assert!(glob_match("*!*.md", "foo!bar.md"));
         assert!(glob_match("*b*.md", "foobar.md"));
+    }
 
+    #[test]
+    fn negation_double_bang() {
         assert!(!glob_match("a!!b", "a"));
         assert!(!glob_match("a!!b", "aa"));
         assert!(!glob_match("a!!b", "a/b"));
         assert!(!glob_match("a!!b", "a!b"));
         assert!(glob_match("a!!b", "a!!b"));
         assert!(!glob_match("a!!b", "a/!!/b"));
+    }
 
+    #[test]
+    fn negation_path() {
         assert!(!glob_match("!a/b", "a/b"));
         assert!(glob_match("!a/b", "a"));
         assert!(glob_match("!a/b", "a.b"));
@@ -1830,7 +1900,10 @@ mod tests {
         assert!(glob_match("!a/b", "b/a"));
         assert!(glob_match("!a/b", "b/b"));
         assert!(glob_match("!a/b", "b/c"));
+    }
 
+    #[test]
+    fn negation_multiple_bangs() {
         assert!(!glob_match("!abc", "abc"));
         assert!(glob_match("!!abc", "abc"));
         assert!(!glob_match("!!!abc", "abc"));
@@ -1839,7 +1912,10 @@ mod tests {
         assert!(glob_match("!!!!!!abc", "abc"));
         assert!(!glob_match("!!!!!!!abc", "abc"));
         assert!(glob_match("!!!!!!!!abc", "abc"));
+    }
 
+    #[test]
+    fn negation_star_slash_negative() {
         // assert!(!glob_match("!(*/*)", "a/a"));
         // assert!(!glob_match("!(*/*)", "a/b"));
         // assert!(!glob_match("!(*/*)", "a/c"));
@@ -1865,6 +1941,10 @@ mod tests {
         assert!(!glob_match("!*/c", "b/c"));
         assert!(!glob_match("!*a*", "bar"));
         assert!(!glob_match("!*a*", "fab"));
+    }
+
+    #[test]
+    fn negation_a_slash_negative() {
         // assert!(!glob_match("!a/(*)", "a/a"));
         // assert!(!glob_match("!a/(*)", "a/b"));
         // assert!(!glob_match("!a/(*)", "a/c"));
@@ -1873,6 +1953,10 @@ mod tests {
         assert!(!glob_match("!a/*", "a/b"));
         assert!(!glob_match("!a/*", "a/c"));
         assert!(!glob_match("!f*b", "fab"));
+    }
+
+    #[test]
+    fn negation_star_slash_positive() {
         // assert!(glob_match("!(*/*)", "a"));
         // assert!(glob_match("!(*/*)", "a.b"));
         // assert!(glob_match("!(*/b)", "a"));
@@ -1909,6 +1993,10 @@ mod tests {
         assert!(glob_match("!*/c", "b/a"));
         assert!(glob_match("!*/c", "b/b"));
         assert!(glob_match("!*a*", "foo"));
+    }
+
+    #[test]
+    fn negation_a_slash_positive() {
         // assert!(glob_match("!a/(*)", "a"));
         // assert!(glob_match("!a/(*)", "a.b"));
         // assert!(glob_match("!a/(*)", "b/a"));
@@ -1928,7 +2016,10 @@ mod tests {
         assert!(glob_match("!a/*", "b/c"));
         assert!(glob_match("!f*b", "bar"));
         assert!(glob_match("!f*b", "foo"));
+    }
 
+    #[test]
+    fn negation_md_extension() {
         assert!(!glob_match("!.md", ".md"));
         assert!(glob_match("!**/*.md", "a.js"));
         // assert!(!glob_match("!**/*.md", "b.md"));
@@ -1940,7 +2031,10 @@ mod tests {
         assert!(glob_match("!*.md", "abc.txt"));
         assert!(!glob_match("!*.md", "foo.md"));
         assert!(glob_match("!.md", "foo.md"));
+    }
 
+    #[test]
+    fn negation_path_patterns() {
         assert!(glob_match("!*.md", "a.js"));
         assert!(glob_match("!*.md", "b.txt"));
         assert!(!glob_match("!*.md", "c.md"));
@@ -1959,7 +2053,10 @@ mod tests {
         assert!(!glob_match("!a/*.txt", "a/a.txt"));
         assert!(!glob_match("!a/*.txt", "a/b.txt"));
         assert!(!glob_match("!a/*.txt", "a/c.txt"));
+    }
 
+    #[test]
+    fn negation_globstar_md() {
         assert!(glob_match("!*.md", "a.js"));
         assert!(glob_match("!*.md", "b.txt"));
         assert!(!glob_match("!*.md", "c.md"));
@@ -1992,7 +2089,7 @@ mod tests {
     }
 
     #[test]
-    fn question_mark() {
+    fn question_mark_single_multi() {
         assert!(glob_match("?", "a"));
         assert!(!glob_match("?", "aa"));
         assert!(!glob_match("?", "ab"));
@@ -2010,7 +2107,10 @@ mod tests {
         assert!(!glob_match("???", "ab"));
         assert!(glob_match("???", "aaa"));
         assert!(!glob_match("???", "abcdefg"));
+    }
 
+    #[test]
+    fn question_mark_with_literals() {
         assert!(!glob_match("a?c", "aaa"));
         assert!(glob_match("a?c", "aac"));
         assert!(glob_match("a?c", "abc"));
@@ -2021,7 +2121,10 @@ mod tests {
         assert!(!glob_match("ab?", "abcd"));
         assert!(!glob_match("ab?", "abbb"));
         assert!(glob_match("a?b", "acb"));
+    }
 
+    #[test]
+    fn question_mark_paths() {
         assert!(!glob_match("a/?/c/?/e.md", "a/bb/c/dd/e.md"));
         assert!(glob_match("a/??/c/??/e.md", "a/bb/c/dd/e.md"));
         assert!(!glob_match("a/??/c.md", "a/bbb/c.md"));
@@ -2036,7 +2139,7 @@ mod tests {
     }
 
     #[test]
-    fn braces() {
+    fn braces_basic() {
         assert!(glob_match("{a,b,c}", "a"));
         assert!(glob_match("{a,b,c}", "b"));
         assert!(glob_match("{a,b,c}", "c"));
@@ -2053,7 +2156,10 @@ mod tests {
         assert!(glob_match("a{b,bc}.txt", "abc.txt"));
 
         assert!(glob_match("foo[{a,b}]baz", "foo{baz"));
+    }
 
+    #[test]
+    fn braces_empty_alternative() {
         assert!(!glob_match("a{,b}.txt", "abc.txt"));
         assert!(!glob_match("a{a,b,}.txt", "abc.txt"));
         assert!(!glob_match("a{b,}.txt", "abc.txt"));
@@ -2063,7 +2169,10 @@ mod tests {
         assert!(glob_match("a{a,b,}.txt", "aa.txt"));
         assert!(glob_match("a{,b}.txt", "ab.txt"));
         assert!(glob_match("a{b,}.txt", "ab.txt"));
+    }
 
+    #[test]
+    fn braces_slash_alternatives() {
         // assert!(glob_match("{a/,}a/**", "a"));
         assert!(glob_match("a{a,b/}*.txt", "aa.txt"));
         assert!(glob_match("a{a,b/}*.txt", "ab/.txt"));
@@ -2080,7 +2189,10 @@ mod tests {
         assert!(glob_match("a{,/}*.txt", "ab.txt"));
         assert!(glob_match("a{,/}*.txt", "a/b.txt"));
         assert!(glob_match("a{,/}*.txt", "a/ab.txt"));
+    }
 
+    #[test]
+    fn braces_nested_foo_db() {
         assert!(glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "a.txt"));
         assert!(!glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "adb.txt"));
         assert!(glob_match("a{,.*{foo,db},\\(bar\\)}.txt", "a.db.txt"));
@@ -2106,7 +2218,10 @@ mod tests {
         assert!(glob_match("{*,*.{foo,db},\\(bar\\)}", "a"));
         assert!(!glob_match("{,*.{foo,db},\\(bar\\)}", "adb"));
         assert!(glob_match("{,*.{foo,db},\\(bar\\)}", "a.db"));
+    }
 
+    #[test]
+    fn braces_globstar_paths() {
         assert!(!glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/c/xyz.md"));
         assert!(!glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/d/xyz.md"));
         assert!(glob_match("a/b/**/c{d,e}/**/xyz.md", "a/b/cd/xyz.md"));
@@ -2120,7 +2235,10 @@ mod tests {
 
         assert!(glob_match("*{*a,b}", "xba"));
         assert!(glob_match("*{*a,b}", "xb"));
+    }
 
+    #[test]
+    fn braces_star_question_combos() {
         assert!(!glob_match("*??", "a"));
         assert!(!glob_match("*???", "aa"));
         assert!(glob_match("*???", "aaa"));
@@ -2143,7 +2261,10 @@ mod tests {
         assert!(glob_match("*****?", "zzz"));
         assert!(glob_match("*****?", "bbb"));
         assert!(glob_match("*****?", "aaaa"));
+    }
 
+    #[test]
+    fn braces_star_question_combos_two() {
         assert!(!glob_match("*****??", "a"));
         assert!(glob_match("*****??", "aa"));
         assert!(glob_match("*****??", "abc"));
@@ -2165,7 +2286,10 @@ mod tests {
         assert!(glob_match("?***?****c", "abc"));
         assert!(!glob_match("?***?****c", "bbb"));
         assert!(!glob_match("?***?****c", "zzz"));
+    }
 
+    #[test]
+    fn braces_complex_star_patterns() {
         assert!(glob_match("?***?****?", "abc"));
         assert!(glob_match("?***?****?", "bbb"));
         assert!(glob_match("?***?****?", "zzz"));
@@ -2179,7 +2303,10 @@ mod tests {
         assert!(glob_match("a**?**cd**?**??***k", "abcdecdhjk"));
         assert!(glob_match("a**?**cd**?**??***k**", "abcdecdhjk"));
         assert!(glob_match("a****c**?**??*****", "abcdecdhjk"));
+    }
 
+    #[test]
+    fn braces_question_path_patterns() {
         assert!(!glob_match("a/?/c/?/*/e.md", "a/b/c/d/e.md"));
         assert!(glob_match("a/?/c/?/*/e.md", "a/b/c/d/e/e.md"));
         assert!(glob_match("a/?/c/?/*/e.md", "a/b/c/d/efghijk/e.md"));
@@ -2198,13 +2325,13 @@ mod tests {
         assert!(glob_match("a/bbb/ab???md", "a/bbb/abcd.md"));
     }
 
-    #[test]
-    fn captures() {
-        fn test_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<&'a str>> {
-            glob_match_with_captures(glob, path)
-                .map(|v| v.into_iter().map(|capture| &path[capture]).collect())
-        }
+    fn test_captures<'a>(glob: &str, path: &'a str) -> Option<Vec<&'a str>> {
+        glob_match_with_captures(glob, path)
+            .map(|v| v.into_iter().map(|capture| &path[capture]).collect())
+    }
 
+    #[test]
+    fn captures_basic() {
         assert_eq!(test_captures("a/b", "a/b"), Some(vec![]));
         assert_eq!(test_captures("a/*/c", "a/bx/c"), Some(vec!["bx"]));
         assert_eq!(test_captures("a/*/c", "a/test/c"), Some(vec!["test"]));
@@ -2251,7 +2378,10 @@ mod tests {
             test_captures("a/{b,c[}]*}", "a/c}xx"),
             Some(vec!["c}xx", "}", "xx"])
         );
+    }
 
+    #[test]
+    fn captures_globstar() {
         // assert\.deepEqual\(([!])?capture\('(.*?)', ['"](.*?)['"]\), (.*)?\);
         // assert_eq!(test_captures("$2", "$3"), Some(vec!$4));
 
