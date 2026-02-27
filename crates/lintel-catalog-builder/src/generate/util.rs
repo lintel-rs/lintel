@@ -183,6 +183,11 @@ pub(super) fn extract_lintel_meta(
     (file_match, Vec::new())
 }
 
+/// Extract the first line of a string (up to the first newline).
+pub(super) fn first_line(s: &str) -> String {
+    s.lines().next().unwrap_or(s).to_string()
+}
+
 /// Convert a key like `"github"` to title case (`"Github"`).
 pub(super) fn title_case(s: &str) -> String {
     let mut chars = s.chars();

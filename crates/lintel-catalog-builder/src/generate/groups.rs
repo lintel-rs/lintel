@@ -13,8 +13,8 @@ use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
 use super::util::{
-    extract_lintel_meta, extract_schema_meta, prefetch_versions, process_fetched_versions,
-    resolve_latest_id,
+    extract_lintel_meta, extract_schema_meta, first_line, prefetch_versions,
+    process_fetched_versions, resolve_latest_id,
 };
 
 /// Context for processing a single group schema entry.
@@ -185,12 +185,13 @@ pub(super) async fn process_group_schema(
     let name = schema_def
         .name
         .clone()
-        .or(schema_title)
+        .or_else(|| schema_title.clone())
         .unwrap_or_else(|| key.to_string());
     let description = schema_def
         .description
         .clone()
-        .or(schema_desc)
+        .or(schema_title)
+        .or_else(|| schema_desc.as_deref().map(first_line))
         .unwrap_or_default();
 
     Ok(SchemaEntry {
