@@ -13,6 +13,7 @@ use lintel_catalog_builder::config::TargetConfig;
 pub struct OutputContext<'a> {
     pub output_dir: &'a Path,
     pub config_path: &'a Path,
+    pub config_dir: &'a Path,
     pub catalog: &'a Catalog,
     pub groups_meta: &'a [(String, String, String)],
     pub base_url: &'a str,
@@ -54,7 +55,62 @@ pub async fn finalize(target: &TargetConfig, ctx: &OutputContext<'_>) -> Result<
         debug!("wrote .nojekyll");
     }
 
+    // Copy static/ directory contents last so they can override generated files.
+    copy_static_dir(ctx.config_dir, ctx.output_dir).await?;
+
     Ok(())
+}
+
+/// Copy files from a `static/` directory (relative to the config file) into the output root.
+async fn copy_static_dir(config_dir: &Path, output_dir: &Path) -> Result<()> {
+    let static_dir = config_dir.join("static");
+    if !static_dir.is_dir() {
+        return Ok(());
+    }
+    debug!(path = %static_dir.display(), "copying static directory");
+    copy_dir_recursive(&static_dir, output_dir).await
+}
+
+/// Recursively copy all files from `src` into `dst`, creating subdirectories as needed.
+fn copy_dir_recursive<'a>(
+    src: &'a Path,
+    dst: &'a Path,
+) -> futures_util::future::BoxFuture<'a, Result<()>> {
+    Box::pin(async move {
+        let mut entries = tokio::fs::read_dir(src)
+            .await
+            .with_context(|| format!("failed to read directory {}", src.display()))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .with_context(|| format!("failed to read entry in {}", src.display()))?
+        {
+            let file_type = entry.file_type().await.with_context(|| {
+                format!("failed to get file type for {}", entry.path().display())
+            })?;
+            let dest_path = dst.join(entry.file_name());
+            if file_type.is_dir() {
+                tokio::fs::create_dir_all(&dest_path)
+                    .await
+                    .with_context(|| {
+                        format!("failed to create directory {}", dest_path.display())
+                    })?;
+                copy_dir_recursive(&entry.path(), &dest_path).await?;
+            } else {
+                tokio::fs::copy(entry.path(), &dest_path)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "failed to copy {} to {}",
+                            entry.path().display(),
+                            dest_path.display()
+                        )
+                    })?;
+                debug!(file = %dest_path.display(), "copied static file");
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Write `catalog.json`, `README.md`, and the full static site — shared by all targets.
@@ -175,6 +231,7 @@ mod tests {
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: &config_path,
+            config_dir: dir.path(),
             catalog: &catalog,
             groups_meta: &[],
             base_url: "https://example.com/",
@@ -200,6 +257,7 @@ mod tests {
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: Path::new("lintel-catalog.toml"),
+            config_dir: dir.path(),
             catalog: &catalog,
             groups_meta: &[],
             base_url: "https://example.com/",
@@ -235,6 +293,7 @@ mod tests {
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: Path::new("lintel-catalog.toml"),
+            config_dir: dir.path(),
             catalog: &catalog,
             groups_meta: &[],
             base_url: "https://example.com/",
@@ -251,6 +310,39 @@ mod tests {
         finalize(&target, &ctx).await?;
         assert!(!dir.path().join(".nojekyll").exists());
         assert!(!dir.path().join("CNAME").exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn copy_static_dir_copies_files_recursively() -> Result<()> {
+        let config_dir = tempfile::tempdir()?;
+        let output_dir = tempfile::tempdir()?;
+
+        // Create static/ with a file and a nested subdir
+        let static_dir = config_dir.path().join("static");
+        tokio::fs::create_dir_all(static_dir.join("sub")).await?;
+        tokio::fs::write(static_dir.join("llms.txt"), "hello").await?;
+        tokio::fs::write(static_dir.join("sub").join("nested.txt"), "world").await?;
+
+        copy_static_dir(config_dir.path(), output_dir.path()).await?;
+
+        assert_eq!(
+            tokio::fs::read_to_string(output_dir.path().join("llms.txt")).await?,
+            "hello"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(output_dir.path().join("sub").join("nested.txt")).await?,
+            "world"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn copy_static_dir_is_noop_when_missing() -> Result<()> {
+        let config_dir = tempfile::tempdir()?;
+        let output_dir = tempfile::tempdir()?;
+        // No static/ dir — should succeed silently
+        copy_static_dir(config_dir.path(), output_dir.path()).await?;
         Ok(())
     }
 }

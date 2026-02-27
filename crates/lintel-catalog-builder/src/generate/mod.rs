@@ -231,6 +231,7 @@ async fn generate_for_target(
     let output_ctx = OutputContext {
         output_dir,
         config_path: ctx.config_path,
+        config_dir: ctx.config_dir,
         catalog: &catalog,
         groups_meta: &groups_meta_vec,
         base_url,
