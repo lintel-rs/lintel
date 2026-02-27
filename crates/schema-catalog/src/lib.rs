@@ -96,6 +96,7 @@ pub struct CatalogGroup {
 ///
 /// Each entry maps a schema to its URL and the file patterns it applies to.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 #[schemars(title = "Schema Entry")]
 pub struct SchemaEntry {
     /// The display name of the schema.
@@ -109,13 +110,13 @@ pub struct SchemaEntry {
     pub url: String,
     /// An optional URL pointing to the upstream or canonical source of
     /// the schema (e.g. a GitHub raw URL).
-    #[serde(default, rename = "sourceUrl", skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_url: Option<String>,
     /// Glob patterns for files this schema should be applied to.
     ///
     /// Editors and tools use these patterns to automatically associate
     /// matching files with this schema.
-    #[serde(default, rename = "fileMatch", skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(title = "File Match")]
     #[schemars(example = example_file_match())]
     pub file_match: Vec<String>,
@@ -139,6 +140,20 @@ fn example_schema_url() -> String {
 
 fn example_file_match() -> Vec<String> {
     vec!["*.config.json".to_owned(), "**/.config.json".to_owned()]
+}
+
+/// Supported file formats for parsing and validation.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum FileFormat {
+    Json,
+    Json5,
+    Jsonc,
+    Toml,
+    Yaml,
+    Markdown,
 }
 
 /// Generate the JSON Schema for the [`Catalog`] type.

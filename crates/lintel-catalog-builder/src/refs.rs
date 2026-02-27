@@ -26,6 +26,8 @@ pub struct RefRewriteContext<'a> {
     /// takes priority over cache-based injection from `source_url`.
     /// Format: `(source_identifier, sha256_hex)`.
     pub lintel_source: Option<(String, String)>,
+    /// Glob patterns from the catalog entry, injected into `x-lintel.fileMatch`.
+    pub file_match: Vec<String>,
 }
 
 /// Characters that must be percent-encoded in URI fragment components.
@@ -296,10 +298,30 @@ fn resolve_all_relative_refs(
 /// Uses `lintel_source` (pre-computed source + hash) if available, otherwise
 /// falls back to cache-based injection from `source_url`.
 fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
+    let parsers = crate::download::parsers_from_file_match(&ctx.file_match);
     if let Some((source, hash)) = &ctx.lintel_source {
-        crate::download::inject_lintel_extra(value, source, hash.clone());
+        crate::download::inject_lintel_extra(
+            value,
+            crate::download::LintelExtra {
+                source: source.clone(),
+                source_sha256: hash.clone(),
+                invalid: false,
+                file_match: ctx.file_match.clone(),
+                parsers,
+            },
+        );
     } else if let Some(ref source_url) = ctx.source_url {
-        crate::download::inject_lintel_extra_from_cache(value, source_url, ctx.cache);
+        crate::download::inject_lintel_extra_from_cache(
+            value,
+            ctx.cache,
+            crate::download::LintelExtra {
+                source: source_url.clone(),
+                source_sha256: String::new(),
+                invalid: false,
+                file_match: ctx.file_match.clone(),
+                parsers,
+            },
+        );
     }
 }
 
@@ -530,7 +552,17 @@ async fn write_dep_schemas(
         rewrite_refs(&mut dep_value, &dep_url_map);
         fix_ref_uris(&mut dep_value);
         if let Some(ref source_url) = source_url {
-            crate::download::inject_lintel_extra_from_cache(&mut dep_value, source_url, ctx.cache);
+            crate::download::inject_lintel_extra_from_cache(
+                &mut dep_value,
+                ctx.cache,
+                crate::download::LintelExtra {
+                    source: source_url.clone(),
+                    source_sha256: String::new(),
+                    invalid: false,
+                    file_match: Vec::new(),
+                    parsers: Vec::new(),
+                },
+            );
         }
         crate::download::write_schema_json(&dep_value, &dep_dest, ctx.processed).await?;
     }

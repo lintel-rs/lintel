@@ -256,6 +256,7 @@ async fn process_one_source_schema(
                 source_url: Some(source_url.clone()),
                 processed: ctx.processed,
                 lintel_source: None,
+                file_match: info.file_match.clone(),
             };
 
             debug!(schema = %info.name, "processing schema refs");
