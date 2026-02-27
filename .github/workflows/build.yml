@@ -77,7 +77,7 @@ jobs:
         run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.binary }}-${{ matrix.target }}
           path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
@@ -157,7 +157,7 @@ jobs:
           Compress-Archive -Path lintel.exe -DestinationPath ../../../lintel-${{ matrix.target }}.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: lintel-${{ matrix.target }}
           path: lintel-${{ matrix.target }}.*
