@@ -13,7 +13,7 @@ use serde_json::Value;
 /// Place this file at the root of your catalog repository.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-#[schemars(title = "lintel-catalog.toml")]
+#[schemars(title = "Lintel Catalog")]
 pub struct CatalogConfig {
     /// Catalog metadata such as the catalog title. Corresponds to the
     /// `[catalog]` TOML section.
@@ -103,6 +103,33 @@ pub struct SiteConfig {
     /// description tag and JSON-LD structured data.
     #[serde(default)]
     pub description: Option<String>,
+    /// Google Analytics tracking ID (measurement ID).
+    ///
+    /// When set, the generated site includes the Google Analytics Global Site
+    /// Tag (`gtag.js`) snippet in every page's `<head>`. The snippet loads
+    /// the gtag.js library and configures it with the provided measurement ID.
+    ///
+    /// The injected markup looks like:
+    ///
+    /// ```html
+    /// <!-- Google tag (gtag.js) -->
+    /// <script async src="https://www.googletagmanager.com/gtag/js?id=GA_TRACKING_ID"></script>
+    /// <script>
+    ///   window.dataLayer = window.dataLayer || [];
+    ///   function gtag(){dataLayer.push(arguments);}
+    ///   gtag('js', new Date());
+    ///
+    ///   gtag('config', 'GA_TRACKING_ID');
+    /// </script>
+    /// ```
+    ///
+    /// where `GA_TRACKING_ID` is replaced with the value of this field
+    /// (e.g. `G-XXXXXXXXXX`).
+    ///
+    /// Leave unset (or omit) to disable Google Analytics entirely.
+    #[schemars(example = &"G-XXXXXXXXXX")]
+    #[serde(default)]
+    pub ga_tracking_id: Option<String>,
     /// GitHub Pages hosting options.
     #[serde(default)]
     pub github: Option<GitHubPagesConfig>,
@@ -111,45 +138,23 @@ pub struct SiteConfig {
 /// Output target configuration.
 ///
 /// Each target specifies where the built catalog and schema files are written.
-/// Use `type = "dir"` for a plain directory output or `type = "github-pages"`
-/// for GitHub Pages deployment with automatic `.nojekyll` and optional `CNAME`.
+/// When `site.github` is present, GitHub Pages files (`.nojekyll`, `CNAME`) are
+/// written automatically.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-#[serde(tag = "type", deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[schemars(title = "Build Target")]
-pub enum TargetConfig {
-    /// Write output to a local directory.
-    #[serde(rename = "dir")]
-    Dir {
-        /// Output directory path (relative to the catalog repository root).
-        #[schemars(example = &"../catalog-generated")]
-        dir: String,
-        /// Base URL where the catalog will be hosted. Schema URLs in
-        /// `catalog.json` are constructed relative to this URL.
-        #[schemars(example = &"https://raw.githubusercontent.com/org/catalog/master/")]
-        #[serde(rename = "base-url", alias = "base_url")]
-        base_url: String,
-        /// Site-level configuration for description and hosting options.
-        #[serde(default)]
-        site: Option<SiteConfig>,
-    },
-    /// Generate output optimized for GitHub Pages deployment.
-    #[serde(rename = "github-pages")]
-    GitHubPages {
-        /// Base URL where the GitHub Pages site is hosted.
-        #[schemars(example = &"https://catalog.example.com/")]
-        #[serde(rename = "base-url", alias = "base_url")]
-        base_url: String,
-        /// Custom domain for GitHub Pages. When set, a `CNAME` file is written
-        /// to the output directory.
-        #[serde(default)]
-        cname: Option<String>,
-        /// Output directory path. Defaults to `docs/` if not specified.
-        #[serde(default)]
-        dir: Option<String>,
-        /// Site-level configuration for description and hosting options.
-        #[serde(default)]
-        site: Option<SiteConfig>,
-    },
+pub struct TargetConfig {
+    /// Output directory path (relative to the catalog repository root).
+    #[schemars(example = &"../catalog-generated")]
+    pub dir: String,
+    /// Base URL where the catalog will be hosted. Schema URLs in
+    /// `catalog.json` are constructed relative to this URL.
+    #[schemars(example = &"https://raw.githubusercontent.com/org/catalog/master/")]
+    #[serde(alias = "base_url")]
+    pub base_url: String,
+    /// Site-level configuration for description and hosting options.
+    #[serde(default)]
+    pub site: Option<SiteConfig>,
 }
 
 /// A named collection of related schema definitions.
@@ -314,18 +319,13 @@ mod tests {
 [catalog]
 
 [target.local]
-type = "dir"
 dir = "../catalog-generated"
 base-url = "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
 
 [target.local.site]
 description = "A test catalog"
+ga-tracking-id = "G-TEST123"
 github.cname = "catalog.example.com"
-
-[target.pages]
-type = "github-pages"
-base-url = "https://catalog.lintel.tools/"
-cname = "catalog.lintel.tools"
 
 [groups.claude-code]
 name = "Claude Code"
@@ -355,34 +355,18 @@ match = ["**.github**"]
         let config = load_config(toml).expect("parse");
 
         // Targets
-        assert_eq!(config.target.len(), 2);
-        match &config.target["local"] {
-            TargetConfig::Dir {
-                dir,
-                base_url,
-                site,
-            } => {
-                assert_eq!(dir, "../catalog-generated");
-                assert_eq!(
-                    base_url,
-                    "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
-                );
-                let site = site.as_ref().expect("site should be present");
-                assert_eq!(site.description.as_deref(), Some("A test catalog"));
-                let gh = site.github.as_ref().expect("github should be present");
-                assert_eq!(gh.cname.as_deref(), Some("catalog.example.com"));
-            }
-            TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
-        }
-        match &config.target["pages"] {
-            TargetConfig::GitHubPages {
-                base_url, cname, ..
-            } => {
-                assert_eq!(base_url, "https://catalog.lintel.tools/");
-                assert_eq!(cname.as_deref(), Some("catalog.lintel.tools"));
-            }
-            TargetConfig::Dir { .. } => panic!("expected GitHubPages target"),
-        }
+        assert_eq!(config.target.len(), 1);
+        let local = &config.target["local"];
+        assert_eq!(local.dir, "../catalog-generated");
+        assert_eq!(
+            local.base_url,
+            "https://raw.githubusercontent.com/lintel-rs/catalog/master/"
+        );
+        let site = local.site.as_ref().expect("site should be present");
+        assert_eq!(site.description.as_deref(), Some("A test catalog"));
+        assert_eq!(site.ga_tracking_id.as_deref(), Some("G-TEST123"));
+        let gh = site.github.as_ref().expect("github should be present");
+        assert_eq!(gh.cname.as_deref(), Some("catalog.example.com"));
 
         // Groups
         assert_eq!(config.groups.len(), 3);
@@ -419,17 +403,11 @@ match = ["**.github**"]
 [catalog]
 
 [target.local]
-type = "dir"
 dir = "out"
 base_url = "https://example.com/"
 "#;
         let config = load_config(toml).expect("snake_case base_url should be accepted");
-        match &config.target["local"] {
-            TargetConfig::Dir { base_url, .. } => {
-                assert_eq!(base_url, "https://example.com/");
-            }
-            TargetConfig::GitHubPages { .. } => panic!("expected Dir target"),
-        }
+        assert_eq!(config.target["local"].base_url, "https://example.com/");
     }
 
     #[test]
@@ -494,20 +472,37 @@ unknown_field = 'bad'
     }
 
     #[test]
-    fn github_pages_target_without_cname() {
+    fn target_with_github_pages_site_config() {
         let toml = r#"
 [catalog]
 
 [target.pages]
-type = "github-pages"
+dir = "docs"
 base-url = "https://example.github.io/catalog/"
+
+[target.pages.site]
+github.cname = "catalog.example.com"
 "#;
         let config = load_config(toml).expect("parse");
-        match &config.target["pages"] {
-            TargetConfig::GitHubPages { cname, .. } => {
-                assert!(cname.is_none());
-            }
-            TargetConfig::Dir { .. } => panic!("expected GitHubPages target"),
-        }
+        let pages = &config.target["pages"];
+        let gh = pages
+            .site
+            .as_ref()
+            .and_then(|s| s.github.as_ref())
+            .expect("github config should be present");
+        assert_eq!(gh.cname.as_deref(), Some("catalog.example.com"));
+    }
+
+    #[test]
+    fn target_without_site_config() {
+        let toml = r#"
+[catalog]
+
+[target.local]
+dir = "out"
+base-url = "https://example.com/"
+"#;
+        let config = load_config(toml).expect("parse");
+        assert!(config.target["local"].site.is_none());
     }
 }

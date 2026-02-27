@@ -353,12 +353,14 @@ mod tests {
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: Path::new("lintel-catalog.toml"),
+            config_dir: dir.path(),
             catalog: &catalog,
             groups_meta: &groups_meta,
             base_url: "https://example.com/",
             source_count: 0,
             processed: &processed,
             site_description: None,
+            ga_tracking_id: None,
         };
 
         generate_site(&ctx).await?;

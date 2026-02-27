@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CATALOG_SCHEMAS_DIR="${REPO_ROOT}/../catalog/schemas/lintel"
+
+cargo run -p lintel-config-schema-generator -- "$CATALOG_SCHEMAS_DIR"

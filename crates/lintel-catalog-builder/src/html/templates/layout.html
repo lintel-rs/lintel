@@ -27,7 +27,22 @@
       content="{% block og_url %}{{ site.base_url }}{% endblock %}"
     />
     <link rel="stylesheet" href="{{ site.base_path }}style.css" />
-    {% block jsonld %}{% endblock %}
+    {% if site.ga_tracking_id %}
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id={{ site.ga_tracking_id }}"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "{{ site.ga_tracking_id }}");
+    </script>
+    {% endif %} {% block jsonld %}{% endblock %}
   </head>
   <body>
     <header class="site-header">
