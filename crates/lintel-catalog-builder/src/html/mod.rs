@@ -359,6 +359,7 @@ mod tests {
             source_count: 0,
             processed: &processed,
             site_description: None,
+            ga_tracking_id: None,
         };
 
         generate_site(&ctx).await?;
