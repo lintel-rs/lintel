@@ -1,6 +1,6 @@
 [package]
 name = "glob-matcher"
-version = "0.0.1"
+version = "0.1.0"
 authors.workspace = true
 categories = ["no-std"]
 edition.workspace = true
