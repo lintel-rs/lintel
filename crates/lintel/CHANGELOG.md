@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14](https://github.com/lintel-rs/lintel/compare/v0.0.13...v0.0.14) - 2026-02-27
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.0.13](https://github.com/lintel-rs/lintel/compare/v0.0.12...v0.0.13) - 2026-02-26
 
 ### Other
