@@ -153,21 +153,24 @@ pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>
     (title, description)
 }
 
-/// Extract the `fileMatch` array from a JSON Schema value.
+/// Extract `fileMatch` and `parsers` from a JSON Schema value.
 ///
-/// Checks `x-lintel.fileMatch` first (our own metadata), then falls back
-/// to a root-level `fileMatch` array (used by some upstream schemas).
-/// Returns an empty `Vec` if neither is present.
-pub(super) fn extract_file_match(value: &serde_json::Value) -> Vec<String> {
-    // Prefer x-lintel.fileMatch (our structured metadata)
+/// Checks `x-lintel` first (our own metadata) for both fields, then falls
+/// back to a root-level `fileMatch` array (used by some upstream schemas).
+/// Returns `(file_match, parsers)` — parsers will be empty if not found
+/// in `x-lintel`.
+pub(super) fn extract_lintel_meta(
+    value: &serde_json::Value,
+) -> (Vec<String>, Vec<schema_catalog::FileFormat>) {
+    // Prefer x-lintel metadata (our structured metadata)
     if let Some(extra) = crate::download::parse_lintel_extra(value)
         && !extra.file_match.is_empty()
     {
-        return extra.file_match;
+        return (extra.file_match, extra.parsers);
     }
 
-    // Fall back to root-level fileMatch (upstream schemas)
-    value
+    // Fall back to root-level fileMatch (upstream schemas); no parsers available
+    let file_match = value
         .get("fileMatch")
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -176,7 +179,8 @@ pub(super) fn extract_file_match(value: &serde_json::Value) -> Vec<String> {
                 .map(String::from)
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    (file_match, Vec::new())
 }
 
 /// Convert a key like `"github"` to title case (`"Github"`).

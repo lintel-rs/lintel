@@ -14,7 +14,7 @@ use crate::refs::{RefRewriteContext, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::{OrganizeEntry, SourceConfig};
 
 use super::util::{
-    extract_file_match, prefetch_versions, process_fetched_versions, resolve_latest_id, slugify,
+    extract_lintel_meta, prefetch_versions, process_fetched_versions, resolve_latest_id, slugify,
 };
 
 /// Per-target processing context passed to source-level functions.
@@ -247,11 +247,11 @@ async fn process_one_source_schema(
                 &schema_base_url,
             );
 
-            // Extract fileMatch from the schema if the catalog didn't provide any
-            let file_match = if info.file_match.is_empty() {
-                extract_file_match(&value)
+            // Extract fileMatch + parsers from the schema if the catalog didn't provide any
+            let (file_match, parsers) = if info.file_match.is_empty() {
+                extract_lintel_meta(&value)
             } else {
-                info.file_match.clone()
+                (info.file_match.clone(), Vec::new())
             };
 
             let shared_dir = entry_dir.join("_shared");
@@ -266,6 +266,7 @@ async fn process_one_source_schema(
                 processed: ctx.processed,
                 lintel_source: None,
                 file_match: file_match.clone(),
+                parsers,
             };
 
             debug!(schema = %info.name, "processing schema refs");
