@@ -170,7 +170,7 @@ jobs:
       - name: Detect release
         id: detect-release
         if: github.event_name == 'push'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           result-encoding: string
           script: |
