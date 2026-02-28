@@ -26,8 +26,8 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.extract-lintel-tag.outputs.tag }}
-      version: ${{ steps.extract-lintel-tag.outputs.version }}
+      tag: ${{ steps.extract-lintel-tag.outputs.tag }} # lintel CLI release tag (vX.Y.Z)
+      version: ${{ steps.extract-lintel-tag.outputs.version }} # lintel CLI version (X.Y.Z)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
