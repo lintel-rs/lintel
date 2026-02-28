@@ -1,12 +1,14 @@
 mod json;
 mod json5;
 mod jsonc;
+pub mod jsonl;
 mod markdown;
 mod toml_parser;
 mod yaml;
 
 use std::path::Path;
 
+use schema_catalog::FileFormat;
 use serde_json::Value;
 
 use crate::diagnostics::ParseDiagnostic;
@@ -14,11 +16,10 @@ use crate::diagnostics::ParseDiagnostic;
 pub use self::json::JsonParser;
 pub use self::json5::Json5Parser;
 pub use self::jsonc::JsoncParser;
+pub use self::jsonl::JsonlParser;
 pub use self::markdown::MarkdownParser;
 pub use self::toml_parser::TomlParser;
 pub use self::yaml::YamlParser;
-
-pub use schema_catalog::FileFormat;
 
 /// Parse file content into a `serde_json::Value`.
 ///
@@ -64,6 +65,7 @@ pub fn detect_format(path: &Path) -> Option<FileFormat> {
     match path.extension().and_then(|e| e.to_str()) {
         Some("yaml" | "yml") => Some(FileFormat::Yaml),
         Some("json5") => Some(FileFormat::Json5),
+        Some("jsonl" | "ndjson") => Some(FileFormat::Jsonl),
         Some("json" | "jsonc") => Some(FileFormat::Jsonc),
         Some("toml") => Some(FileFormat::Toml),
         Some("md" | "mdx") => Some(FileFormat::Markdown),
@@ -75,6 +77,7 @@ pub fn detect_format(path: &Path) -> Option<FileFormat> {
 pub fn parser_for(format: FileFormat) -> Box<dyn Parser> {
     match format {
         FileFormat::Json => Box::new(JsonParser),
+        FileFormat::Jsonl => Box::new(JsonlParser),
         FileFormat::Json5 => Box::new(Json5Parser),
         FileFormat::Jsonc => Box::new(JsoncParser),
         FileFormat::Toml => Box::new(TomlParser),
@@ -268,6 +271,22 @@ mod tests {
     #[test]
     fn detect_format_toml() {
         assert_eq!(detect_format(Path::new("foo.toml")), Some(FileFormat::Toml));
+    }
+
+    #[test]
+    fn detect_format_jsonl() {
+        assert_eq!(
+            detect_format(Path::new("foo.jsonl")),
+            Some(FileFormat::Jsonl)
+        );
+    }
+
+    #[test]
+    fn detect_format_ndjson() {
+        assert_eq!(
+            detect_format(Path::new("foo.ndjson")),
+            Some(FileFormat::Jsonl)
+        );
     }
 
     #[test]

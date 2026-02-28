@@ -8,6 +8,7 @@ use lintel_cli_common::CLIGlobalOptions;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validate::parsers;
 use lintel_validate::validate;
+use schema_catalog::FileFormat;
 
 #[derive(Debug, Clone, Bpaf)]
 pub enum CacheCommand {
@@ -391,7 +392,7 @@ fn print_cache_file_info(path: &Path, indent: &str) {
 
 /// Parse the file content, trying the detected format first, then all parsers as fallback.
 fn parse_file(
-    detected_format: Option<parsers::FileFormat>,
+    detected_format: Option<FileFormat>,
     content: &str,
     path_str: &str,
 ) -> (Box<dyn parsers::Parser>, serde_json::Value) {

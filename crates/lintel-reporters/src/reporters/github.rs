@@ -37,6 +37,7 @@ impl Reporter for GithubReporter {
                 LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
                     offset_to_line_col(src.inner(), span.offset())
                 }
+                LintError::SchemaMismatch { line_number, .. } => (*line_number, 1),
                 LintError::Io { .. }
                 | LintError::SchemaFetch { .. }
                 | LintError::SchemaCompile { .. } => (1, 1),
@@ -50,6 +51,7 @@ impl Reporter for GithubReporter {
                 LintError::Validation { .. } => "validation error",
                 LintError::Io { .. } => "io error",
                 LintError::SchemaFetch { .. } => "schema fetch error",
+                LintError::SchemaMismatch { .. } => "schema mismatch",
                 LintError::SchemaCompile { .. } => "schema compile error",
             };
 

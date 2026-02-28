@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::catalog;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
-use schema_catalog::CompiledCatalog;
+use schema_catalog::{CompiledCatalog, FileFormat};
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
@@ -170,9 +170,9 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 ///
 /// JSONC is tried first (superset of JSON, handles comments), then YAML and
 /// TOML which cover the most common config formats, followed by the rest.
-pub fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
-    use parsers::FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
-    const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
+pub fn try_parse_all(content: &str, file_name: &str) -> Option<(FileFormat, Value)> {
+    use FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
+    const FORMATS: [FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
 
     for fmt in FORMATS {
         let parser = parsers::parser_for(fmt);
@@ -194,7 +194,25 @@ enum FileResult {
     Skip,
 }
 
+/// Resolve a relative local schema path against a base directory.
+///
+/// Remote URIs (http/https) are returned unchanged. For local paths, joins with
+/// the provided base directory (file's parent for inline `$schema`, config dir
+/// for config/catalog sources).
+fn resolve_local_schema_path(schema_uri: &str, base_dir: Option<&Path>) -> String {
+    if schema_uri.starts_with("http://") || schema_uri.starts_with("https://") {
+        return schema_uri.to_string();
+    }
+    if let Some(dir) = base_dir {
+        dir.join(schema_uri).to_string_lossy().to_string()
+    } else {
+        schema_uri.to_string()
+    }
+}
+
 /// Process a single file's already-read content: parse and resolve schema URI.
+///
+/// Returns a `Vec` because JSONL files expand to one result per non-empty line.
 #[allow(clippy::too_many_arguments)]
 fn process_one_file(
     path: &Path,
@@ -202,7 +220,7 @@ fn process_one_file(
     config: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
-) -> FileResult {
+) -> Vec<FileResult> {
     let path_str = path.display().to_string();
     let file_name = path
         .file_name()
@@ -211,6 +229,19 @@ fn process_one_file(
 
     let detected_format = parsers::detect_format(path);
 
+    // JSONL files get special per-line handling.
+    if detected_format == Some(FileFormat::Jsonl) {
+        return process_jsonl_file(
+            path,
+            &path_str,
+            file_name,
+            &content,
+            config,
+            config_dir,
+            compiled_catalogs,
+        );
+    }
+
     // For unrecognized extensions, only proceed if a catalog or config mapping matches.
     if detected_format.is_none() {
         let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
@@ -218,7 +249,7 @@ fn process_one_file(
                 .iter()
                 .any(|cat| cat.find_schema(&path_str, file_name).is_some());
         if !has_match {
-            return FileResult::Skip;
+            return vec![FileResult::Skip];
         }
     }
 
@@ -227,26 +258,30 @@ fn process_one_file(
         let parser = parsers::parser_for(fmt);
         match parser.parse(&content, &path_str) {
             Ok(val) => (parser, val),
-            Err(parse_err) => return FileResult::Error(parse_err.into()),
+            Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
         }
     } else {
         match try_parse_all(&content, &path_str) {
             Some((fmt, val)) => (parsers::parser_for(fmt), val),
-            None => return FileResult::Skip,
+            None => return vec![FileResult::Skip],
         }
     };
 
     // Skip markdown files with no frontmatter
     if instance.is_null() {
-        return FileResult::Skip;
+        return vec![FileResult::Skip];
     }
 
     // Schema resolution priority:
     // 1. Inline $schema / YAML modeline (always wins)
     // 2. Custom schema mappings from lintel.toml [schemas]
     // 3. Catalog matching (custom registries > Lintel catalog > SchemaStore)
-    let schema_uri = parser
-        .extract_schema_uri(&content, &instance)
+    //
+    // Track whether the URI came from inline $schema (resolve relative to file)
+    // or from config/catalog (resolve relative to config dir).
+    let inline_uri = parser.extract_schema_uri(&content, &instance);
+    let from_inline = inline_uri.is_some();
+    let schema_uri = inline_uri
         .or_else(|| {
             config
                 .find_schema_mapping(&path_str, file_name)
@@ -260,7 +295,7 @@ fn process_one_file(
         });
 
     let Some(schema_uri) = schema_uri else {
-        return FileResult::Skip;
+        return vec![FileResult::Skip];
     };
 
     // Keep original URI for override matching (before rewrites)
@@ -270,17 +305,19 @@ fn process_one_file(
     let schema_uri = lintel_config::apply_rewrites(&schema_uri, &config.rewrite);
     let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
 
-    // Resolve relative local paths against the file's parent directory.
-    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
-    let schema_uri = if is_remote {
-        schema_uri
-    } else {
-        path.parent()
-            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
-            .unwrap_or(schema_uri)
-    };
+    // Resolve relative local paths:
+    // - Inline $schema: relative to the file's parent directory
+    // - Config/catalog: relative to the config directory (where lintel.toml lives)
+    let schema_uri = resolve_local_schema_path(
+        &schema_uri,
+        if from_inline {
+            path.parent()
+        } else {
+            Some(config_dir)
+        },
+    );
 
-    FileResult::Parsed {
+    vec![FileResult::Parsed {
         schema_uri,
         parsed: ParsedFile {
             path: path_str,
@@ -288,6 +325,102 @@ fn process_one_file(
             instance,
             original_schema_uri,
         },
+    }]
+}
+
+/// Process a JSONL file: parse each line independently and resolve schemas.
+///
+/// Each non-empty line becomes its own [`FileResult::Parsed`]. Schema resolution
+/// priority per line: inline `$schema` on the line > config mapping > catalog.
+///
+/// Also checks schema consistency across lines — mismatches are emitted as
+/// [`FileResult::Error`] so they flow through the normal Reporter pipeline.
+#[allow(clippy::too_many_arguments)]
+fn process_jsonl_file(
+    path: &Path,
+    path_str: &str,
+    file_name: &str,
+    content: &str,
+    config: &lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: &[CompiledCatalog],
+) -> Vec<FileResult> {
+    let lines = match parsers::jsonl::parse_jsonl(content, path_str) {
+        Ok(lines) => lines,
+        Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+    };
+
+    if lines.is_empty() {
+        return vec![FileResult::Skip];
+    }
+
+    let mut results = Vec::with_capacity(lines.len());
+
+    // Check schema consistency before consuming lines.
+    if let Some(mismatches) = parsers::jsonl::check_schema_consistency(&lines) {
+        for m in mismatches {
+            results.push(FileResult::Error(LintError::SchemaMismatch {
+                path: path_str.to_string(),
+                line_number: m.line_number,
+                message: format!("expected consistent $schema but found {}", m.schema_uri),
+            }));
+        }
+    }
+
+    for line in lines {
+        // Schema resolution: inline $schema on line > config > catalog
+        // Track source to resolve relative paths correctly.
+        let inline_uri = parsers::jsonl::extract_schema_uri(&line.value);
+        let from_inline = inline_uri.is_some();
+        let schema_uri = inline_uri
+            .or_else(|| {
+                config
+                    .find_schema_mapping(path_str, file_name)
+                    .map(str::to_string)
+            })
+            .or_else(|| {
+                compiled_catalogs
+                    .iter()
+                    .find_map(|cat| cat.find_schema(path_str, file_name))
+                    .map(str::to_string)
+            });
+
+        let Some(schema_uri) = schema_uri else {
+            continue;
+        };
+
+        let original_schema_uri = schema_uri.clone();
+
+        let schema_uri = lintel_config::apply_rewrites(&schema_uri, &config.rewrite);
+        let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
+
+        // Inline $schema: relative to file's parent. Config/catalog: relative to config dir.
+        let schema_uri = resolve_local_schema_path(
+            &schema_uri,
+            if from_inline {
+                path.parent()
+            } else {
+                Some(config_dir)
+            },
+        );
+
+        let line_path = format!("{path_str}:{}", line.line_number);
+
+        results.push(FileResult::Parsed {
+            schema_uri,
+            parsed: ParsedFile {
+                path: line_path,
+                content: line.raw,
+                instance: line.value,
+                original_schema_uri,
+            },
+        });
+    }
+
+    if results.is_empty() {
+        vec![FileResult::Skip]
+    } else {
+        results
     }
 }
 
@@ -337,13 +470,15 @@ async fn parse_and_group_files(
                 continue;
             }
         };
-        let result = process_one_file(&path, content, config, config_dir, compiled_catalogs);
-        match result {
-            FileResult::Parsed { schema_uri, parsed } => {
-                schema_groups.entry(schema_uri).or_default().push(parsed);
+        let results = process_one_file(&path, content, config, config_dir, compiled_catalogs);
+        for result in results {
+            match result {
+                FileResult::Parsed { schema_uri, parsed } => {
+                    schema_groups.entry(schema_uri).or_default().push(parsed);
+                }
+                FileResult::Error(e) => errors.push(e),
+                FileResult::Skip => {}
             }
-            FileResult::Error(e) => errors.push(e),
-            FileResult::Skip => {}
         }
     }
 

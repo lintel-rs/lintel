@@ -1,8 +1,7 @@
 ---
 source: crates/lintel/tests/e2e.rs
-assertion_line: 49
 expression: text
 ---
-error: key must be a string at line 3 column 3
-Checked 1 files in [TIME]. 1 error(s) found.
+error: ./package.json: Expected string for object property on line 3 column 3
+Checked 0 files in [TIME]. 1 error(s) found.
 exit code: 1
