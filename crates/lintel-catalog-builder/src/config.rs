@@ -130,6 +130,14 @@ pub struct SiteConfig {
     #[schemars(example = &"G-XXXXXXXXXX")]
     #[serde(default)]
     pub ga_tracking_id: Option<String>,
+    /// Full URL to an Open Graph image for social sharing previews.
+    ///
+    /// When set, `<meta property="og:image">` and Twitter Card tags are added
+    /// to every page. The image should be hosted at a publicly accessible URL
+    /// (e.g. in the `static/` directory of your catalog repo).
+    #[schemars(example = &"https://catalog.example.com/og-image.png")]
+    #[serde(default)]
+    pub og_image: Option<String>,
     /// GitHub Pages hosting options.
     #[serde(default)]
     pub github: Option<GitHubPagesConfig>,

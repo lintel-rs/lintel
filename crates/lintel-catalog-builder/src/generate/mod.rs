@@ -228,6 +228,7 @@ async fn generate_for_target(
         .site
         .as_ref()
         .and_then(|s| s.ga_tracking_id.as_deref());
+    let og_image = target.site.as_ref().and_then(|s| s.og_image.as_deref());
     let output_ctx = OutputContext {
         output_dir,
         config_path: ctx.config_path,
@@ -239,6 +240,7 @@ async fn generate_for_target(
         processed: ctx.processed,
         site_description,
         ga_tracking_id,
+        og_image,
     };
 
     targets::finalize(target, &output_ctx).await?;

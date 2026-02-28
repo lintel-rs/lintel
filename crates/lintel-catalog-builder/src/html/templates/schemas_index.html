@@ -1,0 +1,62 @@
+{% extends "layout.html" %} {% block title %}All JSON Schemas - {{ site.title
+}}{% endblock %} {% block description %}{{ seo_description }}{% endblock %} {%
+block canonical %}{{ site.base_url }}schemas/{% endblock %} {% block og_title
+%}All JSON Schemas - {{ site.title }}{% endblock %} {% block og_description %}{{
+seo_description }}{% endblock %} {% block og_url %}{{ site.base_url }}schemas/{%
+endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        "name": "All JSON Schemas",
+        "description": "{{ seo_description }}",
+        "url": "{{ site.base_url }}schemas/",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "{{ site.title }}",
+          "url": "{{ site.base_url }}"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "{{ site.base_url }}"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "All Schemas"
+          }
+        ]
+      }
+    ]
+  }
+</script>
+{% endblock %} {% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{{ site.base_path }}">Home</a>
+  <span class="breadcrumb-sep" aria-hidden="true">/</span>
+  <span class="breadcrumb-current" aria-current="page">All Schemas</span>
+</nav>
+
+<article>
+  <header class="page-header">
+    <h1>All Schemas</h1>
+    <p class="page-description">
+      Complete listing of all {{ schemas|length|commafy }} JSON Schemas in the
+      catalog.
+    </p>
+  </header>
+
+  <div class="schema-list">
+    {% for schema in schemas %} {% include "components/schema_card.html" %} {%
+    endfor %}
+  </div>
+</article>
+{% endblock %}
