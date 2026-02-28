@@ -12,16 +12,15 @@ on:
       - .github/workflows/build.yml
   workflow_call:
 
-permissions:
-  contents: read
-
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify-nix:
-    name: Verify Nix (${{ matrix.os }})
+  # Build all Nix packages, run flake checks, and verify the CLI runs.
+  # Gates the static binary and Docker image builds below.
+  build-nix:
+    name: Nix (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -40,9 +39,11 @@ jobs:
       - run: nix flake check
       - run: nix run . -- version
 
-  build-nix:
+  # Build statically-linked musl binaries via Nix for Linux x86_64 and aarch64.
+  # Uploaded as release artifacts.
+  build-static:
     name: Build (${{ matrix.binary }}-${{ matrix.target }})
-    needs: verify-nix
+    needs: build-nix
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -82,8 +83,9 @@ jobs:
           name: ${{ matrix.binary }}-${{ matrix.target }}
           path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
 
-  # Build GNU/Linux binaries in Docker using Debian 11 (bullseye) to support
-  # older versions of glibc. Inspired by Biome's build setup:
+  # Build dynamic binaries with Cargo for GNU/Linux, macOS, and Windows.
+  # GNU/Linux builds use Debian 11 (bullseye) containers for older glibc
+  # compatibility. Inspired by Biome's build setup:
   # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
   build-cargo:
     name: Build (${{ matrix.target }})
@@ -145,3 +147,38 @@ jobs:
         with:
           name: lintel-${{ matrix.target }}
           path: lintel-${{ matrix.target }}.*
+
+  # Build Docker images via Nix for amd64 and arm64. The image tarballs are
+  # uploaded as artifacts so release.yml can push them without rebuilding.
+  build-docker:
+    name: Docker (${{ matrix.arch }})
+    needs: build-nix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lintel
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build image with Nix
+        run: nix build .#docker
+
+      - name: Smoke test
+        run: |
+          docker load < result
+          docker run --rm ghcr.io/lintel-rs/lintel:latest version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-${{ matrix.arch }}
+          path: result
