@@ -90,6 +90,9 @@ pub struct LintelExtra {
     /// Parsers that can handle files matched by this schema.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parsers: Vec<FileFormat>,
+    /// Brief description used to populate the catalog entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog_description: Option<String>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde requires fn(&bool) -> bool
@@ -135,6 +138,12 @@ pub fn inject_lintel_extra(value: &mut serde_json::Value, mut extra: LintelExtra
         warn!(source = %extra.source, "schema is invalid after transformation");
     }
     extra.invalid = invalid;
+    // Preserve catalogDescription from existing x-lintel if not already set.
+    if extra.catalog_description.is_none()
+        && let Some(existing) = parse_lintel_extra(value)
+    {
+        extra.catalog_description = existing.catalog_description;
+    }
     if let Some(obj) = value.as_object_mut() {
         obj.insert(
             "x-lintel".to_string(),

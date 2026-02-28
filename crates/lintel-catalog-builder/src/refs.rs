@@ -315,6 +315,7 @@ fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
                 invalid: false,
                 file_match: ctx.file_match.clone(),
                 parsers,
+                catalog_description: None,
             },
         );
     } else if let Some(ref source_url) = ctx.source_url {
@@ -327,6 +328,7 @@ fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
                 invalid: false,
                 file_match: ctx.file_match.clone(),
                 parsers,
+                catalog_description: None,
             },
         );
     }
@@ -568,6 +570,7 @@ async fn write_dep_schemas(
                     invalid: false,
                     file_match: Vec::new(),
                     parsers: Vec::new(),
+                    catalog_description: None,
                 },
             );
         }
