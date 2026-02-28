@@ -134,13 +134,14 @@ fn version_gt(a: &str, b: &str) -> bool {
     }
 }
 
-/// Extract the `title` and `description` from a JSON Schema string.
+/// Extract the `title`, `description`, and `x-lintel.catalogDescription` from a
+/// JSON Schema string.
 ///
-/// Returns `(title, description)` — either or both may be `None` if the schema
-/// doesn't contain the corresponding top-level property or isn't valid JSON.
-pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>) {
+/// Returns `(title, description, catalog_description)` — any may be `None` if
+/// the schema doesn't contain the corresponding property or isn't valid JSON.
+pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>, Option<String>) {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
-        return (None, None);
+        return (None, None, None);
     };
     let title = value
         .get("title")
@@ -150,7 +151,9 @@ pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>
         .get("description")
         .and_then(|v| v.as_str())
         .map(String::from);
-    (title, description)
+    let catalog_description =
+        crate::download::parse_lintel_extra(&value).and_then(|extra| extra.catalog_description);
+    (title, description, catalog_description)
 }
 
 /// Extract `fileMatch` and `parsers` from a JSON Schema value.

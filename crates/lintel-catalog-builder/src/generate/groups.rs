@@ -181,7 +181,7 @@ pub(super) async fn process_group_schema(
     let version_urls = process_fetched_versions(&mut ref_ctx, &entry_dir, version_results).await?;
 
     // Auto-populate name and description from the JSON Schema
-    let (schema_title, schema_desc) = extract_schema_meta(&schema_text);
+    let (schema_title, schema_desc, catalog_desc) = extract_schema_meta(&schema_text);
     let name = schema_def
         .name
         .clone()
@@ -190,8 +190,9 @@ pub(super) async fn process_group_schema(
     let description = schema_def
         .description
         .clone()
-        .or(schema_title)
+        .or(catalog_desc)
         .or_else(|| schema_desc.as_deref().map(first_line))
+        .or(schema_title)
         .unwrap_or_default();
 
     Ok(SchemaEntry {
