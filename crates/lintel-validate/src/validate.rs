@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::catalog;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
-use schema_catalog::CompiledCatalog;
+use schema_catalog::{CompiledCatalog, FileFormat};
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
@@ -170,9 +170,9 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 ///
 /// JSONC is tried first (superset of JSON, handles comments), then YAML and
 /// TOML which cover the most common config formats, followed by the rest.
-pub fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
-    use parsers::FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
-    const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
+pub fn try_parse_all(content: &str, file_name: &str) -> Option<(FileFormat, Value)> {
+    use FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
+    const FORMATS: [FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
 
     for fmt in FORMATS {
         let parser = parsers::parser_for(fmt);
@@ -230,7 +230,7 @@ fn process_one_file(
     let detected_format = parsers::detect_format(path);
 
     // JSONL files get special per-line handling.
-    if detected_format == Some(parsers::FileFormat::Jsonl) {
+    if detected_format == Some(FileFormat::Jsonl) {
         return process_jsonl_file(
             path,
             &path_str,

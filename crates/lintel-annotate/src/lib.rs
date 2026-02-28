@@ -10,7 +10,7 @@ use lintel_cli_common::CliCacheOptions;
 use lintel_schema_cache::SchemaCache;
 use lintel_validate::parsers;
 use lintel_validate::validate;
-use schema_catalog::CompiledCatalog;
+use schema_catalog::{CompiledCatalog, FileFormat};
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -87,7 +87,7 @@ fn process_file(
     };
 
     // JSONL files don't support inline annotations; use lintel.toml mappings instead.
-    if fmt == parsers::FileFormat::Jsonl {
+    if fmt == FileFormat::Jsonl {
         return FileOutcome::Skipped;
     }
 

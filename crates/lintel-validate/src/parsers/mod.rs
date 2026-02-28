@@ -8,6 +8,7 @@ mod yaml;
 
 use std::path::Path;
 
+use schema_catalog::FileFormat;
 use serde_json::Value;
 
 use crate::diagnostics::ParseDiagnostic;
@@ -19,8 +20,6 @@ pub use self::jsonl::JsonlParser;
 pub use self::markdown::MarkdownParser;
 pub use self::toml_parser::TomlParser;
 pub use self::yaml::YamlParser;
-
-pub use schema_catalog::FileFormat;
 
 /// Parse file content into a `serde_json::Value`.
 ///

@@ -11,7 +11,7 @@ use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 use lintel_schema_cache::SchemaCache;
 use lintel_validate::parsers;
 use lintel_validate::validate;
-use schema_catalog::SchemaMatch;
+use schema_catalog::{FileFormat, SchemaMatch};
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -551,7 +551,7 @@ async fn run_explain(
 ///
 /// Exits the process when the file cannot be parsed.
 fn parse_file(
-    detected_format: Option<parsers::FileFormat>,
+    detected_format: Option<FileFormat>,
     content: &str,
     path_str: &str,
 ) -> (Box<dyn parsers::Parser>, serde_json::Value) {
