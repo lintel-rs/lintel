@@ -4,7 +4,6 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
 use lintel_schema_cache::SchemaCache;
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, info, warn};
 
 use crate::download::ProcessedSchemas;
@@ -32,26 +31,6 @@ pub struct RefRewriteContext<'a> {
     /// When non-empty, used as-is; otherwise derived from `file_match` extensions.
     pub parsers: Vec<schema_catalog::FileFormat>,
 }
-
-/// Characters that must be percent-encoded in URI fragment components.
-///
-/// Per RFC 3986, fragments may contain: `pchar / "/" / "?"` where
-/// `pchar = unreserved / pct-encoded / sub-delims / ":" / "@"`.
-///
-/// This set encodes everything that is NOT allowed in a fragment.
-const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'<')
-    .add(b'>')
-    .add(b'[')
-    .add(b']')
-    .add(b'{')
-    .add(b'}')
-    .add(b'|')
-    .add(b'\\')
-    .add(b'^')
-    .add(b'"')
-    .add(b'`');
 
 /// Recursively scan a JSON value for `$ref` strings that are absolute HTTP(S) URLs.
 /// Returns the set of base URLs (fragments stripped).
@@ -218,52 +197,6 @@ pub fn rewrite_refs(value: &mut serde_json::Value, url_map: &HashMap<String, Str
     }
 }
 
-/// Percent-encode invalid characters in `$ref` URI references.
-///
-/// Many schemas in the wild use definition names with spaces, brackets, angle
-/// brackets, etc. that are not valid in URI references per RFC 3986. This
-/// function fixes them by percent-encoding the offending characters in the
-/// fragment portion of `$ref` values.
-pub fn fix_ref_uris(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(map) => {
-            if let Some(serde_json::Value::String(ref_str)) = map.get("$ref")
-                && let Some(new_ref) = encode_ref_fragment(ref_str)
-            {
-                map.insert("$ref".to_string(), serde_json::Value::String(new_ref));
-            }
-            for v in map.values_mut() {
-                fix_ref_uris(v);
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                fix_ref_uris(v);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Encode invalid characters in a `$ref` fragment. Returns `None` if no
-/// encoding is needed.
-fn encode_ref_fragment(ref_str: &str) -> Option<String> {
-    let (base, fragment) = ref_str.split_once('#')?;
-
-    // Encode each JSON Pointer segment individually, preserving `/` separators
-    let encoded_fragment: String = fragment
-        .split('/')
-        .map(|segment| utf8_percent_encode(segment, FRAGMENT_ENCODE_SET).to_string())
-        .collect::<Vec<_>>()
-        .join("/");
-
-    if encoded_fragment == fragment {
-        return None;
-    }
-
-    Some(format!("{base}#{encoded_fragment}"))
-}
-
 /// Resolve all relative `$ref` paths in a schema against a source URL.
 ///
 /// Returns a map from relative path → absolute URL for each successfully resolved
@@ -296,41 +229,14 @@ fn resolve_all_relative_refs(
     resolved
 }
 
-/// Inject `x-lintel` metadata into a schema value.
-///
-/// Uses `lintel_source` (pre-computed source + hash) if available, otherwise
-/// falls back to cache-based injection from `source_url`.
-fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
-    let parsers = if ctx.parsers.is_empty() {
-        crate::download::parsers_from_file_match(&ctx.file_match)
-    } else {
-        ctx.parsers.clone()
-    };
-    if let Some((source, hash)) = &ctx.lintel_source {
-        crate::download::inject_lintel_extra(
-            value,
-            crate::download::LintelExtra {
-                source: source.clone(),
-                source_sha256: hash.clone(),
-                invalid: false,
-                file_match: ctx.file_match.clone(),
-                parsers,
-                catalog_description: None,
-            },
-        );
-    } else if let Some(ref source_url) = ctx.source_url {
-        crate::download::inject_lintel_extra_from_cache(
-            value,
-            ctx.cache,
-            crate::download::LintelExtra {
-                source: source_url.clone(),
-                source_sha256: String::new(),
-                invalid: false,
-                file_match: ctx.file_match.clone(),
-                parsers,
-                catalog_description: None,
-            },
-        );
+/// Build a [`PostprocessContext`] from the shared [`RefRewriteContext`].
+fn postprocess_ctx<'a>(ctx: &RefRewriteContext<'a>) -> crate::postprocess::PostprocessContext<'a> {
+    crate::postprocess::PostprocessContext {
+        cache: ctx.cache,
+        source_url: ctx.source_url.clone(),
+        lintel_source: ctx.lintel_source.clone(),
+        file_match: ctx.file_match.clone(),
+        parsers: ctx.parsers.clone(),
     }
 }
 
@@ -381,9 +287,7 @@ pub async fn resolve_and_rewrite_value(
     let resolved_relative = resolve_all_relative_refs(value, ctx.source_url.as_deref());
 
     if external_refs.is_empty() && resolved_relative.is_empty() {
-        // No external refs — still fix invalid URI references
-        fix_ref_uris(value);
-        inject_lintel(value, ctx);
+        crate::postprocess::postprocess_schema(&postprocess_ctx(ctx), value);
         crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
         return Ok(());
     }
@@ -416,8 +320,7 @@ pub async fn resolve_and_rewrite_value(
 
     // Rewrite refs in the root schema and write it
     rewrite_refs(value, &url_map);
-    fix_ref_uris(value);
-    inject_lintel(value, ctx);
+    crate::postprocess::postprocess_schema(&postprocess_ctx(ctx), value);
     crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
 
     // Process and write each dependency
@@ -559,21 +462,16 @@ async fn write_dep_schemas(
         }
         jsonschema_migrate::migrate_to_2020_12(&mut dep_value);
         rewrite_refs(&mut dep_value, &dep_url_map);
-        fix_ref_uris(&mut dep_value);
-        if let Some(ref source_url) = source_url {
-            crate::download::inject_lintel_extra_from_cache(
-                &mut dep_value,
-                ctx.cache,
-                crate::download::LintelExtra {
-                    source: source_url.clone(),
-                    source_sha256: String::new(),
-                    invalid: false,
-                    file_match: Vec::new(),
-                    parsers: Vec::new(),
-                    catalog_description: None,
-                },
-            );
-        }
+        crate::postprocess::postprocess_schema(
+            &crate::postprocess::PostprocessContext {
+                cache: ctx.cache,
+                source_url,
+                lintel_source: None,
+                file_match: Vec::new(),
+                parsers: Vec::new(),
+            },
+            &mut dep_value,
+        );
         crate::download::write_schema_json(&dep_value, &dep_dest, ctx.processed).await?;
     }
 
@@ -679,79 +577,6 @@ mod tests {
         assert_eq!(schema["properties"]["bar"]["$ref"], "_shared/other.json");
         // Local refs are untouched
         assert_eq!(schema["properties"]["local"]["$ref"], "#/definitions/Local");
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_spaces() {
-        assert_eq!(
-            encode_ref_fragment("#/$defs/Parameter Node"),
-            Some("#/$defs/Parameter%20Node".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_brackets() {
-        assert_eq!(
-            encode_ref_fragment("#/$defs/ConfigTranslated[string]"),
-            Some("#/$defs/ConfigTranslated%5Bstring%5D".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_angle_brackets() {
-        assert_eq!(
-            encode_ref_fragment("#/definitions/Dictionary<any>"),
-            Some("#/definitions/Dictionary%3Cany%3E".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_pipe() {
-        assert_eq!(
-            encode_ref_fragment("#/definitions/k8s.io|api|core|v1.TaintEffect"),
-            Some("#/definitions/k8s.io%7Capi%7Ccore%7Cv1.TaintEffect".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_valid_unchanged() {
-        // Already-valid refs should return None (no change needed)
-        assert_eq!(encode_ref_fragment("#/definitions/Foo"), None);
-        assert_eq!(encode_ref_fragment("#/$defs/bar-baz"), None);
-    }
-
-    #[test]
-    fn encode_ref_no_fragment() {
-        assert_eq!(encode_ref_fragment("https://example.com/foo.json"), None);
-    }
-
-    #[test]
-    fn fix_ref_uris_encodes_spaces_in_schema() {
-        let mut schema = serde_json::json!({
-            "oneOf": [
-                { "$ref": "#/$defs/Parameter Node" },
-                { "$ref": "#/$defs/Event Node" }
-            ],
-            "properties": {
-                "ok": { "$ref": "#/definitions/Valid" }
-            }
-        });
-        fix_ref_uris(&mut schema);
-        assert_eq!(schema["oneOf"][0]["$ref"], "#/$defs/Parameter%20Node");
-        assert_eq!(schema["oneOf"][1]["$ref"], "#/$defs/Event%20Node");
-        assert_eq!(schema["properties"]["ok"]["$ref"], "#/definitions/Valid");
-    }
-
-    #[test]
-    fn fix_ref_uris_encodes_complex_rust_types() {
-        let mut schema = serde_json::json!({
-            "$ref": "#/definitions/core::option::Option<vector::template::Template>"
-        });
-        fix_ref_uris(&mut schema);
-        assert_eq!(
-            schema["$ref"],
-            "#/definitions/core::option::Option%3Cvector::template::Template%3E"
-        );
     }
 
     // --- find_relative_refs ---
