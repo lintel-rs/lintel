@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-format-v0.0.2...lintel-format-v0.0.3) - 2026-02-28
+
+### Other
+
+- Add shell file/directory completion to CLI arguments
+- Extract generic TOML sort engine from catalog-specific code
+
 ## [0.0.2](https://github.com/lintel-rs/lintel/compare/lintel-format-v0.0.1...lintel-format-v0.0.2) - 2026-02-26
 
 ### Other

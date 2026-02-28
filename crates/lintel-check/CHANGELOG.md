@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.15](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.14...lintel-check-v0.0.15) - 2026-02-28
+
+### Other
+
+- update Cargo.toml dependencies
+
 ## [0.0.14](https://github.com/lintel-rs/lintel/compare/lintel-check-v0.0.13...lintel-check-v0.0.14) - 2026-02-27
 
 ### Other

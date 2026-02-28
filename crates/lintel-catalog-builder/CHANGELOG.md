@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.11...lintel-catalog-builder-v0.0.12) - 2026-02-28
+
+### Other
+
+- Improve SEO for catalog site and add /schemas/ index page
+- Add catalogDescription property to x-lintel metadata
+- Merge pull request #113 from lintel-rs/lintel-file-match
+- catalog description fallbacks
+- Merge remote-tracking branch 'origin/master' into lintel-file-match
+- Extract parsers from x-lintel alongside fileMatch
+- Extract fileMatch from schemas with x-lintel priority
+
 ## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.10...lintel-catalog-builder-v0.0.11) - 2026-02-27
 
 ### Other

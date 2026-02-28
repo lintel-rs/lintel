@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.10...lintel-identify-v0.0.11) - 2026-02-28
+
+### Other
+
+- Remove FileFormat re-export from parsers, import from schema_catalog directly
+- Merge origin/master into jsonl-support
+- Merge pull request #116 from lintel-rs/autocomplete-fix
+- Add shell file/directory completion to CLI arguments
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.9...lintel-identify-v0.0.10) - 2026-02-27
 
 ### Other

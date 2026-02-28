@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.4...npm-release-binaries-v0.0.5) - 2026-02-28
+
+### Other
+
+- update Cargo.toml dependencies
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.3...npm-release-binaries-v0.0.4) - 2026-02-26
 
 ### Other

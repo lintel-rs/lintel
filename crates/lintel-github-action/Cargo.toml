@@ -1,6 +1,6 @@
 [package]
 name = "lintel-github-action"
-version = "0.0.12"
+version = "0.0.13"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -16,9 +16,9 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bpaf.workspace = true
-lintel-check = { version = "0.0.14", path = "../lintel-check" }
-lintel-format = { version = "0.0.2", path = "../lintel-format" }
-lintel-validate = { version = "0.0.7", path = "../lintel-validate" }
+lintel-check = { version = "0.0.15", path = "../lintel-check" }
+lintel-format = { version = "0.0.3", path = "../lintel-format" }
+lintel-validate = { version = "0.0.8", path = "../lintel-validate" }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

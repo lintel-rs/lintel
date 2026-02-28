@@ -289,7 +289,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cargo-furnish"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1573,7 +1573,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-benchmark"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1672,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-cli-common"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "bpaf",
  "humantime",
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bpaf",
  "lintel-catalog-builder",
@@ -1705,7 +1705,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1723,7 +1723,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-format"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1748,7 +1748,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1762,7 +1762,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1780,7 +1780,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "ansi-term-styles",
  "lintel-validate",
@@ -1806,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "npm-release-binaries"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "bpaf",
  "flate2",
@@ -2804,7 +2804,7 @@ dependencies = [
 
 [[package]]
 name = "schema-catalog"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "glob-set",
  "schemars",
