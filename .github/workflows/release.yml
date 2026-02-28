@@ -26,8 +26,8 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.extract-tag.outputs.tag }}
-      version: ${{ steps.extract-tag.outputs.version }}
+      tag: ${{ steps.extract-lintel-tag.outputs.tag }}
+      version: ${{ steps.extract-lintel-tag.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -50,7 +50,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Extract lintel release tag
-        id: extract-tag
+        id: extract-lintel-tag
         if: steps.release-plz.outputs.releases_created == 'true'
         env:
           RELEASES: ${{ steps.release-plz.outputs.releases }}
