@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.12...lintel-catalog-builder-v0.0.13) - 2026-02-28
+
+### Other
+
+- Merge pull request #120 from lintel-rs/link-transform
+
 ## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.11...lintel-catalog-builder-v0.0.12) - 2026-02-28
 
 ### Other

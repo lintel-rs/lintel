@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bpaf",
  "lintel-catalog-builder",
