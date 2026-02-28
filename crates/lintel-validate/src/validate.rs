@@ -22,6 +22,29 @@ use crate::registry;
 /// Linux (1024) while still providing good throughput.
 const FD_CONCURRENCY_LIMIT: usize = 128;
 
+/// Composite retriever that dispatches `file://` URIs to local disk reads
+/// and everything else to the HTTP-backed [`SchemaCache`].
+struct LocalRetriever {
+    http: SchemaCache,
+}
+
+#[async_trait::async_trait]
+impl jsonschema::AsyncRetrieve for LocalRetriever {
+    async fn retrieve(
+        &self,
+        uri: &jsonschema::Uri<String>,
+    ) -> Result<Value, Box<dyn core::error::Error + Send + Sync>> {
+        let s = uri.as_str();
+        if let Some(raw) = s.strip_prefix("file://") {
+            let path = percent_encoding::percent_decode_str(raw).decode_utf8()?;
+            let content = tokio::fs::read_to_string(path.as_ref()).await?;
+            Ok(serde_json::from_str(&content)?)
+        } else {
+            self.http.retrieve(uri).await
+        }
+    }
+}
+
 pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
     pub globs: Vec<String>,
@@ -961,15 +984,26 @@ pub async fn run_with(
         // Compile the schema for cache misses.
         let t = std::time::Instant::now();
         let validator = {
-            // Set base URI for remote schemas so relative $ref values
-            // (e.g. "./rule.json") resolve correctly.
+            // Set base URI so relative $ref values (e.g. "./rule.json") resolve
+            // correctly. Remote schemas use the HTTP URI directly; local schemas
+            // get a file:// URI derived from the canonical absolute path.
             let is_remote_schema =
                 schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+            let local_retriever = LocalRetriever {
+                http: retriever.clone(),
+            };
             let opts = jsonschema::async_options()
-                .with_retriever(retriever.clone())
+                .with_retriever(local_retriever)
                 .should_validate_formats(validate_formats);
-            let opts = if is_remote_schema {
-                opts.with_base_uri(schema_uri.clone())
+            let base_uri = if is_remote_schema {
+                Some(schema_uri.clone())
+            } else {
+                std::fs::canonicalize(schema_uri)
+                    .ok()
+                    .map(|p| format!("file://{}", p.display()))
+            };
+            let opts = if let Some(uri) = base_uri {
+                opts.with_base_uri(uri)
             } else {
                 opts
             };
@@ -2049,5 +2083,58 @@ validate_formats = false
     fn clean_preserves_required_property() {
         let msg = "\"name\" is a required property";
         assert_eq!(clean_error_message(msg.to_string()), msg);
+    }
+
+    #[tokio::test]
+    async fn relative_ref_in_local_schema() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+
+        // Referenced schema with a "name" string definition
+        std::fs::write(tmp.path().join("defs.json"), r#"{"type": "string"}"#)?;
+
+        // Main schema that uses a relative $ref
+        let schema_path = tmp.path().join("schema.json");
+        std::fs::write(
+            &schema_path,
+            r#"{
+                "type": "object",
+                "properties": {
+                    "name": { "$ref": "./defs.json" }
+                },
+                "required": ["name"]
+            }"#,
+        )?;
+
+        // Valid data file pointing to the local schema
+        let schema_uri = schema_path.to_string_lossy();
+        std::fs::write(
+            tmp.path().join("data.json"),
+            format!(r#"{{ "$schema": "{schema_uri}", "name": "hello" }}"#),
+        )?;
+
+        // Invalid data file (name should be a string per defs.json)
+        std::fs::write(
+            tmp.path().join("bad.json"),
+            format!(r#"{{ "$schema": "{schema_uri}", "name": 42 }}"#),
+        )?;
+
+        let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
+        let args = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            force_schema_fetch: true,
+            force_validation: true,
+            no_catalog: true,
+            config_dir: None,
+            schema_cache_ttl: None,
+        };
+        let result = run_with(&args, Some(mock(&[])), |_| {}).await?;
+
+        // The invalid file should produce an error (name is 42, not a string)
+        assert!(result.has_errors());
+        // Exactly one file should have errors (bad.json), the other (data.json) should pass
+        assert_eq!(result.errors.len(), 1);
+        Ok(())
     }
 }

@@ -15,6 +15,8 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait = "0.1.89"
+percent-encoding = "2.3.2"
 bpaf.workspace = true
 glob.workspace = true
 glob-match.workspace = true
