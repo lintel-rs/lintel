@@ -23,6 +23,8 @@ pub struct SiteInfo {
     pub version: String,
     /// Google Analytics measurement ID, if configured.
     pub ga_tracking_id: Option<String>,
+    /// Open Graph image URL for social sharing previews.
+    pub og_image: Option<String>,
 }
 
 /// Context for the home page template.
@@ -61,6 +63,14 @@ pub struct SchemaCard {
     pub description: String,
     pub url: String,
     pub file_match: Vec<String>,
+}
+
+/// Context for the `/schemas/` index page listing all schemas.
+#[derive(Serialize)]
+pub struct SchemasIndexPage {
+    pub site: SiteInfo,
+    pub schemas: Vec<SchemaCard>,
+    pub seo_description: String,
 }
 
 /// Context for a schema detail page.
@@ -128,6 +138,8 @@ pub struct Breadcrumb {
 pub struct SitemapContext {
     pub base_url: String,
     pub urls: Vec<String>,
+    /// ISO 8601 date string for `<lastmod>` (e.g. `2025-01-15`).
+    pub lastmod: String,
 }
 
 /// Search index entry with compact keys.
@@ -170,6 +182,7 @@ pub fn build_site_info(ctx: &OutputContext<'_>) -> SiteInfo {
         group_count: ctx.catalog.groups.len(),
         version: String::from(env!("CARGO_PKG_VERSION")),
         ga_tracking_id: ctx.ga_tracking_id.map(String::from),
+        og_image: ctx.og_image.map(String::from),
     }
 }
 
@@ -210,6 +223,25 @@ pub fn build_home_context(ctx: &OutputContext<'_>, site: &SiteInfo) -> HomeConte
     }
 }
 
+/// Build the `/schemas/` index page context with all schemas.
+pub fn build_schemas_index(ctx: &OutputContext<'_>, site: &SiteInfo) -> SchemasIndexPage {
+    let schemas: Vec<SchemaCard> = ctx
+        .catalog
+        .schemas
+        .iter()
+        .filter_map(|s| schema_card(s, &site.base_url))
+        .collect();
+    let seo_description = alloc::format!(
+        "Browse all {} JSON Schemas for editor auto-completion, validation, and documentation.",
+        format_number(schemas.len()),
+    );
+    SchemasIndexPage {
+        site: site.clone(),
+        schemas,
+        seo_description,
+    }
+}
+
 /// Build a group page context.
 ///
 /// `meta` is `(key, name, description)` from the groups metadata.
@@ -230,11 +262,9 @@ pub fn build_group_page(
     let count = schemas.len();
     let schema_word = if count == 1 { "schema" } else { "schemas" };
     let seo_description = alloc::format!(
-        "{} {schema_word} for {}. {} Lintel is a catalog of {} JSON Schemas for project configuration.",
-        format_number(count),
-        name,
-        ensure_sentence_end(description),
-        format_number(site.schema_count),
+        "{name} JSON Schemas — {count} {schema_word} for editor auto-completion and validation. {desc}",
+        count = format_number(count),
+        desc = ensure_sentence_end(description),
     );
 
     GroupPage {
@@ -297,12 +327,7 @@ pub fn build_schema_page(
     });
 
     let description_html = md_to_html(&entry.description);
-    let seo_description = alloc::format!(
-        "Complete reference for {}. {} Lintel is a catalog of {} JSON Schemas for project configuration.",
-        entry.name,
-        ensure_sentence_end(&entry.description),
-        format_number(site.schema_count),
-    );
+    let seo_description = build_schema_seo_description(entry, group_name);
 
     SchemaPage {
         site: site.clone(),
@@ -443,6 +468,34 @@ fn group_schema_count(groups: &[CatalogGroup], group_name: &str) -> usize {
         .iter()
         .find(|g| g.name == group_name)
         .map_or(0, |g| g.schemas.len())
+}
+
+/// Build a descriptive SEO meta description for a schema page.
+///
+/// Includes group name, schema description, and file match patterns to
+/// maximise the useful information within Google's ~155-char limit.
+fn build_schema_seo_description(entry: &SchemaEntry, group_name: Option<&str>) -> String {
+    let mut parts = Vec::new();
+
+    // Lead with "GroupName SchemaName JSON Schema" or "SchemaName JSON Schema"
+    if let Some(gn) = group_name {
+        parts.push(alloc::format!("{} {} JSON Schema.", gn, entry.name));
+    } else {
+        parts.push(alloc::format!("{} JSON Schema.", entry.name));
+    }
+
+    // Add description if non-empty
+    if !entry.description.is_empty() {
+        parts.push(ensure_sentence_end(&entry.description));
+    }
+
+    // Add file match patterns
+    if !entry.file_match.is_empty() {
+        let patterns: Vec<&str> = entry.file_match.iter().map(String::as_str).collect();
+        parts.push(alloc::format!("Matches: {}.", patterns.join(", ")));
+    }
+
+    parts.join(" ")
 }
 
 /// Ensure a string ends with a sentence-ending punctuation mark.

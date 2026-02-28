@@ -26,17 +26,21 @@
 {% endblock %} {% block content %}
 <div class="home-header">
   <h1>{{ site.title }}</h1>
-  <span class="home-stats"
-    >{{ site.schema_count|commafy }} {{ site.schema_count|pluralize("schema",
-    "schemas") }} &middot; {{ site.group_count|commafy }} {{
-    site.group_count|pluralize("group", "groups") }}</span
-  >
+  <p class="home-intro">
+    Browse {{ site.schema_count|commafy }} JSON Schemas for editor
+    auto-completion, validation, and documentation. Schemas are organized into
+    {{ site.group_count|commafy }} {{ site.group_count|pluralize("group",
+    "groups") }} covering popular tools and frameworks.
+  </p>
 </div>
 
 {% if groups %}
-<section class="card-grid">
-  {% for group in groups %} {% include "components/group_card.html" %} {% endfor
-  %}
+<section>
+  <h2 class="section-heading">Schema Groups</h2>
+  <div class="card-grid">
+    {% for group in groups %} {% include "components/group_card.html" %} {%
+    endfor %}
+  </div>
 </section>
 {% endif %} {% if unassigned %}
 <section class="unassigned-section">
