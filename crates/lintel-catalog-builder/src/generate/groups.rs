@@ -12,7 +12,9 @@ use crate::refs::{RefRewriteContext, resolve_and_rewrite, resolve_and_rewrite_va
 use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
-use super::util::{prefetch_versions, process_fetched_versions, resolve_latest_id};
+use super::util::{
+    extract_lintel_meta, first_line, prefetch_versions, process_fetched_versions, resolve_latest_id,
+};
 
 /// Context for processing a single group schema entry.
 pub(super) struct GroupSchemaContext<'a> {
@@ -112,6 +114,18 @@ pub(super) async fn process_group_schema(
         None
     };
 
+    // Resolve file_match + parsers: config takes priority, then fall back to schema metadata.
+    // For local schemas we can extract from the text now; for remote schemas we
+    // update ref_ctx after fetching.
+    let mut file_match = schema_def.file_match.clone();
+    let mut parsers = Vec::new();
+    if file_match.is_empty()
+        && let Some((_, _, text)) = &lintel_source
+        && let Ok(val) = serde_json::from_str::<serde_json::Value>(text)
+    {
+        (file_match, parsers) = extract_lintel_meta(&val);
+    }
+
     let mut ref_ctx = RefRewriteContext {
         cache: ctx.generate.cache,
         shared_dir: &shared_dir,
@@ -122,7 +136,8 @@ pub(super) async fn process_group_schema(
         lintel_source: lintel_source
             .as_ref()
             .map(|(id, hash, _)| (id.clone(), hash.clone())),
-        file_match: schema_def.file_match.clone(),
+        file_match: file_match.clone(),
+        parsers,
     };
 
     // Process schema result
@@ -130,6 +145,16 @@ pub(super) async fn process_group_schema(
         let (mut value, status) =
             schema_fetch_result.expect("fetch result must exist when URL is present")?;
         info!(url = %url, status = %status, "downloaded group schema");
+
+        // Extract fileMatch + parsers from fetched schema if config didn't provide any
+        if ref_ctx.file_match.is_empty() {
+            let (schema_file_match, schema_parsers) = extract_lintel_meta(&value);
+            if !schema_file_match.is_empty() {
+                file_match = schema_file_match;
+                ref_ctx.file_match.clone_from(&file_match);
+                ref_ctx.parsers = schema_parsers;
+            }
+        }
 
         // Use version URL as $id if latest content matches a version
         let schema_base_url = format!("{}/schemas/{}/{key}", ctx.trimmed_base, ctx.group_key,);
@@ -154,20 +179,28 @@ pub(super) async fn process_group_schema(
 
     // Auto-populate name and description from the postprocessed schema
     let processed_value = ctx.processed.get_by_path(&dest_path).unwrap_or_default();
+    let schema_title = processed_value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let schema_desc = processed_value
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let catalog_desc = crate::download::parse_lintel_extra(&processed_value)
+        .and_then(|extra| extra.catalog_description);
+
     let name = schema_def
         .name
         .clone()
-        .or_else(|| processed_value.get("title")?.as_str().map(String::from))
+        .or_else(|| schema_title.clone())
         .unwrap_or_else(|| key.to_string());
     let description = schema_def
         .description
         .clone()
-        .or_else(|| {
-            processed_value
-                .get("description")?
-                .as_str()
-                .map(String::from)
-        })
+        .or(catalog_desc)
+        .or_else(|| schema_desc.as_deref().map(first_line))
+        .or(schema_title)
         .unwrap_or_default();
 
     Ok(SchemaEntry {
@@ -175,7 +208,7 @@ pub(super) async fn process_group_schema(
         description,
         url: schema_url,
         source_url: schema_def.url.clone(),
-        file_match: schema_def.file_match.clone(),
+        file_match,
         versions: version_urls,
     })
 }

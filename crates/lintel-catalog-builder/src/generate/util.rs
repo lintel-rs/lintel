@@ -134,6 +134,41 @@ fn version_gt(a: &str, b: &str) -> bool {
     }
 }
 
+/// Extract `fileMatch` and `parsers` from a JSON Schema value.
+///
+/// Checks `x-lintel` first (our own metadata) for both fields, then falls
+/// back to a root-level `fileMatch` array (used by some upstream schemas).
+/// Returns `(file_match, parsers)` — parsers will be empty if not found
+/// in `x-lintel`.
+pub(super) fn extract_lintel_meta(
+    value: &serde_json::Value,
+) -> (Vec<String>, Vec<schema_catalog::FileFormat>) {
+    // Prefer x-lintel metadata (our structured metadata)
+    if let Some(extra) = crate::download::parse_lintel_extra(value)
+        && !extra.file_match.is_empty()
+    {
+        return (extra.file_match, extra.parsers);
+    }
+
+    // Fall back to root-level fileMatch (upstream schemas); no parsers available
+    let file_match = value
+        .get("fileMatch")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    (file_match, Vec::new())
+}
+
+/// Extract the first line of a string (up to the first newline).
+pub(super) fn first_line(s: &str) -> String {
+    s.lines().next().unwrap_or(s).to_string()
+}
+
 /// Convert a key like `"github"` to title case (`"Github"`).
 pub(super) fn title_case(s: &str) -> String {
     let mut chars = s.chars();
