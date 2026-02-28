@@ -1,6 +1,6 @@
 # Build workflow.
-# Runs on push to master. Auto-detects release tags on the current commit
-# and uploads binary assets to the GitHub release when found.
+# Runs on push to master. Artifacts are picked up by release.yml
+# (via workflow_run) for publishing when a release commit is detected.
 
 name: Build
 
@@ -13,7 +13,7 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -82,22 +82,6 @@ jobs:
           name: ${{ matrix.binary }}-${{ matrix.target }}
           path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
 
-      # Upload to the GitHub release as soon as this build finishes, so
-      # release binaries become available incrementally rather than waiting
-      # for every matrix entry to complete.
-      - name: Upload to release if the release was already created
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG=$(gh api "repos/${{ github.repository }}/tags" --paginate -q \
-            ".[] | select(.commit.sha == \"${{ github.sha }}\") | .name" | \
-            grep -m1 -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
-          if [[ -n "$TAG" ]] && gh release view "$TAG" --repo "${{ github.repository }}" &>/dev/null; then
-            gh release upload "$TAG" ${{ matrix.binary }}-${{ matrix.target }}.tar.gz --repo "${{ github.repository }}" --clobber
-            echo "Uploaded to release $TAG"
-          fi
-
   # Build GNU/Linux binaries in Docker using Debian 11 (bullseye) to support
   # older versions of glibc. Inspired by Biome's build setup:
   # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
@@ -161,42 +145,3 @@ jobs:
         with:
           name: lintel-${{ matrix.target }}
           path: lintel-${{ matrix.target }}.*
-
-      # Upload to the GitHub release as soon as this build finishes, so
-      # release binaries become available incrementally rather than waiting
-      # for every matrix entry to complete.
-      # Uses actions/github-script for detection because some matrix entries
-      # run in Docker containers where the gh CLI is not available.
-      - name: Detect release
-        id: detect-release
-        if: github.event_name == 'push'
-        uses: actions/github-script@v8
-        with:
-          result-encoding: string
-          script: |
-            const tags = await github.paginate(github.rest.repos.listTags, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100,
-            });
-            const tag = tags.find(t =>
-              t.commit.sha === context.sha && /^v\d+\.\d+\.\d+$/.test(t.name)
-            );
-            if (!tag) return '';
-            try {
-              await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag: tag.name,
-              });
-              return tag.name;
-            } catch {
-              return '';
-            }
-
-      - name: Upload to release if the release was already created
-        if: steps.detect-release.outputs.result
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.detect-release.outputs.result }}
-          files: lintel-${{ matrix.target }}.*

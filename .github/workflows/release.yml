@@ -1,0 +1,88 @@
+# Release workflow.
+# Runs after the Build workflow succeeds on master. Publishes crates to
+# crates.io via release-plz, uploads binary artifacts to the GitHub release,
+# then triggers release-lintel.yml for npm/docker/action publishing.
+
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release-plz:
+    name: Release-plz release
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.extract-tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
+      - name: Run release-plz
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Extract lintel release tag
+        id: extract-tag
+        if: steps.release-plz.outputs.releases_created == 'true'
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^v\\d")) | .tag')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  upload-and-publish:
+    name: Upload assets & trigger publish
+    needs: release-plz
+    if: needs.release-plz.outputs.tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          pattern: lintel-*
+          merge-multiple: true
+
+      - name: Upload artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-plz.outputs.tag }}
+        run: |
+          echo "Uploading artifacts for $TAG:"
+          ls -la artifacts/
+          for file in artifacts/lintel-*; do
+            echo "  Uploading $file"
+            gh release upload "$TAG" "$file" --repo "${{ github.repository }}" --clobber
+          done
+
+      - name: Trigger release-lintel workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.release-plz.outputs.tag }}"
+          VERSION="${TAG#v}"
+          gh workflow run release-lintel.yml --ref "$TAG" -f version="$VERSION"
