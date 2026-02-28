@@ -55,7 +55,7 @@ jobs:
         env:
           RELEASES: ${{ steps.release-plz.outputs.releases }}
         run: |
-          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.tag | test("^v\\d")) | .tag')
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.package_name == "lintel") | .tag')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
