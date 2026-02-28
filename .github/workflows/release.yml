@@ -21,7 +21,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  release-plz:
+  release-plz-release:
     name: Release-plz release
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -61,8 +61,8 @@ jobs:
 
   upload-assets:
     name: Upload release assets
-    needs: release-plz
-    if: needs.release-plz.outputs.tag
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.tag
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -77,7 +77,7 @@ jobs:
       - name: Upload artifacts to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-plz.outputs.tag }}
+          TAG: ${{ needs.release-plz-release.outputs.tag }}
         run: |
           echo "Uploading artifacts for $TAG:"
           ls -la artifacts/
@@ -88,19 +88,19 @@ jobs:
 
   npm:
     name: Publish to NPM
-    needs: [release-plz, upload-assets]
-    if: needs.release-plz.outputs.tag
+    needs: [release-plz-release, upload-assets]
+    if: needs.release-plz-release.outputs.tag
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.release-plz.outputs.tag }}
+          ref: ${{ needs.release-plz-release.outputs.tag }}
       - name: Download release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p artifacts
-          gh release download "${{ needs.release-plz.outputs.tag }}" --dir artifacts --pattern 'lintel-*'
+          gh release download "${{ needs.release-plz-release.outputs.tag }}" --dir artifacts --pattern 'lintel-*'
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -113,15 +113,15 @@ jobs:
         run: |
           cargo run --release --package npm-release-binaries -- release \
             --package lintel \
-            --release-version ${{ needs.release-plz.outputs.version }} \
+            --release-version ${{ needs.release-plz-release.outputs.version }} \
             --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   docker-build:
     name: Docker (${{ matrix.arch }})
-    needs: release-plz
-    if: needs.release-plz.outputs.tag
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.tag
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -133,7 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.release-plz.outputs.tag }}
+          ref: ${{ needs.release-plz-release.outputs.tag }}
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v16
         with:
@@ -154,15 +154,15 @@ jobs:
 
       - name: Tag and push
         run: |
-          ARCH_TAG=${{ needs.release-plz.outputs.version }}-${{ matrix.arch }}
+          ARCH_TAG=${{ needs.release-plz-release.outputs.version }}-${{ matrix.arch }}
 
           docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
 
   docker-manifest:
     name: Docker Manifest
-    needs: [release-plz, docker-build]
-    if: needs.release-plz.outputs.tag
+    needs: [release-plz-release, docker-build]
+    if: needs.release-plz-release.outputs.tag
     runs-on: ubuntu-latest
     steps:
       - uses: docker/login-action@v3
@@ -173,7 +173,7 @@ jobs:
 
       - name: Create and push manifests
         run: |
-          VERSION=${{ needs.release-plz.outputs.version }}
+          VERSION=${{ needs.release-plz-release.outputs.version }}
           MAJOR_MINOR=${VERSION%.*}
           IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
