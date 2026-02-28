@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.13...lintel-catalog-builder-v0.0.14) - 2026-02-28
+
+### Other
+
+- Merge pull request #123 from lintel-rs/fix-links
+- Add clickable type links and definition examples to catalog site
+
 ## [0.0.13](https://github.com/lintel-rs/lintel/compare/lintel-catalog-builder-v0.0.12...lintel-catalog-builder-v0.0.13) - 2026-02-28
 
 ### Other
