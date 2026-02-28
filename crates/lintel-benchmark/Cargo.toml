@@ -1,6 +1,6 @@
 [package]
 name = "lintel-benchmark"
-version = "0.0.7"
+version = "0.0.8"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true

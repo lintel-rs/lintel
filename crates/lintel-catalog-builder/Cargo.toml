@@ -1,6 +1,6 @@
 [package]
 name = "lintel-catalog-builder"
-version = "0.0.11"
+version = "0.0.12"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -25,7 +25,7 @@ minijinja = { version = "2.16.0", features = ["builtins"] }
 percent-encoding = "2.3.2"
 pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
 reqwest.workspace = true
-schema-catalog = { version = "0.0.7", path = "../schema-catalog" }
+schema-catalog = { version = "0.0.8", path = "../schema-catalog" }
 schemars.workspace = true
 semver = "1.0.27"
 serde = { workspace = true, features = ["derive"] }

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.7...lintel-validate-v0.0.8) - 2026-02-28
+
+### Other
+
+- Support relative $ref resolution in local schemas
+- Remove FileFormat re-export from parsers, import from schema_catalog directly
+- Merge origin/master into jsonl-support
+- Merge pull request #116 from lintel-rs/autocomplete-fix
+- Add shell file/directory completion to CLI arguments
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.6...lintel-validate-v0.0.7) - 2026-02-27
 
 ### Other

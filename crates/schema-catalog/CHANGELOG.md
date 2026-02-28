@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.7...schema-catalog-v0.0.8) - 2026-02-28
+
+### Other
+
+- Merge origin/master into jsonl-support
+
 ## [0.0.7](https://github.com/lintel-rs/lintel/compare/schema-catalog-v0.0.6...schema-catalog-v0.0.7) - 2026-02-27
 
 ### Other

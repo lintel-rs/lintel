@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-cli-common-v0.0.5...lintel-cli-common-v0.0.6) - 2026-02-28
+
+### Other
+
+- Add shell file/directory completion to CLI arguments
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-cli-common-v0.0.4...lintel-cli-common-v0.0.5) - 2026-02-26
 
 ### Other
