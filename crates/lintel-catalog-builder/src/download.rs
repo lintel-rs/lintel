@@ -48,6 +48,16 @@ impl ProcessedSchemas {
             .cloned()
     }
 
+    /// Look up a schema by its absolute path, stripping the output directory
+    /// prefix to derive the key.
+    pub fn get_by_path(&self, path: &Path) -> Option<serde_json::Value> {
+        let relative = path
+            .strip_prefix(&self.output_dir)
+            .unwrap_or(path)
+            .to_string_lossy();
+        self.get(&relative)
+    }
+
     /// Total count of all stored schemas.
     pub fn len(&self) -> usize {
         self.inner
@@ -191,46 +201,19 @@ pub fn parsers_from_file_match(patterns: &[String]) -> Vec<FileFormat> {
     parsers.into_iter().collect()
 }
 
-/// Preferred key order for the root object of a JSON Schema.
-const SCHEMA_KEY_ORDER: &[&str] = &[
-    "$schema",
-    "$id",
-    "title",
-    "description",
-    "x-lintel",
-    "type",
-    "properties",
-];
-
-/// Reorder the top-level keys of a JSON Schema object so that well-known
-/// fields appear first (in [`SCHEMA_KEY_ORDER`]), followed by the rest in
-/// their original order.
-fn reorder_schema_keys(value: &mut serde_json::Value) {
-    let Some(obj) = value.as_object_mut() else {
-        return;
-    };
-    let mut ordered = serde_json::Map::with_capacity(obj.len());
-    for &key in SCHEMA_KEY_ORDER {
-        if let Some(v) = obj.remove(key) {
-            ordered.insert(key.to_string(), v);
-        }
-    }
-    // Append remaining keys in their original order
-    ordered.extend(core::mem::take(obj));
-    *obj = ordered;
-}
-
 /// Write a `serde_json::Value` to disk as pretty-printed JSON.
 /// Enforces [`MAX_SCHEMA_SIZE`]. Creates parent directories.
-/// Reorders top-level keys so well-known schema fields come first.
-/// Also inserts the final value into `processed` for in-memory lookups.
+/// Runs all post-processing transformations (key reordering, description
+/// link conversion, etc.) before writing.
+/// Inserts the final value into `processed` for in-memory lookups and
+/// returns the postprocessed value.
 pub async fn write_schema_json(
     value: &serde_json::Value,
     path: &Path,
     processed: &ProcessedSchemas,
-) -> Result<()> {
+) -> Result<serde_json::Value> {
     let mut value = value.clone();
-    reorder_schema_keys(&mut value);
+    crate::postprocess::postprocess_schema(&mut value);
 
     processed.insert(path, &value);
 
@@ -248,5 +231,5 @@ pub async fn write_schema_json(
         tokio::fs::create_dir_all(parent).await?;
     }
     tokio::fs::write(path, format!("{text}\n")).await?;
-    Ok(())
+    Ok(value)
 }

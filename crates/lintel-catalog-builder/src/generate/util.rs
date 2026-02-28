@@ -134,25 +134,6 @@ fn version_gt(a: &str, b: &str) -> bool {
     }
 }
 
-/// Extract the `title` and `description` from a JSON Schema string.
-///
-/// Returns `(title, description)` — either or both may be `None` if the schema
-/// doesn't contain the corresponding top-level property or isn't valid JSON.
-pub(super) fn extract_schema_meta(text: &str) -> (Option<String>, Option<String>) {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
-        return (None, None);
-    };
-    let title = value
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let description = value
-        .get("description")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    (title, description)
-}
-
 /// Convert a key like `"github"` to title case (`"Github"`).
 pub(super) fn title_case(s: &str) -> String {
     let mut chars = s.chars();

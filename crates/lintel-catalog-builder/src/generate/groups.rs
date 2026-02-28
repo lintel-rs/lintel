@@ -12,9 +12,7 @@ use crate::refs::{RefRewriteContext, resolve_and_rewrite, resolve_and_rewrite_va
 use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
-use super::util::{
-    extract_schema_meta, prefetch_versions, process_fetched_versions, resolve_latest_id,
-};
+use super::util::{prefetch_versions, process_fetched_versions, resolve_latest_id};
 
 /// Context for processing a single group schema entry.
 pub(super) struct GroupSchemaContext<'a> {
@@ -128,7 +126,7 @@ pub(super) async fn process_group_schema(
     };
 
     // Process schema result
-    let schema_text = if let Some(url) = &schema_def.url {
+    if let Some(url) = &schema_def.url {
         let (mut value, status) =
             schema_fetch_result.expect("fetch result must exist when URL is present")?;
         info!(url = %url, status = %status, "downloaded group schema");
@@ -144,29 +142,32 @@ pub(super) async fn process_group_schema(
         );
 
         resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &resolved_url).await?;
-        serde_json::to_string_pretty(&value)?
     } else {
         let (_, _, text) = lintel_source
             .as_ref()
             .expect("computed above for local schemas");
         resolve_and_rewrite(&mut ref_ctx, text, &dest_path, &schema_url).await?;
-        text.clone()
-    };
+    }
 
     // Process pre-fetched versions
     let version_urls = process_fetched_versions(&mut ref_ctx, &entry_dir, version_results).await?;
 
-    // Auto-populate name and description from the JSON Schema
-    let (schema_title, schema_desc) = extract_schema_meta(&schema_text);
+    // Auto-populate name and description from the postprocessed schema
+    let processed_value = ctx.processed.get_by_path(&dest_path).unwrap_or_default();
     let name = schema_def
         .name
         .clone()
-        .or(schema_title)
+        .or_else(|| processed_value.get("title")?.as_str().map(String::from))
         .unwrap_or_else(|| key.to_string());
     let description = schema_def
         .description
         .clone()
-        .or(schema_desc)
+        .or_else(|| {
+            processed_value
+                .get("description")?
+                .as_str()
+                .map(String::from)
+        })
         .unwrap_or_default();
 
     Ok(SchemaEntry {
