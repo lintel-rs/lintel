@@ -13,8 +13,7 @@ use lintel_catalog_builder::config::SchemaDefinition;
 
 use super::GenerateContext;
 use super::util::{
-    extract_lintel_meta, extract_schema_meta, first_line, prefetch_versions,
-    process_fetched_versions, resolve_latest_id,
+    extract_lintel_meta, first_line, prefetch_versions, process_fetched_versions, resolve_latest_id,
 };
 
 /// Context for processing a single group schema entry.
@@ -26,6 +25,10 @@ pub(super) struct GroupSchemaContext<'a> {
     pub(super) processed: &'a ProcessedSchemas,
     /// Base URL for local schema sources (e.g. raw GitHub URL).
     pub(super) source_base_url: Option<&'a str>,
+    /// Maps relative `$ref` paths (e.g. `./hooks.json`) to canonical catalog
+    /// URLs for other schemas in the same group. Built from the group's schema
+    /// keys so cross-references resolve without downloading.
+    pub(super) sibling_urls: HashMap<String, String>,
 }
 
 /// Build the `x-lintel` source identifier for a local schema.
@@ -127,13 +130,35 @@ pub(super) async fn process_group_schema(
         (file_match, parsers) = extract_lintel_meta(&val);
     }
 
+    // For relative $ref resolution, use the configured URL for remote schemas
+    // or the source_base_url for local schemas (so sibling refs like ./hooks.json
+    // resolve against the remote source).
+    let source_url = schema_def.url.clone().or_else(|| {
+        ctx.source_base_url.map(|base| {
+            format!(
+                "{}/schemas/{}/{key}.json",
+                base.trim_end_matches('/'),
+                ctx.group_key,
+            )
+        })
+    });
+
+    // For local schemas, resolve relative refs against the local filesystem
+    let local_dir = if schema_def.url.is_none() {
+        Some(ctx.generate.config_dir.join("schemas").join(ctx.group_key))
+    } else {
+        None
+    };
+
     let mut ref_ctx = RefRewriteContext {
         cache: ctx.generate.cache,
         shared_dir: &shared_dir,
         base_url_for_shared: &shared_base_url,
         already_downloaded: &mut already_downloaded,
-        source_url: schema_def.url.clone(),
+        source_url,
         processed: ctx.processed,
+        local_source_dir: local_dir.as_deref(),
+        sibling_urls: ctx.sibling_urls.clone(),
         lintel_source: lintel_source
             .as_ref()
             .map(|(id, hash, _)| (id.clone(), hash.clone())),
@@ -142,7 +167,7 @@ pub(super) async fn process_group_schema(
     };
 
     // Process schema result
-    let schema_text = if let Some(url) = &schema_def.url {
+    if let Some(url) = &schema_def.url {
         let (mut value, status) =
             schema_fetch_result.expect("fetch result must exist when URL is present")?;
         info!(url = %url, status = %status, "downloaded group schema");
@@ -168,20 +193,29 @@ pub(super) async fn process_group_schema(
         );
 
         resolve_and_rewrite_value(&mut ref_ctx, &mut value, &dest_path, &resolved_url).await?;
-        serde_json::to_string_pretty(&value)?
     } else {
         let (_, _, text) = lintel_source
             .as_ref()
             .expect("computed above for local schemas");
         resolve_and_rewrite(&mut ref_ctx, text, &dest_path, &schema_url).await?;
-        text.clone()
-    };
+    }
 
     // Process pre-fetched versions
     let version_urls = process_fetched_versions(&mut ref_ctx, &entry_dir, version_results).await?;
 
-    // Auto-populate name and description from the JSON Schema
-    let (schema_title, schema_desc, catalog_desc) = extract_schema_meta(&schema_text);
+    // Auto-populate name and description from the postprocessed schema
+    let processed_value = ctx.processed.get_by_path(&dest_path).unwrap_or_default();
+    let schema_title = processed_value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let schema_desc = processed_value
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let catalog_desc = crate::download::parse_lintel_extra(&processed_value)
+        .and_then(|extra| extra.catalog_description);
+
     let name = schema_def
         .name
         .clone()
