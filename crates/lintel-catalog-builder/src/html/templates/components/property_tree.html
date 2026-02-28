@@ -11,8 +11,17 @@
 >
   <div class="property-header">
     <span class="property-name">{{ property.name }}</span>
-    {% if property.ref_anchor and property.schema_type %}
-    <a href="#{{ property.ref_anchor }}" class="type-badge type-badge-link"
+    {% if property.schema_type_parts %}
+    <span class="type-badge"
+      >{% for part in property.schema_type_parts %}{% if part.href %}<a
+        href="{{ part.href }}"
+        class="type-badge-link"
+        >{{ part.text }}</a
+      >{% else %}{{ part.text }}{% endif %}{% if not loop.last %} | {% endif
+      %}{% endfor %}</span
+    >
+    {% elif property.ref_anchor and property.schema_type %}
+    <a href="{{ property.ref_anchor }}" class="type-badge type-badge-link"
       >{{ property.schema_type }}</a
     >
     {% elif property.schema_type %}
@@ -57,7 +66,11 @@
     <span class="meta-label">{{ comp.label }}:</span>
     {% for variant in comp.variants %}
     <span class="inline-variant"
-      >{{ variant.label }}{% if variant.schema_type %}
+      >{% if variant.ref_href %}<a
+        href="{{ variant.ref_href }}"
+        class="type-badge-link"
+        >{{ variant.label }}</a
+      >{% else %}{{ variant.label }}{% endif %}{% if variant.schema_type %}
       <span class="type-badge">{{ variant.schema_type }}</span>{% endif %}</span
     >{% if not loop.last %}, {% endif %} {% endfor %}
   </div>

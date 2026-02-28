@@ -16,6 +16,7 @@ use context::{
     build_schemas_index, build_site_info, build_version_page, schema_group_map, schema_page_url,
     version_page_url,
 };
+use schema_doc::SiteContext;
 
 /// Generate all HTML pages, assets, search index, and sitemap.
 pub async fn generate_site(ctx: &OutputContext<'_>) -> Result<()> {
@@ -111,6 +112,10 @@ fn render_schema_pages(
     sitemap_urls: &mut Vec<String>,
 ) -> Result<()> {
     let group_map = schema_group_map(ctx.catalog, ctx.groups_meta);
+    let site_ctx = SiteContext {
+        base_url: &site.base_url,
+        base_path: &site.base_path,
+    };
 
     for entry in &ctx.catalog.schemas {
         let Some(page_url) = schema_page_url(&entry.url, &site.base_url) else {
@@ -119,7 +124,7 @@ fn render_schema_pages(
 
         let group_info = group_map.get(entry.name.as_str()).copied();
 
-        let doc = load_schema_doc(&page_url, ctx.processed);
+        let doc = load_schema_doc(&page_url, ctx.processed, Some(&site_ctx));
         let page = build_schema_page(site, entry, &page_url, group_info, doc);
         let html = engine::render(env, "schema.html", &page)?;
         write_page(ctx.output_dir, &page_url, &html)?;
@@ -141,10 +146,14 @@ fn render_schema_pages(
 }
 
 /// Try to load and extract schema documentation from in-memory processed schemas.
-fn load_schema_doc(page_url: &str, processed: &ProcessedSchemas) -> Option<schema_doc::SchemaDoc> {
+fn load_schema_doc(
+    page_url: &str,
+    processed: &ProcessedSchemas,
+    site: Option<&SiteContext<'_>>,
+) -> Option<schema_doc::SchemaDoc> {
     let relative_key = format!("{page_url}latest.json");
     let value = processed.get(&relative_key)?;
-    let doc = schema_doc::extract_schema_doc(&value);
+    let doc = schema_doc::extract_schema_doc(&value, site);
     if doc.has_content { Some(doc) } else { None }
 }
 
@@ -152,9 +161,10 @@ fn load_schema_doc(page_url: &str, processed: &ProcessedSchemas) -> Option<schem
 fn load_schema_doc_by_path(
     relative_path: &str,
     processed: &ProcessedSchemas,
+    site: Option<&SiteContext<'_>>,
 ) -> Option<schema_doc::SchemaDoc> {
     let value = processed.get(relative_path)?;
-    let doc = schema_doc::extract_schema_doc(&value);
+    let doc = schema_doc::extract_schema_doc(&value, site);
     if doc.has_content { Some(doc) } else { None }
 }
 
@@ -177,7 +187,11 @@ fn render_version_pages(
         // Load schema doc for this version from ProcessedSchemas
         // The version JSON is at e.g. schemas/github/workflow/versions/v2.json
         let relative = vurl.strip_prefix(&site.base_url).unwrap_or(vurl);
-        let version_doc = load_schema_doc_by_path(relative, ctx.processed);
+        let site_ctx = SiteContext {
+            base_url: &site.base_url,
+            base_path: &site.base_path,
+        };
+        let version_doc = load_schema_doc_by_path(relative, ctx.processed, Some(&site_ctx));
 
         let page = build_version_page(
             site,
@@ -259,7 +273,11 @@ fn render_shared_pages(
         });
 
         let schema_doc = {
-            let doc = schema_doc::extract_schema_doc(&value);
+            let site_ctx = SiteContext {
+                base_url: &site.base_url,
+                base_path: &site.base_path,
+            };
+            let doc = schema_doc::extract_schema_doc(&value, Some(&site_ctx));
             if doc.has_content { Some(doc) } else { None }
         };
 

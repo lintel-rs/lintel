@@ -1,6 +1,18 @@
 {% if schema_doc %}
 <section class="schema-doc">
-  {% if schema_doc.schema_type %}
+  {% if schema_doc.type_parts %}
+  <div class="schema-doc-type">
+    <span class="label">Type:</span>
+    <span class="type-badge"
+      >{% for part in schema_doc.type_parts %}{% if part.href %}<a
+        href="{{ part.href }}"
+        class="type-badge-link"
+        >{{ part.text }}</a
+      >{% else %}{{ part.text }}{% endif %}{% if not loop.last %} | {% endif
+      %}{% endfor %}</span
+    >
+  </div>
+  {% elif schema_doc.schema_type %}
   <div class="schema-doc-type">
     <span class="label">Type:</span>
     <span class="type-badge">{{ schema_doc.schema_type }}</span>
@@ -38,8 +50,12 @@
     >
       <div class="variant-header">
         <span class="variant-index">{{ variant.index }}.</span>
-        <span class="variant-label">{{ variant.label }}</span>
-        {% if variant.schema_type %}<span class="type-badge"
+        {% if variant.ref_href %}<a
+          href="{{ variant.ref_href }}"
+          class="variant-label type-badge-link"
+          >{{ variant.label }}</a
+        >{% else %}<span class="variant-label">{{ variant.label }}</span>{%
+        endif %} {% if variant.schema_type %}<span class="type-badge"
           >{{ variant.schema_type }}</span
         >{% endif %}
       </div>
@@ -68,6 +84,15 @@
     <div class="definition-body">
       {% if def.description_html %}
       <div class="desc-html">{{ def.description_html|safe }}</div>
+      {% endif %} {% if def.examples %}
+      <div class="definition-examples">
+        <span class="meta-label">Examples:</span>
+        <ul>
+          {% for ex in def.examples %}
+          <li><code>{{ ex }}</code></li>
+          {% endfor %}
+        </ul>
+      </div>
       {% endif %} {% if def.properties %}
       <div class="property-list">
         {% for prop in def.properties %} {% with property = prop, depth = 1 %}
