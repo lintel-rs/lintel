@@ -1,6 +1,3 @@
-mod dir;
-mod github_pages;
-
 use core::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -12,13 +9,11 @@ use crate::catalog::write_catalog_json;
 use crate::download::ProcessedSchemas;
 use lintel_catalog_builder::config::TargetConfig;
 
-pub use self::dir::DirTarget;
-pub use self::github_pages::GitHubPagesTarget;
-
-/// Data passed to [`Target::finalize`] for writing output files.
+/// Data passed to [`finalize`] for writing output files.
 pub struct OutputContext<'a> {
     pub output_dir: &'a Path,
     pub config_path: &'a Path,
+    pub config_dir: &'a Path,
     pub catalog: &'a Catalog,
     pub groups_meta: &'a [(String, String, String)],
     pub base_url: &'a str,
@@ -27,87 +22,95 @@ pub struct OutputContext<'a> {
     pub processed: &'a ProcessedSchemas,
     /// Optional site description from the target's site config.
     pub site_description: Option<&'a str>,
+    /// Optional Google Analytics tracking ID from the target's site config.
+    pub ga_tracking_id: Option<&'a str>,
 }
 
-/// Behaviour that every output target must implement.
-pub trait Target {
-    /// The `base_url` configured for this target.
-    fn base_url(&self) -> &str;
-
-    /// The site description configured for this target, if any.
-    fn site_description(&self) -> Option<&str>;
-
-    /// Resolve the output directory for this target.
-    fn output_dir(&self, target_name: &str, config_dir: &Path) -> PathBuf;
-
-    /// Write all output files for this target.
-    fn finalize(
-        &self,
-        ctx: &OutputContext<'_>,
-    ) -> impl core::future::Future<Output = Result<()>> + Send;
-}
-
-/// Enum dispatch wrapper so we can store any target without `dyn`.
-pub enum AnyTarget {
-    Dir(DirTarget),
-    GitHubPages(GitHubPagesTarget),
-}
-
-impl From<TargetConfig> for AnyTarget {
-    fn from(config: TargetConfig) -> Self {
-        match config {
-            TargetConfig::Dir {
-                dir,
-                base_url,
-                site,
-            } => Self::Dir(DirTarget {
-                dir,
-                base_url,
-                site,
-            }),
-            TargetConfig::GitHubPages {
-                base_url,
-                cname,
-                dir,
-                site,
-            } => Self::GitHubPages(GitHubPagesTarget {
-                base_url,
-                cname,
-                dir,
-                site,
-            }),
-        }
+/// Resolve the output directory for a target.
+pub fn output_dir(target: &TargetConfig, config_dir: &Path) -> PathBuf {
+    let path = PathBuf::from(&target.dir);
+    if path.is_absolute() {
+        path
+    } else {
+        config_dir.join(path)
     }
 }
 
-impl Target for AnyTarget {
-    fn base_url(&self) -> &str {
-        match self {
-            Self::Dir(t) => t.base_url(),
-            Self::GitHubPages(t) => t.base_url(),
+/// Write all output files for a target.
+pub async fn finalize(target: &TargetConfig, ctx: &OutputContext<'_>) -> Result<()> {
+    write_common_files(ctx).await?;
+
+    if let Some(gh) = target.site.as_ref().and_then(|s| s.github.as_ref()) {
+        tokio::fs::write(ctx.output_dir.join(".nojekyll"), "")
+            .await
+            .context("failed to write .nojekyll")?;
+
+        if let Some(domain) = &gh.cname {
+            tokio::fs::write(ctx.output_dir.join("CNAME"), format!("{domain}\n"))
+                .await
+                .context("failed to write CNAME")?;
+            debug!(domain, "wrote CNAME");
         }
+
+        debug!("wrote .nojekyll");
     }
 
-    fn site_description(&self) -> Option<&str> {
-        match self {
-            Self::Dir(t) => t.site_description(),
-            Self::GitHubPages(t) => t.site_description(),
-        }
-    }
+    // Copy static/ directory contents last so they can override generated files.
+    copy_static_dir(ctx.config_dir, ctx.output_dir).await?;
 
-    fn output_dir(&self, target_name: &str, config_dir: &Path) -> PathBuf {
-        match self {
-            Self::Dir(t) => t.output_dir(target_name, config_dir),
-            Self::GitHubPages(t) => t.output_dir(target_name, config_dir),
-        }
-    }
+    Ok(())
+}
 
-    async fn finalize(&self, ctx: &OutputContext<'_>) -> Result<()> {
-        match self {
-            Self::Dir(t) => t.finalize(ctx).await,
-            Self::GitHubPages(t) => t.finalize(ctx).await,
-        }
+/// Copy files from a `static/` directory (relative to the config file) into the output root.
+async fn copy_static_dir(config_dir: &Path, output_dir: &Path) -> Result<()> {
+    let static_dir = config_dir.join("static");
+    if !static_dir.is_dir() {
+        return Ok(());
     }
+    debug!(path = %static_dir.display(), "copying static directory");
+    copy_dir_recursive(&static_dir, output_dir).await
+}
+
+/// Recursively copy all files from `src` into `dst`, creating subdirectories as needed.
+fn copy_dir_recursive<'a>(
+    src: &'a Path,
+    dst: &'a Path,
+) -> futures_util::future::BoxFuture<'a, Result<()>> {
+    Box::pin(async move {
+        let mut entries = tokio::fs::read_dir(src)
+            .await
+            .with_context(|| format!("failed to read directory {}", src.display()))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .with_context(|| format!("failed to read entry in {}", src.display()))?
+        {
+            let file_type = entry.file_type().await.with_context(|| {
+                format!("failed to get file type for {}", entry.path().display())
+            })?;
+            let dest_path = dst.join(entry.file_name());
+            if file_type.is_dir() {
+                tokio::fs::create_dir_all(&dest_path)
+                    .await
+                    .with_context(|| {
+                        format!("failed to create directory {}", dest_path.display())
+                    })?;
+                copy_dir_recursive(&entry.path(), &dest_path).await?;
+            } else {
+                tokio::fs::copy(entry.path(), &dest_path)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "failed to copy {} to {}",
+                            entry.path().display(),
+                            dest_path.display()
+                        )
+                    })?;
+                debug!(file = %dest_path.display(), "copied static file");
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Write `catalog.json`, `README.md`, and the full static site — shared by all targets.
@@ -189,6 +192,8 @@ mod tests {
     use schema_catalog::SchemaEntry;
 
     use crate::catalog::build_output_catalog;
+    use crate::download::ProcessedSchemas;
+    use lintel_catalog_builder::config::{GitHubPagesConfig, SiteConfig};
 
     use super::*;
 
@@ -226,12 +231,14 @@ mod tests {
         let ctx = OutputContext {
             output_dir: dir.path(),
             config_path: &config_path,
+            config_dir: dir.path(),
             catalog: &catalog,
             groups_meta: &[],
             base_url: "https://example.com/",
             source_count: 1,
             processed: &processed,
             site_description: None,
+            ga_tracking_id: None,
         };
         write_readme(&ctx).await?;
         let content = tokio::fs::read_to_string(dir.path().join("README.md")).await?;
@@ -239,6 +246,103 @@ mod tests {
         assert!(content.contains("**2** schemas"));
         assert!(content.contains("**1** groups"));
         assert!(content.contains("**1** external sources"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn finalize_writes_nojekyll_and_cname_when_github_present() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let catalog = build_output_catalog(None, vec![], vec![]);
+        let processed = ProcessedSchemas::new(dir.path());
+        let ctx = OutputContext {
+            output_dir: dir.path(),
+            config_path: Path::new("lintel-catalog.toml"),
+            config_dir: dir.path(),
+            catalog: &catalog,
+            groups_meta: &[],
+            base_url: "https://example.com/",
+            source_count: 0,
+            processed: &processed,
+            site_description: None,
+            ga_tracking_id: None,
+        };
+        let target = TargetConfig {
+            dir: "out".into(),
+            base_url: "https://example.com/".into(),
+            site: Some(SiteConfig {
+                description: None,
+                ga_tracking_id: None,
+                github: Some(GitHubPagesConfig {
+                    cname: Some("example.com".into()),
+                }),
+            }),
+        };
+        finalize(&target, &ctx).await?;
+        assert!(dir.path().join(".nojekyll").exists());
+        let cname = tokio::fs::read_to_string(dir.path().join("CNAME")).await?;
+        assert_eq!(cname.trim(), "example.com");
+        assert!(dir.path().join("index.html").exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn finalize_skips_github_files_without_github_config() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let catalog = build_output_catalog(None, vec![], vec![]);
+        let processed = ProcessedSchemas::new(dir.path());
+        let ctx = OutputContext {
+            output_dir: dir.path(),
+            config_path: Path::new("lintel-catalog.toml"),
+            config_dir: dir.path(),
+            catalog: &catalog,
+            groups_meta: &[],
+            base_url: "https://example.com/",
+            source_count: 0,
+            processed: &processed,
+            site_description: None,
+            ga_tracking_id: None,
+        };
+        let target = TargetConfig {
+            dir: "out".into(),
+            base_url: "https://example.com/".into(),
+            site: None,
+        };
+        finalize(&target, &ctx).await?;
+        assert!(!dir.path().join(".nojekyll").exists());
+        assert!(!dir.path().join("CNAME").exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn copy_static_dir_copies_files_recursively() -> Result<()> {
+        let config_dir = tempfile::tempdir()?;
+        let output_dir = tempfile::tempdir()?;
+
+        // Create static/ with a file and a nested subdir
+        let static_dir = config_dir.path().join("static");
+        tokio::fs::create_dir_all(static_dir.join("sub")).await?;
+        tokio::fs::write(static_dir.join("llms.txt"), "hello").await?;
+        tokio::fs::write(static_dir.join("sub").join("nested.txt"), "world").await?;
+
+        copy_static_dir(config_dir.path(), output_dir.path()).await?;
+
+        assert_eq!(
+            tokio::fs::read_to_string(output_dir.path().join("llms.txt")).await?,
+            "hello"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(output_dir.path().join("sub").join("nested.txt")).await?,
+            "world"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn copy_static_dir_is_noop_when_missing() -> Result<()> {
+        let config_dir = tempfile::tempdir()?;
+        let output_dir = tempfile::tempdir()?;
+        // No static/ dir — should succeed silently
+        copy_static_dir(config_dir.path(), output_dir.path()).await?;
         Ok(())
     }
 }

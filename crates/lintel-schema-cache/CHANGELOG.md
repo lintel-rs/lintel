@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-schema-cache-v0.0.11...lintel-schema-cache-v0.0.12) - 2026-02-27
+
+### Other
+
+- update Cargo.toml dependencies
+
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-schema-cache-v0.0.10...lintel-schema-cache-v0.0.11) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Merge origin/master into site-generator
+- Add static site generator with ProcessedSchemas for in-memory schema lookups
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-schema-cache-v0.0.9...lintel-schema-cache-v0.0.10) - 2026-02-24
 
 ### Other

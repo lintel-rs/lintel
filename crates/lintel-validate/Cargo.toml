@@ -1,6 +1,6 @@
 [package]
 name = "lintel-validate"
-version = "0.0.5"
+version = "0.0.7"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -22,12 +22,12 @@ ignore.workspace = true
 json5 = "1.3.1"
 jsonc-parser = { version = "0.29.0", features = ["serde"] }
 jsonschema = { workspace = true, features = ["resolve-async"] }
-lintel-cli-common = { version = "0.0.4", path = "../lintel-cli-common" }
-lintel-config = { version = "0.0.6", path = "../lintel-config" }
-lintel-schema-cache = { version = "0.0.10", path = "../lintel-schema-cache" }
-lintel-validation-cache = { version = "0.0.7", path = "../lintel-validation-cache" }
+lintel-cli-common = { version = "0.0.5", path = "../lintel-cli-common" }
+lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-validation-cache = { version = "0.0.8", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }
-schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+schema-catalog = { version = "0.0.7", path = "../schema-catalog" }
 serde_json.workspace = true
 serde_yaml = "0.9.34"
 thiserror.workspace = true

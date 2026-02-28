@@ -101,7 +101,7 @@ fn html_escape(value: &str) -> alloc::string::String {
 
 fn register_templates(env: &mut Environment<'static>) -> Result<()> {
     let templates: &[(&str, &str)] = &[
-        ("base.html", include_str!("templates/base.html")),
+        ("layout.html", include_str!("templates/layout.html")),
         ("index.html", include_str!("templates/index.html")),
         ("group.html", include_str!("templates/group.html")),
         ("schema.html", include_str!("templates/schema.html")),

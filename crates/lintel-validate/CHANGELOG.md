@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.6...lintel-validate-v0.0.7) - 2026-02-27
+
+### Other
+
+- Add fileMatch and parsers to x-lintel metadata
+
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.5...lintel-validate-v0.0.6) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Remove schemastore crate, inline CATALOG_URL into lintel-validate
+- Resolve merge conflicts: move CompiledCatalog to schema-catalog
+- Move CompiledCatalog and SchemaMatch from schemastore to schema-catalog
+
 ## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.4...lintel-validate-v0.0.5) - 2026-02-24
 
 ### Other

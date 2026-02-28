@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lintel-rs/lintel/compare/lintel-config-schema-generator-v0.0.5...lintel-config-schema-generator-v0.0.6) - 2026-02-27
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [0.0.5](https://github.com/lintel-rs/lintel/compare/lintel-config-schema-generator-v0.0.4...lintel-config-schema-generator-v0.0.5) - 2026-02-26
+
+### Other
+
+- Centralize workspace dependencies in root Cargo.toml
+- Enable Cargo.toml sorting via dprint and remove ordering from cargo-furnish
+
 ## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-config-schema-generator-v0.0.3...lintel-config-schema-generator-v0.0.4) - 2026-02-24
 
 ### Other

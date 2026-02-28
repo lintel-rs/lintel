@@ -5,7 +5,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 use lintel_cli_common::{CLIGlobalOptions, CliCacheOptions};
 
 use lintel_schema_cache::SchemaCache;
@@ -36,7 +36,7 @@ pub struct IdentifyArgs {
     pub no_pager: bool,
 
     /// File to identify
-    #[bpaf(positional("FILE"))]
+    #[bpaf(positional("FILE"), complete_shell(ShellComp::File { mask: None }))]
     pub file: String,
 }
 

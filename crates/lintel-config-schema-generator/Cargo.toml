@@ -1,6 +1,6 @@
 [package]
 name = "lintel-config-schema-generator"
-version = "0.0.4"
+version = "0.0.6"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 bpaf.workspace = true
-lintel-catalog-builder = { version = "0.0.9", path = "../lintel-catalog-builder" }
-lintel-config = { version = "0.0.6", path = "../lintel-config" }
-schema-catalog = { version = "0.0.5", path = "../schema-catalog" }
+lintel-catalog-builder = { version = "0.0.11", path = "../lintel-catalog-builder" }
+lintel-config = { version = "0.0.7", path = "../lintel-config" }
+schema-catalog = { version = "0.0.7", path = "../schema-catalog" }
 serde_json.workspace = true

@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 use lintel_cli_common::CLIGlobalOptions;
 use tracing_subscriber::prelude::*;
 
@@ -45,7 +45,7 @@ pub struct ConvertArgs {
     pub to: OutputFormat,
 
     /// Input file to convert
-    #[bpaf(positional("FILE"))]
+    #[bpaf(positional("FILE"), complete_shell(ShellComp::File { mask: None }))]
     pub file: String,
 }
 

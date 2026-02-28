@@ -13,7 +13,9 @@ use crate::download::{ProcessedSchemas, fetch_one};
 use crate::refs::{RefRewriteContext, resolve_and_rewrite_value};
 use lintel_catalog_builder::config::{OrganizeEntry, SourceConfig};
 
-use super::util::{prefetch_versions, process_fetched_versions, resolve_latest_id, slugify};
+use super::util::{
+    extract_lintel_meta, prefetch_versions, process_fetched_versions, resolve_latest_id, slugify,
+};
 
 /// Per-target processing context passed to source-level functions.
 pub(super) struct SourceContext<'a> {
@@ -225,7 +227,7 @@ async fn process_one_source_schema(
         prefetch_versions(ctx.cache, &info.versions),
     );
 
-    let (entry_url, versions) = match latest_result {
+    let (entry_url, versions, file_match) = match latest_result {
         Ok((mut value, status)) => {
             info!(
                 url = %source_url,
@@ -245,6 +247,13 @@ async fn process_one_source_schema(
                 &schema_base_url,
             );
 
+            // Extract fileMatch + parsers from the schema if the catalog didn't provide any
+            let (file_match, parsers) = if info.file_match.is_empty() {
+                extract_lintel_meta(&value)
+            } else {
+                (info.file_match.clone(), Vec::new())
+            };
+
             let shared_dir = entry_dir.join("_shared");
             let shared_base_url = format!("{schema_base_url}/_shared");
             let mut already_downloaded: HashMap<String, String> = HashMap::new();
@@ -255,6 +264,9 @@ async fn process_one_source_schema(
                 already_downloaded: &mut already_downloaded,
                 source_url: Some(source_url.clone()),
                 processed: ctx.processed,
+                lintel_source: None,
+                file_match: file_match.clone(),
+                parsers,
             };
 
             debug!(schema = %info.name, "processing schema refs");
@@ -272,7 +284,7 @@ async fn process_one_source_schema(
                     description: info.description,
                     url: source_url.clone(),
                     source_url: Some(source_url),
-                    file_match: info.file_match,
+                    file_match,
                     versions: info.versions,
                 });
             }
@@ -286,7 +298,7 @@ async fn process_one_source_schema(
             } else {
                 version_urls
             };
-            (info.local_url, versions)
+            (info.local_url, versions, file_match)
         }
         Err(e) => {
             warn!(
@@ -295,7 +307,7 @@ async fn process_one_source_schema(
                 error = %e,
                 "failed to download source schema, skipping"
             );
-            (source_url.clone(), info.versions)
+            (source_url.clone(), info.versions, info.file_match)
         }
     };
 
@@ -304,7 +316,7 @@ async fn process_one_source_schema(
         description: info.description,
         url: entry_url,
         source_url: Some(source_url),
-        file_match: info.file_match,
+        file_match,
         versions,
     })
 }

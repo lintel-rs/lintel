@@ -20,16 +20,7 @@ pub use self::markdown::MarkdownParser;
 pub use self::toml_parser::TomlParser;
 pub use self::yaml::YamlParser;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileFormat {
-    Json,
-    Json5,
-    Jsonc,
-    Jsonl,
-    Toml,
-    Yaml,
-    Markdown,
-}
+pub use schema_catalog::FileFormat;
 
 /// Parse file content into a `serde_json::Value`.
 ///

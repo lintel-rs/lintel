@@ -1,3 +1,4 @@
+use alloc::collections::BTreeSet;
 use alloc::sync::Arc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
+use schema_catalog::FileFormat;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -71,15 +73,23 @@ const MAX_SCHEMA_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Metadata injected into downloaded schemas as `x-lintel`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LintelExtra {
     /// Original URL the schema was fetched from.
+    #[serde(default)]
     pub source: String,
     /// SHA-256 hex digest of the raw schema content before any transformations.
-    #[serde(rename = "sourceSha256")]
+    #[serde(default)]
     pub source_sha256: String,
     /// `true` when the schema fails validation after transformation.
     #[serde(default, skip_serializing_if = "is_false")]
     pub invalid: bool,
+    /// Glob patterns for files this schema should be associated with.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_match: Vec<String>,
+    /// Parsers that can handle files matched by this schema.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parsers: Vec<FileFormat>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde requires fn(&bool) -> bool
@@ -117,23 +127,14 @@ fn is_schema_invalid(value: &serde_json::Value) -> bool {
 
 /// Inject `x-lintel` metadata into a schema's root object.
 ///
-/// Looks up the content hash for `source_url` from the cache. If the hash is
-/// not available (e.g. the schema was never fetched via HTTP), no metadata is
-/// injected. Also validates the schema and sets `invalid: true` if it fails
-/// compilation.
-pub fn inject_lintel_extra(value: &mut serde_json::Value, source_url: &str, cache: &SchemaCache) {
-    let Some(hash) = cache.content_hash(source_url) else {
-        return;
-    };
+/// Validates the schema and sets `invalid: true` if it fails compilation.
+/// The `extra` struct is completed with the `invalid` flag before insertion.
+pub fn inject_lintel_extra(value: &mut serde_json::Value, mut extra: LintelExtra) {
     let invalid = is_schema_invalid(value);
     if invalid {
-        warn!(source = %source_url, "schema is invalid after transformation");
+        warn!(source = %extra.source, "schema is invalid after transformation");
     }
-    let extra = LintelExtra {
-        source: source_url.to_string(),
-        source_sha256: hash,
-        invalid,
-    };
+    extra.invalid = invalid;
     if let Some(obj) = value.as_object_mut() {
         obj.insert(
             "x-lintel".to_string(),
@@ -142,11 +143,63 @@ pub fn inject_lintel_extra(value: &mut serde_json::Value, source_url: &str, cach
     }
 }
 
+/// Inject `x-lintel` metadata using the HTTP cache to look up the content hash.
+///
+/// If the hash is not available (e.g. the schema was never fetched via HTTP),
+/// no metadata is injected. The provided `extra` is completed with the
+/// source hash before injection.
+pub fn inject_lintel_extra_from_cache(
+    value: &mut serde_json::Value,
+    cache: &SchemaCache,
+    mut extra: LintelExtra,
+) {
+    let Some(hash) = cache.content_hash(&extra.source) else {
+        return;
+    };
+    extra.source_sha256 = hash;
+    inject_lintel_extra(value, extra);
+}
+
+/// Parse the `x-lintel` extension from a schema's root object.
+///
+/// Returns `None` if the key is missing or cannot be deserialized.
+pub fn parse_lintel_extra(value: &serde_json::Value) -> Option<LintelExtra> {
+    value
+        .get("x-lintel")
+        .and_then(|v| serde_json::from_value::<LintelExtra>(v.clone()).ok())
+}
+
 /// Fetch a schema via the cache. Returns the parsed `Value` and cache status.
 /// Does NOT write to disk.
 pub async fn fetch_one(cache: &SchemaCache, url: &str) -> Result<(serde_json::Value, CacheStatus)> {
     let (value, status) = cache.fetch(url).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok((value, status))
+}
+
+/// Derive file formats from `fileMatch` glob patterns by inspecting extensions.
+///
+/// Returns a sorted, deduplicated list of formats.
+pub fn parsers_from_file_match(patterns: &[String]) -> Vec<FileFormat> {
+    let mut parsers: BTreeSet<FileFormat> = BTreeSet::new();
+    for pattern in patterns {
+        // Strip leading path components (e.g. "**/*.yml" → "*.yml")
+        let base = pattern.rsplit('/').next().unwrap_or(pattern);
+        if let Some(dot_pos) = base.rfind('.') {
+            let format = match &base[dot_pos..] {
+                ".json" => Some(FileFormat::Json),
+                ".jsonc" => Some(FileFormat::Jsonc),
+                ".json5" => Some(FileFormat::Json5),
+                ".yaml" | ".yml" => Some(FileFormat::Yaml),
+                ".toml" => Some(FileFormat::Toml),
+                ".md" | ".mdx" => Some(FileFormat::Markdown),
+                _ => None,
+            };
+            if let Some(f) = format {
+                parsers.insert(f);
+            }
+        }
+    }
+    parsers.into_iter().collect()
 }
 
 /// Preferred key order for the root object of a JSON Schema.

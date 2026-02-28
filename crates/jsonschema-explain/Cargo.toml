@@ -1,6 +1,6 @@
 [package]
 name = "jsonschema-explain"
-version = "0.2.3"
+version = "0.2.5"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true

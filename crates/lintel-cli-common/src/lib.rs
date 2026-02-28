@@ -2,7 +2,7 @@
 
 use core::time::Duration;
 
-use bpaf::Bpaf;
+use bpaf::{Bpaf, ShellComp};
 
 /// Global options applied to all commands
 #[derive(Debug, Clone, Bpaf)]
@@ -100,7 +100,7 @@ fn parse_duration(s: String) -> Result<Duration, String> {
 #[bpaf(generate(cli_cache_options))]
 #[allow(clippy::struct_excessive_bools)]
 pub struct CliCacheOptions {
-    #[bpaf(long("cache-dir"), argument("DIR"))]
+    #[bpaf(long("cache-dir"), argument("DIR"), complete_shell(ShellComp::Dir { mask: None }))]
     pub cache_dir: Option<String>,
 
     /// Schema cache TTL (e.g. "12h", "30m", "1d"); default 12h
