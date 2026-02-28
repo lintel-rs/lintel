@@ -62,10 +62,11 @@ mod tests {
         fs::write(tmp.path().join("e.jsonc"), "{}")?;
         fs::write(tmp.path().join("f.txt"), "nope")?;
         fs::write(tmp.path().join("g.nix"), "{ }")?;
+        fs::write(tmp.path().join("h.jsonl"), "{\"a\":1}\n")?;
 
         let root = tmp.path().to_str().expect("temp dir should be valid UTF-8");
         let files = discover_files(root, &[])?;
-        assert_eq!(files.len(), 5);
+        assert_eq!(files.len(), 6);
         assert!(files.iter().all(|f| parsers::detect_format(f).is_some()));
         Ok(())
     }

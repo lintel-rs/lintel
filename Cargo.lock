@@ -1809,6 +1809,7 @@ name = "lintel-validate"
 version = "0.0.7"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bpaf",
  "glob",
  "glob-match",
@@ -1822,6 +1823,7 @@ dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",
+ "percent-encoding",
  "schema-catalog",
  "serde_json",
  "serde_yaml",

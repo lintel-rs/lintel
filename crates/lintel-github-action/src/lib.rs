@@ -74,6 +74,7 @@ fn error_to_annotation(error: &LintError) -> Annotation {
         LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
             offset_to_line_col(src.inner(), span.offset())
         }
+        LintError::SchemaMismatch { line_number, .. } => (*line_number, 1),
         LintError::Io { .. } | LintError::SchemaFetch { .. } | LintError::SchemaCompile { .. } => {
             (1, 1)
         }
@@ -85,6 +86,7 @@ fn error_to_annotation(error: &LintError) -> Annotation {
             Some(instance_path.clone())
         }
         LintError::Validation { .. } => Some("validation error".to_string()),
+        LintError::SchemaMismatch { .. } => Some("schema mismatch".to_string()),
         LintError::Io { .. } => Some("io error".to_string()),
         LintError::SchemaFetch { .. } => Some("schema fetch error".to_string()),
         LintError::SchemaCompile { .. } => Some("schema compile error".to_string()),

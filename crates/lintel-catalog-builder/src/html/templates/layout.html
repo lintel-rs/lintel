@@ -26,6 +26,20 @@
       property="og:url"
       content="{% block og_url %}{{ site.base_url }}{% endblock %}"
     />
+    {% if site.og_image %}
+    <meta property="og:image" content="{{ site.og_image }}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    {% else %}
+    <meta name="twitter:card" content="summary" />
+    {% endif %}
+    <meta
+      name="twitter:title"
+      content="{% block twitter_title %}{{ site.title }}{% endblock %}"
+    />
+    <meta
+      name="twitter:description"
+      content="{% block twitter_description %}{{ site.description }}{% endblock %}"
+    />
     <link rel="stylesheet" href="{{ site.base_path }}style.css" />
     {% if site.ga_tracking_id %}
     <!-- Google tag (gtag.js) -->

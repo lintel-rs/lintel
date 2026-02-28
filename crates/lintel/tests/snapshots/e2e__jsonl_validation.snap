@@ -1,0 +1,7 @@
+---
+source: crates/lintel/tests/e2e.rs
+expression: text
+---
+error: ./data.jsonl:3: "name" is a required property
+Checked 3 files in [TIME]. 1 error(s) found.
+exit code: 1

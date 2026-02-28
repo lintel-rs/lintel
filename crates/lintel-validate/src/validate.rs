@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::catalog;
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
-use schema_catalog::CompiledCatalog;
+use schema_catalog::{CompiledCatalog, FileFormat};
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
@@ -21,6 +21,29 @@ use crate::registry;
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
 /// Linux (1024) while still providing good throughput.
 const FD_CONCURRENCY_LIMIT: usize = 128;
+
+/// Composite retriever that dispatches `file://` URIs to local disk reads
+/// and everything else to the HTTP-backed [`SchemaCache`].
+struct LocalRetriever {
+    http: SchemaCache,
+}
+
+#[async_trait::async_trait]
+impl jsonschema::AsyncRetrieve for LocalRetriever {
+    async fn retrieve(
+        &self,
+        uri: &jsonschema::Uri<String>,
+    ) -> Result<Value, Box<dyn core::error::Error + Send + Sync>> {
+        let s = uri.as_str();
+        if let Some(raw) = s.strip_prefix("file://") {
+            let path = percent_encoding::percent_decode_str(raw).decode_utf8()?;
+            let content = tokio::fs::read_to_string(path.as_ref()).await?;
+            Ok(serde_json::from_str(&content)?)
+        } else {
+            self.http.retrieve(uri).await
+        }
+    }
+}
 
 pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
@@ -170,9 +193,9 @@ fn is_excluded(path: &Path, excludes: &[String]) -> bool {
 ///
 /// JSONC is tried first (superset of JSON, handles comments), then YAML and
 /// TOML which cover the most common config formats, followed by the rest.
-pub fn try_parse_all(content: &str, file_name: &str) -> Option<(parsers::FileFormat, Value)> {
-    use parsers::FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
-    const FORMATS: [parsers::FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
+pub fn try_parse_all(content: &str, file_name: &str) -> Option<(FileFormat, Value)> {
+    use FileFormat::{Json, Json5, Jsonc, Markdown, Toml, Yaml};
+    const FORMATS: [FileFormat; 6] = [Jsonc, Yaml, Toml, Json, Json5, Markdown];
 
     for fmt in FORMATS {
         let parser = parsers::parser_for(fmt);
@@ -194,7 +217,25 @@ enum FileResult {
     Skip,
 }
 
+/// Resolve a relative local schema path against a base directory.
+///
+/// Remote URIs (http/https) are returned unchanged. For local paths, joins with
+/// the provided base directory (file's parent for inline `$schema`, config dir
+/// for config/catalog sources).
+fn resolve_local_schema_path(schema_uri: &str, base_dir: Option<&Path>) -> String {
+    if schema_uri.starts_with("http://") || schema_uri.starts_with("https://") {
+        return schema_uri.to_string();
+    }
+    if let Some(dir) = base_dir {
+        dir.join(schema_uri).to_string_lossy().to_string()
+    } else {
+        schema_uri.to_string()
+    }
+}
+
 /// Process a single file's already-read content: parse and resolve schema URI.
+///
+/// Returns a `Vec` because JSONL files expand to one result per non-empty line.
 #[allow(clippy::too_many_arguments)]
 fn process_one_file(
     path: &Path,
@@ -202,7 +243,7 @@ fn process_one_file(
     config: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: &[CompiledCatalog],
-) -> FileResult {
+) -> Vec<FileResult> {
     let path_str = path.display().to_string();
     let file_name = path
         .file_name()
@@ -211,6 +252,19 @@ fn process_one_file(
 
     let detected_format = parsers::detect_format(path);
 
+    // JSONL files get special per-line handling.
+    if detected_format == Some(FileFormat::Jsonl) {
+        return process_jsonl_file(
+            path,
+            &path_str,
+            file_name,
+            &content,
+            config,
+            config_dir,
+            compiled_catalogs,
+        );
+    }
+
     // For unrecognized extensions, only proceed if a catalog or config mapping matches.
     if detected_format.is_none() {
         let has_match = config.find_schema_mapping(&path_str, file_name).is_some()
@@ -218,7 +272,7 @@ fn process_one_file(
                 .iter()
                 .any(|cat| cat.find_schema(&path_str, file_name).is_some());
         if !has_match {
-            return FileResult::Skip;
+            return vec![FileResult::Skip];
         }
     }
 
@@ -227,26 +281,30 @@ fn process_one_file(
         let parser = parsers::parser_for(fmt);
         match parser.parse(&content, &path_str) {
             Ok(val) => (parser, val),
-            Err(parse_err) => return FileResult::Error(parse_err.into()),
+            Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
         }
     } else {
         match try_parse_all(&content, &path_str) {
             Some((fmt, val)) => (parsers::parser_for(fmt), val),
-            None => return FileResult::Skip,
+            None => return vec![FileResult::Skip],
         }
     };
 
     // Skip markdown files with no frontmatter
     if instance.is_null() {
-        return FileResult::Skip;
+        return vec![FileResult::Skip];
     }
 
     // Schema resolution priority:
     // 1. Inline $schema / YAML modeline (always wins)
     // 2. Custom schema mappings from lintel.toml [schemas]
     // 3. Catalog matching (custom registries > Lintel catalog > SchemaStore)
-    let schema_uri = parser
-        .extract_schema_uri(&content, &instance)
+    //
+    // Track whether the URI came from inline $schema (resolve relative to file)
+    // or from config/catalog (resolve relative to config dir).
+    let inline_uri = parser.extract_schema_uri(&content, &instance);
+    let from_inline = inline_uri.is_some();
+    let schema_uri = inline_uri
         .or_else(|| {
             config
                 .find_schema_mapping(&path_str, file_name)
@@ -260,7 +318,7 @@ fn process_one_file(
         });
 
     let Some(schema_uri) = schema_uri else {
-        return FileResult::Skip;
+        return vec![FileResult::Skip];
     };
 
     // Keep original URI for override matching (before rewrites)
@@ -270,17 +328,19 @@ fn process_one_file(
     let schema_uri = lintel_config::apply_rewrites(&schema_uri, &config.rewrite);
     let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
 
-    // Resolve relative local paths against the file's parent directory.
-    let is_remote = schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
-    let schema_uri = if is_remote {
-        schema_uri
-    } else {
-        path.parent()
-            .map(|parent| parent.join(&schema_uri).to_string_lossy().to_string())
-            .unwrap_or(schema_uri)
-    };
+    // Resolve relative local paths:
+    // - Inline $schema: relative to the file's parent directory
+    // - Config/catalog: relative to the config directory (where lintel.toml lives)
+    let schema_uri = resolve_local_schema_path(
+        &schema_uri,
+        if from_inline {
+            path.parent()
+        } else {
+            Some(config_dir)
+        },
+    );
 
-    FileResult::Parsed {
+    vec![FileResult::Parsed {
         schema_uri,
         parsed: ParsedFile {
             path: path_str,
@@ -288,6 +348,102 @@ fn process_one_file(
             instance,
             original_schema_uri,
         },
+    }]
+}
+
+/// Process a JSONL file: parse each line independently and resolve schemas.
+///
+/// Each non-empty line becomes its own [`FileResult::Parsed`]. Schema resolution
+/// priority per line: inline `$schema` on the line > config mapping > catalog.
+///
+/// Also checks schema consistency across lines — mismatches are emitted as
+/// [`FileResult::Error`] so they flow through the normal Reporter pipeline.
+#[allow(clippy::too_many_arguments)]
+fn process_jsonl_file(
+    path: &Path,
+    path_str: &str,
+    file_name: &str,
+    content: &str,
+    config: &lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: &[CompiledCatalog],
+) -> Vec<FileResult> {
+    let lines = match parsers::jsonl::parse_jsonl(content, path_str) {
+        Ok(lines) => lines,
+        Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+    };
+
+    if lines.is_empty() {
+        return vec![FileResult::Skip];
+    }
+
+    let mut results = Vec::with_capacity(lines.len());
+
+    // Check schema consistency before consuming lines.
+    if let Some(mismatches) = parsers::jsonl::check_schema_consistency(&lines) {
+        for m in mismatches {
+            results.push(FileResult::Error(LintError::SchemaMismatch {
+                path: path_str.to_string(),
+                line_number: m.line_number,
+                message: format!("expected consistent $schema but found {}", m.schema_uri),
+            }));
+        }
+    }
+
+    for line in lines {
+        // Schema resolution: inline $schema on line > config > catalog
+        // Track source to resolve relative paths correctly.
+        let inline_uri = parsers::jsonl::extract_schema_uri(&line.value);
+        let from_inline = inline_uri.is_some();
+        let schema_uri = inline_uri
+            .or_else(|| {
+                config
+                    .find_schema_mapping(path_str, file_name)
+                    .map(str::to_string)
+            })
+            .or_else(|| {
+                compiled_catalogs
+                    .iter()
+                    .find_map(|cat| cat.find_schema(path_str, file_name))
+                    .map(str::to_string)
+            });
+
+        let Some(schema_uri) = schema_uri else {
+            continue;
+        };
+
+        let original_schema_uri = schema_uri.clone();
+
+        let schema_uri = lintel_config::apply_rewrites(&schema_uri, &config.rewrite);
+        let schema_uri = lintel_config::resolve_double_slash(&schema_uri, config_dir);
+
+        // Inline $schema: relative to file's parent. Config/catalog: relative to config dir.
+        let schema_uri = resolve_local_schema_path(
+            &schema_uri,
+            if from_inline {
+                path.parent()
+            } else {
+                Some(config_dir)
+            },
+        );
+
+        let line_path = format!("{path_str}:{}", line.line_number);
+
+        results.push(FileResult::Parsed {
+            schema_uri,
+            parsed: ParsedFile {
+                path: line_path,
+                content: line.raw,
+                instance: line.value,
+                original_schema_uri,
+            },
+        });
+    }
+
+    if results.is_empty() {
+        vec![FileResult::Skip]
+    } else {
+        results
     }
 }
 
@@ -337,13 +493,15 @@ async fn parse_and_group_files(
                 continue;
             }
         };
-        let result = process_one_file(&path, content, config, config_dir, compiled_catalogs);
-        match result {
-            FileResult::Parsed { schema_uri, parsed } => {
-                schema_groups.entry(schema_uri).or_default().push(parsed);
+        let results = process_one_file(&path, content, config, config_dir, compiled_catalogs);
+        for result in results {
+            match result {
+                FileResult::Parsed { schema_uri, parsed } => {
+                    schema_groups.entry(schema_uri).or_default().push(parsed);
+                }
+                FileResult::Error(e) => errors.push(e),
+                FileResult::Skip => {}
             }
-            FileResult::Error(e) => errors.push(e),
-            FileResult::Skip => {}
         }
     }
 
@@ -826,15 +984,26 @@ pub async fn run_with(
         // Compile the schema for cache misses.
         let t = std::time::Instant::now();
         let validator = {
-            // Set base URI for remote schemas so relative $ref values
-            // (e.g. "./rule.json") resolve correctly.
+            // Set base URI so relative $ref values (e.g. "./rule.json") resolve
+            // correctly. Remote schemas use the HTTP URI directly; local schemas
+            // get a file:// URI derived from the canonical absolute path.
             let is_remote_schema =
                 schema_uri.starts_with("http://") || schema_uri.starts_with("https://");
+            let local_retriever = LocalRetriever {
+                http: retriever.clone(),
+            };
             let opts = jsonschema::async_options()
-                .with_retriever(retriever.clone())
+                .with_retriever(local_retriever)
                 .should_validate_formats(validate_formats);
-            let opts = if is_remote_schema {
-                opts.with_base_uri(schema_uri.clone())
+            let base_uri = if is_remote_schema {
+                Some(schema_uri.clone())
+            } else {
+                std::fs::canonicalize(schema_uri)
+                    .ok()
+                    .map(|p| format!("file://{}", p.display()))
+            };
+            let opts = if let Some(uri) = base_uri {
+                opts.with_base_uri(uri)
             } else {
                 opts
             };
@@ -1914,5 +2083,58 @@ validate_formats = false
     fn clean_preserves_required_property() {
         let msg = "\"name\" is a required property";
         assert_eq!(clean_error_message(msg.to_string()), msg);
+    }
+
+    #[tokio::test]
+    async fn relative_ref_in_local_schema() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+
+        // Referenced schema with a "name" string definition
+        std::fs::write(tmp.path().join("defs.json"), r#"{"type": "string"}"#)?;
+
+        // Main schema that uses a relative $ref
+        let schema_path = tmp.path().join("schema.json");
+        std::fs::write(
+            &schema_path,
+            r#"{
+                "type": "object",
+                "properties": {
+                    "name": { "$ref": "./defs.json" }
+                },
+                "required": ["name"]
+            }"#,
+        )?;
+
+        // Valid data file pointing to the local schema
+        let schema_uri = schema_path.to_string_lossy();
+        std::fs::write(
+            tmp.path().join("data.json"),
+            format!(r#"{{ "$schema": "{schema_uri}", "name": "hello" }}"#),
+        )?;
+
+        // Invalid data file (name should be a string per defs.json)
+        std::fs::write(
+            tmp.path().join("bad.json"),
+            format!(r#"{{ "$schema": "{schema_uri}", "name": 42 }}"#),
+        )?;
+
+        let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
+        let args = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            force_schema_fetch: true,
+            force_validation: true,
+            no_catalog: true,
+            config_dir: None,
+            schema_cache_ttl: None,
+        };
+        let result = run_with(&args, Some(mock(&[])), |_| {}).await?;
+
+        // The invalid file should produce an error (name is 42, not a string)
+        assert!(result.has_errors());
+        // Exactly one file should have errors (bad.json), the other (data.json) should pass
+        assert_eq!(result.errors.len(), 1);
+        Ok(())
     }
 }

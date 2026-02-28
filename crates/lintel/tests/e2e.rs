@@ -13,7 +13,7 @@ fn run_lintel_ci(case_name: &str) -> Output {
     assert!(case_dir.is_dir(), "case directory not found: {case_name}");
 
     Command::new(env!("CARGO_BIN_EXE_lintel"))
-        .args(["ci", "--no-catalog", "--no-cache"])
+        .args(["ci", "--no-catalog"])
         .current_dir(&case_dir)
         .output()
         .expect("failed to execute lintel")
@@ -48,5 +48,8 @@ e2e_test!(malformed_yaml);
 e2e_test!(malformed_trailing_comma);
 e2e_test!(malformed_package_json);
 e2e_test!(multiple_errors);
+
+e2e_test!(jsonl_validation);
+e2e_test!(jsonl_schema_mismatch);
 
 e2e_test!(schemastore);

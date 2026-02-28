@@ -1,10 +1,26 @@
 {% extends "layout.html" %} {% block title %}{{ name }} - {{ site.title }}{%
-endblock %} {% block description %}Shared dependency schema: {{ name }}{%
+endblock %} {% block description %}Shared dependency schema: {{ name }}.{%
 endblock %} {% block canonical %}{{ site.base_url }}{{ name }}{% endblock %} {%
 block og_title %}{{ name }} - {{ site.title }}{% endblock %} {% block
-og_description %}Shared dependency schema: {{ name }}{% endblock %} {% block
-og_url %}{{ site.base_url }}{{ name }}{% endblock %} {% block content %} {%
-include "components/breadcrumb.html" %}
+og_description %}Shared dependency schema: {{ name }}.{% endblock %} {% block
+og_url %}{{ site.base_url }}{{ name }}{% endblock %} {% block jsonld %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {% for crumb in breadcrumbs %}
+      {
+        "@type": "ListItem",
+        "position": {{ loop.index }},
+        "name": "{{ crumb.label }}"{% if crumb.url %},
+        "item": "{{ site.base_url }}{{ crumb.url|replace(site.base_path, '') }}"{% endif %}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }
+</script>
+{% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
 
 <div class="schema-layout">
   <article class="schema-detail">
