@@ -25,6 +25,15 @@ pub struct RefRewriteContext<'a> {
     /// takes priority over cache-based injection from `source_url`.
     /// Format: `(source_identifier, sha256_hex)`.
     pub lintel_source: Option<(String, String)>,
+    /// Local directory containing source schemas. When set, relative `$ref`
+    /// paths are resolved against this directory (read from disk) instead of
+    /// downloading from the computed URL. This is used for local schemas whose
+    /// source files may not be available at the `source_url` yet.
+    pub local_source_dir: Option<&'a Path>,
+    /// Maps relative `$ref` paths (e.g. `./hooks.json`) to canonical catalog
+    /// URLs for sibling schemas in the same group. When a relative ref matches
+    /// a key here, it is rewritten directly without downloading.
+    pub sibling_urls: HashMap<String, String>,
     /// Glob patterns from the catalog entry, injected into `x-lintel.fileMatch`.
     pub file_match: Vec<String>,
     /// Explicit parsers extracted from `x-lintel.parsers`.
@@ -284,7 +293,34 @@ pub async fn resolve_and_rewrite_value(
     jsonschema_migrate::migrate_to_2020_12(value);
 
     let external_refs = find_external_refs(value);
-    let resolved_relative = resolve_all_relative_refs(value, ctx.source_url.as_deref());
+    let relative_refs = find_relative_refs(value);
+
+    // Resolve sibling refs directly (same-group schemas with known catalog URLs).
+    // These don't need downloading — just rewrite in place.
+    let mut sibling_map: HashMap<String, String> = HashMap::new();
+    let mut unresolved_relative: HashSet<String> = HashSet::new();
+    for rel in &relative_refs {
+        if let Some(canonical) = ctx.sibling_urls.get(rel.as_str()) {
+            debug!(relative = %rel, resolved = %canonical, "resolved sibling $ref");
+            sibling_map.insert(rel.clone(), canonical.clone());
+        } else {
+            unresolved_relative.insert(rel.clone());
+        }
+    }
+    if !sibling_map.is_empty() {
+        rewrite_refs(value, &sibling_map);
+    }
+
+    // Resolve remaining relative refs against source_url for download
+    let resolved_relative = if unresolved_relative.is_empty() {
+        HashMap::new()
+    } else {
+        let all_resolved = resolve_all_relative_refs(value, ctx.source_url.as_deref());
+        all_resolved
+            .into_iter()
+            .filter(|(rel, _)| unresolved_relative.contains(rel))
+            .collect::<HashMap<_, _>>()
+    };
 
     if external_refs.is_empty() && resolved_relative.is_empty() {
         crate::postprocess::postprocess_schema(&postprocess_ctx(ctx), value);
@@ -327,6 +363,34 @@ pub async fn resolve_and_rewrite_value(
     write_dep_schemas(ctx, dep_values, &url_map).await?;
 
     Ok(())
+}
+
+/// Check whether a `$ref` key looks like a relative file path (e.g. `./rule.json`,
+/// `../other.json`, `subdir/c.json`) as opposed to an absolute HTTP URL.
+fn is_relative_path(ref_key: &str) -> bool {
+    !ref_key.is_empty()
+        && !ref_key.starts_with("http://")
+        && !ref_key.starts_with("https://")
+        && !ref_key.starts_with('#')
+}
+
+/// Scan a dependency value for transitive `$ref`s and enqueue any new ones.
+fn enqueue_transitive_refs(
+    dep_value: &serde_json::Value,
+    source_url: Option<&str>,
+    already_downloaded: &HashMap<String, String>,
+    pending: &mut Vec<(String, String, Option<String>)>,
+) {
+    for url in find_external_refs(dep_value) {
+        if !already_downloaded.contains_key(&url) {
+            pending.push((url.clone(), url.clone(), Some(url.clone())));
+        }
+    }
+    for (rel, abs) in resolve_all_relative_refs(dep_value, source_url) {
+        if !already_downloaded.contains_key(&abs) {
+            pending.push((rel, abs.clone(), Some(abs)));
+        }
+    }
 }
 
 /// Queue-based concurrent fetcher for `$ref` dependencies. Unlike BFS waves,
@@ -378,7 +442,36 @@ async fn fetch_refs_queued(
                 ctx.base_url_for_shared.trim_end_matches('/'),
                 filename,
             );
-            url_map.insert(ref_key, local_url.clone());
+            url_map.insert(ref_key.clone(), local_url.clone());
+
+            // Try to read from local filesystem for relative refs
+            if let Some(local_dir) = ctx.local_source_dir
+                && is_relative_path(&ref_key)
+            {
+                let local_path = local_dir.join(&ref_key);
+                if let Ok(text) = tokio::fs::read_to_string(&local_path).await {
+                    match serde_json::from_str::<serde_json::Value>(&text) {
+                        Ok(dep_value) => {
+                            info!(path = %local_path.display(), "read local $ref dependency");
+                            enqueue_transitive_refs(
+                                &dep_value,
+                                source_url.as_deref(),
+                                ctx.already_downloaded,
+                                &mut pending,
+                            );
+                            dep_values.push((filename, dep_value, source_url));
+                            continue;
+                        }
+                        Err(e) => {
+                            debug!(
+                                path = %local_path.display(),
+                                error = %e,
+                                "local file not valid JSON, falling back to HTTP"
+                            );
+                        }
+                    }
+                }
+            }
 
             let cache = ctx.cache.clone();
             in_flight.push(async move {
@@ -402,17 +495,12 @@ async fn fetch_refs_queued(
             Ok((dep_value, status)) => {
                 info!(url = %download_url, status = %status, "downloaded $ref dependency");
 
-                // Immediately enqueue transitive refs (will be submitted next iteration)
-                for url in find_external_refs(&dep_value) {
-                    if !ctx.already_downloaded.contains_key(&url) {
-                        pending.push((url.clone(), url.clone(), Some(url.clone())));
-                    }
-                }
-                for (rel, abs) in resolve_all_relative_refs(&dep_value, source_url.as_deref()) {
-                    if !ctx.already_downloaded.contains_key(&abs) {
-                        pending.push((rel, abs.clone(), Some(abs)));
-                    }
-                }
+                enqueue_transitive_refs(
+                    &dep_value,
+                    source_url.as_deref(),
+                    ctx.already_downloaded,
+                    &mut pending,
+                );
 
                 dep_values.push((filename, dep_value, source_url));
             }

@@ -109,6 +109,19 @@ mod tests {
     }
 
     #[test]
+    fn encode_relative_ref_with_fragment() {
+        assert_eq!(
+            encode_ref_fragment("./rule.json#/$defs/Parameter Node"),
+            Some("./rule.json#/$defs/Parameter%20Node".to_string())
+        );
+    }
+
+    #[test]
+    fn encode_relative_ref_without_fragment() {
+        assert_eq!(encode_ref_fragment("./rule.json"), None);
+    }
+
+    #[test]
     fn encode_no_fragment() {
         assert_eq!(encode_ref_fragment("https://example.com/foo.json"), None);
     }
