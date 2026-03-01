@@ -10,13 +10,14 @@ use serde_json::Value;
 use lintel_diagnostics::reporter::{CheckResult, CheckedFile};
 use lintel_diagnostics::{DEFAULT_LABEL, LintelDiagnostic, find_instance_path_span, format_label};
 use lintel_schema_cache::{CacheStatus, SchemaCache};
-use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
+use lintel_validation_cache::{ValidationCacheStatus, ValidationError, ValidationErrorKind};
 use schema_catalog::{CompiledCatalog, FileFormat};
 
 use crate::catalog;
 use crate::discover;
 use crate::parsers::{self, Parser};
 use crate::registry;
+use crate::suggest;
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
@@ -198,10 +199,28 @@ fn resolve_local_schema_path(schema_uri: &str, base_dir: Option<&Path>) -> Strin
         return schema_uri.to_string();
     }
     if let Some(dir) = base_dir {
-        dir.join(schema_uri).to_string_lossy().to_string()
+        normalize_path(&dir.join(schema_uri))
+            .to_string_lossy()
+            .to_string()
     } else {
         schema_uri.to_string()
     }
+}
+
+/// Normalize a path by resolving `.` and `..` components without touching the
+/// filesystem (unlike `std::fs::canonicalize`).
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Process a single file's already-read content: parse and resolve schema URI.
@@ -596,39 +615,30 @@ fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     }
 }
 
-/// Clean up error messages from the `jsonschema` crate.
-///
-/// For `anyOf`/`oneOf` failures the crate dumps the entire JSON value into the
-/// message (e.g. `{...} is not valid under any of the schemas listed in the 'oneOf' keyword`).
-/// The source snippet already shows the value, so we strip the redundant prefix
-/// and keep only `"not valid under any of the schemas listed in the 'oneOf' keyword"`.
-///
-/// All other messages are returned unchanged.
-fn clean_error_message(msg: String) -> String {
-    const MARKER: &str = " is not valid under any of the schemas listed in the '";
-    if let Some(pos) = msg.find(MARKER) {
-        // pos points to " is not valid...", skip " is " (4 chars) to get "not valid..."
-        return msg[pos + 4..].to_string();
-    }
-    msg
-}
-
 /// Convert [`ValidationError`]s into [`LintelDiagnostic::Validation`] diagnostics.
+#[allow(clippy::too_many_arguments)]
 fn push_validation_errors(
     pf: &ParsedFile,
     schema_url: &str,
     validation_errors: &[ValidationError],
     errors: &mut Vec<LintelDiagnostic>,
+    schema: Option<&Value>,
 ) {
     for ve in validation_errors {
-        let span = find_instance_path_span(&pf.content, &ve.instance_path);
         let instance_path = if ve.instance_path.is_empty() {
             DEFAULT_LABEL.to_string()
         } else {
             ve.instance_path.clone()
         };
         let label = format_label(&instance_path, &ve.schema_path);
-        let source_span: miette::SourceSpan = span.into();
+        let source_span: miette::SourceSpan = ve.span.into();
+        let mut message = ve.kind.message();
+        if let ValidationErrorKind::AdditionalProperty { ref property } = ve.kind
+            && let Some(s) = schema
+            && let Some(suggestion) = suggest::suggest_property(property, &ve.schema_path, s)
+        {
+            message = format!("{message}; did you mean '{suggestion}'?");
+        }
         errors.push(LintelDiagnostic::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
             span: source_span,
@@ -636,11 +646,144 @@ fn push_validation_errors(
             path: pf.path.clone(),
             instance_path,
             label,
-            message: ve.message.clone(),
+            message,
             schema_url: schema_url.to_string(),
             schema_path: ve.schema_path.clone(),
         });
     }
+}
+
+/// Map a `jsonschema::error::ValidationErrorKind` to our serializable
+/// [`ValidationErrorKind`]. `AdditionalProperties` is handled separately
+/// in [`convert_error`].
+fn convert_kind(kind: &jsonschema::error::ValidationErrorKind) -> ValidationErrorKind {
+    use jsonschema::error::{TypeKind, ValidationErrorKind as JK};
+
+    match kind {
+        JK::AdditionalItems { limit } => ValidationErrorKind::AdditionalItems { limit: *limit },
+        JK::AdditionalProperties { .. } => unreachable!("handled in convert_error"),
+        JK::AnyOf { .. } => ValidationErrorKind::AnyOf,
+        JK::BacktrackLimitExceeded { error } => ValidationErrorKind::BacktrackLimitExceeded {
+            message: error.to_string(),
+        },
+        JK::Constant { expected_value } => ValidationErrorKind::Constant {
+            expected_value: expected_value.clone(),
+        },
+        JK::Contains => ValidationErrorKind::Contains,
+        JK::ContentEncoding { content_encoding } => ValidationErrorKind::ContentEncoding {
+            content_encoding: content_encoding.clone(),
+        },
+        JK::ContentMediaType { content_media_type } => ValidationErrorKind::ContentMediaType {
+            content_media_type: content_media_type.clone(),
+        },
+        JK::Custom { keyword, message } => ValidationErrorKind::Custom {
+            keyword: keyword.clone(),
+            message: message.clone(),
+        },
+        JK::Enum { options } => ValidationErrorKind::Enum {
+            options: options.clone(),
+        },
+        JK::ExclusiveMaximum { limit } => ValidationErrorKind::ExclusiveMaximum {
+            limit: limit.clone(),
+        },
+        JK::ExclusiveMinimum { limit } => ValidationErrorKind::ExclusiveMinimum {
+            limit: limit.clone(),
+        },
+        JK::FalseSchema => ValidationErrorKind::FalseSchema,
+        JK::Format { format } => ValidationErrorKind::Format {
+            format: format.clone(),
+        },
+        JK::FromUtf8 { error } => ValidationErrorKind::FromUtf8 {
+            message: error.to_string(),
+        },
+        JK::MaxItems { limit } => ValidationErrorKind::MaxItems { limit: *limit },
+        JK::Maximum { limit } => ValidationErrorKind::Maximum {
+            limit: limit.clone(),
+        },
+        JK::MaxLength { limit } => ValidationErrorKind::MaxLength { limit: *limit },
+        JK::MaxProperties { limit } => ValidationErrorKind::MaxProperties { limit: *limit },
+        JK::MinItems { limit } => ValidationErrorKind::MinItems { limit: *limit },
+        JK::Minimum { limit } => ValidationErrorKind::Minimum {
+            limit: limit.clone(),
+        },
+        JK::MinLength { limit } => ValidationErrorKind::MinLength { limit: *limit },
+        JK::MinProperties { limit } => ValidationErrorKind::MinProperties { limit: *limit },
+        JK::MultipleOf { multiple_of } => ValidationErrorKind::MultipleOf {
+            multiple_of: *multiple_of,
+        },
+        JK::Not { .. } => ValidationErrorKind::Not,
+        JK::OneOfMultipleValid { .. } => ValidationErrorKind::OneOfMultipleValid,
+        JK::OneOfNotValid { .. } => ValidationErrorKind::OneOfNotValid,
+        JK::Pattern { pattern } => ValidationErrorKind::Pattern {
+            pattern: pattern.clone(),
+        },
+        JK::PropertyNames { error } => ValidationErrorKind::PropertyNames {
+            message: error.to_string(),
+        },
+        JK::Required { property } => ValidationErrorKind::Required {
+            property: match property {
+                Value::String(s) => format!("\"{s}\""),
+                other => other.to_string(),
+            },
+        },
+        JK::Type { kind } => {
+            let expected = match kind {
+                TypeKind::Single(t) => t.to_string(),
+                TypeKind::Multiple(ts) => {
+                    let parts: Vec<String> = ts.iter().map(|t| t.to_string()).collect();
+                    parts.join(", ")
+                }
+            };
+            ValidationErrorKind::Type { expected }
+        }
+        JK::UnevaluatedItems { unexpected } => ValidationErrorKind::UnevaluatedItems {
+            unexpected: unexpected.clone(),
+        },
+        JK::UnevaluatedProperties { unexpected } => ValidationErrorKind::UnevaluatedProperties {
+            unexpected: unexpected.clone(),
+        },
+        JK::UniqueItems => ValidationErrorKind::UniqueItems,
+        JK::Referencing(err) => ValidationErrorKind::Referencing {
+            message: err.to_string(),
+        },
+    }
+}
+
+/// Convert a single `jsonschema::ValidationError` into one or more typed
+/// [`ValidationError`]s with pre-computed spans.
+///
+/// `AdditionalProperties` errors are split into one per unexpected property.
+fn convert_error(error: &jsonschema::ValidationError<'_>, content: &str) -> Vec<ValidationError> {
+    use jsonschema::error::ValidationErrorKind as JK;
+
+    let schema_path = error.schema_path().to_string();
+    let base_instance_path = error.instance_path().to_string();
+
+    if let JK::AdditionalProperties { unexpected } = error.kind() {
+        return unexpected
+            .iter()
+            .map(|prop| {
+                let instance_path = format!("{base_instance_path}/{prop}");
+                let span = find_instance_path_span(content, &instance_path);
+                ValidationError {
+                    instance_path,
+                    schema_path: schema_path.clone(),
+                    kind: ValidationErrorKind::AdditionalProperty {
+                        property: prop.clone(),
+                    },
+                    span,
+                }
+            })
+            .collect();
+    }
+
+    let span = find_instance_path_span(content, &base_instance_path);
+    vec![ValidationError {
+        instance_path: base_instance_path,
+        schema_path,
+        kind: convert_kind(error.kind()),
+        span,
+    }]
 }
 
 /// Validate all files in a group against an already-compiled validator and store
@@ -654,6 +797,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validate_formats: bool,
     cache_status: Option<CacheStatus>,
     group: &[P],
+    schema_value: &Value,
     vcache: &lintel_validation_cache::ValidationCache,
     errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
@@ -663,11 +807,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
         let pf = item.borrow();
         let file_errors: Vec<ValidationError> = validator
             .iter_errors(&pf.instance)
-            .map(|error| ValidationError {
-                instance_path: error.instance_path().to_string(),
-                message: clean_error_message(error.to_string()),
-                schema_path: error.schema_path().to_string(),
-            })
+            .flat_map(|error| convert_error(&error, &pf.content))
             .collect();
 
         vcache
@@ -680,7 +820,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
                 &file_errors,
             )
             .await;
-        push_validation_errors(pf, schema_uri, &file_errors, errors);
+        push_validation_errors(pf, schema_uri, &file_errors, errors, Some(schema_value));
 
         let cf = CheckedFile {
             path: pf.path.clone(),
@@ -990,7 +1130,13 @@ async fn run_with_contents_inner(
                 .await;
 
             if let Some(cached_errors) = cached {
-                push_validation_errors(pf, schema_uri, &cached_errors, &mut errors);
+                push_validation_errors(
+                    pf,
+                    schema_uri,
+                    &cached_errors,
+                    &mut errors,
+                    Some(&schema_value),
+                );
                 let cf = CheckedFile {
                     path: pf.path.clone(),
                     schema: schema_uri.clone(),
@@ -1092,6 +1238,7 @@ async fn run_with_contents_inner(
             validate_formats,
             cache_status,
             &cache_misses,
+            &schema_value,
             &vcache,
             &mut errors,
             &mut checked,
@@ -2079,50 +2226,6 @@ validate_formats = false
             "expected at least one validation cache hit on second run"
         );
         Ok(())
-    }
-
-    // --- clean_error_message ---
-
-    #[test]
-    fn clean_strips_anyof_value() {
-        let msg =
-            r#"{"type":"bad"} is not valid under any of the schemas listed in the 'anyOf' keyword"#;
-        assert_eq!(
-            clean_error_message(msg.to_string()),
-            "not valid under any of the schemas listed in the 'anyOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_strips_oneof_value() {
-        let msg = r#"{"runs-on":"ubuntu-latest","steps":[]} is not valid under any of the schemas listed in the 'oneOf' keyword"#;
-        assert_eq!(
-            clean_error_message(msg.to_string()),
-            "not valid under any of the schemas listed in the 'oneOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_strips_long_value() {
-        let long_value = "x".repeat(5000);
-        let suffix = " is not valid under any of the schemas listed in the 'anyOf' keyword";
-        let msg = format!("{long_value}{suffix}");
-        assert_eq!(
-            clean_error_message(msg),
-            "not valid under any of the schemas listed in the 'anyOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_preserves_type_error() {
-        let msg = r#"12345 is not of types "null", "string""#;
-        assert_eq!(clean_error_message(msg.to_string()), msg);
-    }
-
-    #[test]
-    fn clean_preserves_required_property() {
-        let msg = "\"name\" is a required property";
-        assert_eq!(clean_error_message(msg.to_string()), msg);
     }
 
     /// Schemas whose URI contains a fragment (e.g. `…/draft-07/schema#`)

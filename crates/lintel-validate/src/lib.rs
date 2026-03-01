@@ -19,6 +19,7 @@ pub mod catalog;
 pub mod discover;
 pub mod parsers;
 pub mod registry;
+pub(crate) mod suggest;
 pub mod validate;
 
 // -----------------------------------------------------------------------
