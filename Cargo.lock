@@ -2821,6 +2821,7 @@ dependencies = [
  "dyn-clone",
  "ref-cast",
  "schemars_derive",
+ "semver",
  "serde",
  "serde_json",
 ]

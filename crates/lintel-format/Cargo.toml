@@ -28,7 +28,7 @@ ignore.workspace = true
 lintel-config = { version = "0.0.7", path = "../lintel-config" }
 miette = { workspace = true, features = ["fancy"] }
 pretty_yaml = "0.6.0"
-semver = "1.0.27"
+semver.workspace = true
 serde_json.workspace = true
 similar = "2.7.0"
 thiserror.workspace = true

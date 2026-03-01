@@ -16,7 +16,6 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait = "0.1.89"
-percent-encoding = "2.3.2"
 bpaf.workspace = true
 glob.workspace = true
 glob-match.workspace = true
@@ -29,6 +28,7 @@ lintel-config = { version = "0.0.7", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
 lintel-validation-cache = { version = "0.0.8", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }
+percent-encoding = "2.3.2"
 schema-catalog = { version = "0.0.8", path = "../schema-catalog" }
 serde_json.workspace = true
 serde_yaml = "0.9.34"
