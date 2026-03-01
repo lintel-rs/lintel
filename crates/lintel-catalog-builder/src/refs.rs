@@ -4,7 +4,6 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
 use lintel_schema_cache::SchemaCache;
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tracing::{debug, info, warn};
 
 use crate::download::ProcessedSchemas;
@@ -26,32 +25,21 @@ pub struct RefRewriteContext<'a> {
     /// takes priority over cache-based injection from `source_url`.
     /// Format: `(source_identifier, sha256_hex)`.
     pub lintel_source: Option<(String, String)>,
+    /// Local directory containing source schemas. When set, relative `$ref`
+    /// paths are resolved against this directory (read from disk) instead of
+    /// downloading from the computed URL. This is used for local schemas whose
+    /// source files may not be available at the `source_url` yet.
+    pub local_source_dir: Option<&'a Path>,
+    /// Maps relative `$ref` paths (e.g. `./hooks.json`) to canonical catalog
+    /// URLs for sibling schemas in the same group. When a relative ref matches
+    /// a key here, it is rewritten directly without downloading.
+    pub sibling_urls: HashMap<String, String>,
     /// Glob patterns from the catalog entry, injected into `x-lintel.fileMatch`.
     pub file_match: Vec<String>,
     /// Explicit parsers extracted from `x-lintel.parsers`.
     /// When non-empty, used as-is; otherwise derived from `file_match` extensions.
     pub parsers: Vec<schema_catalog::FileFormat>,
 }
-
-/// Characters that must be percent-encoded in URI fragment components.
-///
-/// Per RFC 3986, fragments may contain: `pchar / "/" / "?"` where
-/// `pchar = unreserved / pct-encoded / sub-delims / ":" / "@"`.
-///
-/// This set encodes everything that is NOT allowed in a fragment.
-const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'<')
-    .add(b'>')
-    .add(b'[')
-    .add(b']')
-    .add(b'{')
-    .add(b'}')
-    .add(b'|')
-    .add(b'\\')
-    .add(b'^')
-    .add(b'"')
-    .add(b'`');
 
 /// Recursively scan a JSON value for `$ref` strings that are absolute HTTP(S) URLs.
 /// Returns the set of base URLs (fragments stripped).
@@ -218,52 +206,6 @@ pub fn rewrite_refs(value: &mut serde_json::Value, url_map: &HashMap<String, Str
     }
 }
 
-/// Percent-encode invalid characters in `$ref` URI references.
-///
-/// Many schemas in the wild use definition names with spaces, brackets, angle
-/// brackets, etc. that are not valid in URI references per RFC 3986. This
-/// function fixes them by percent-encoding the offending characters in the
-/// fragment portion of `$ref` values.
-pub fn fix_ref_uris(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(map) => {
-            if let Some(serde_json::Value::String(ref_str)) = map.get("$ref")
-                && let Some(new_ref) = encode_ref_fragment(ref_str)
-            {
-                map.insert("$ref".to_string(), serde_json::Value::String(new_ref));
-            }
-            for v in map.values_mut() {
-                fix_ref_uris(v);
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            for v in arr {
-                fix_ref_uris(v);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Encode invalid characters in a `$ref` fragment. Returns `None` if no
-/// encoding is needed.
-fn encode_ref_fragment(ref_str: &str) -> Option<String> {
-    let (base, fragment) = ref_str.split_once('#')?;
-
-    // Encode each JSON Pointer segment individually, preserving `/` separators
-    let encoded_fragment: String = fragment
-        .split('/')
-        .map(|segment| utf8_percent_encode(segment, FRAGMENT_ENCODE_SET).to_string())
-        .collect::<Vec<_>>()
-        .join("/");
-
-    if encoded_fragment == fragment {
-        return None;
-    }
-
-    Some(format!("{base}#{encoded_fragment}"))
-}
-
 /// Resolve all relative `$ref` paths in a schema against a source URL.
 ///
 /// Returns a map from relative path → absolute URL for each successfully resolved
@@ -296,41 +238,14 @@ fn resolve_all_relative_refs(
     resolved
 }
 
-/// Inject `x-lintel` metadata into a schema value.
-///
-/// Uses `lintel_source` (pre-computed source + hash) if available, otherwise
-/// falls back to cache-based injection from `source_url`.
-fn inject_lintel(value: &mut serde_json::Value, ctx: &RefRewriteContext<'_>) {
-    let parsers = if ctx.parsers.is_empty() {
-        crate::download::parsers_from_file_match(&ctx.file_match)
-    } else {
-        ctx.parsers.clone()
-    };
-    if let Some((source, hash)) = &ctx.lintel_source {
-        crate::download::inject_lintel_extra(
-            value,
-            crate::download::LintelExtra {
-                source: source.clone(),
-                source_sha256: hash.clone(),
-                invalid: false,
-                file_match: ctx.file_match.clone(),
-                parsers,
-                catalog_description: None,
-            },
-        );
-    } else if let Some(ref source_url) = ctx.source_url {
-        crate::download::inject_lintel_extra_from_cache(
-            value,
-            ctx.cache,
-            crate::download::LintelExtra {
-                source: source_url.clone(),
-                source_sha256: String::new(),
-                invalid: false,
-                file_match: ctx.file_match.clone(),
-                parsers,
-                catalog_description: None,
-            },
-        );
+/// Build a [`PostprocessContext`] from the shared [`RefRewriteContext`].
+fn postprocess_ctx<'a>(ctx: &RefRewriteContext<'a>) -> crate::postprocess::PostprocessContext<'a> {
+    crate::postprocess::PostprocessContext {
+        cache: ctx.cache,
+        source_url: ctx.source_url.clone(),
+        lintel_source: ctx.lintel_source.clone(),
+        file_match: ctx.file_match.clone(),
+        parsers: ctx.parsers.clone(),
     }
 }
 
@@ -378,12 +293,37 @@ pub async fn resolve_and_rewrite_value(
     jsonschema_migrate::migrate_to_2020_12(value);
 
     let external_refs = find_external_refs(value);
-    let resolved_relative = resolve_all_relative_refs(value, ctx.source_url.as_deref());
+    let relative_refs = find_relative_refs(value);
+
+    // Resolve sibling refs directly (same-group schemas with known catalog URLs).
+    // These don't need downloading — just rewrite in place.
+    let mut sibling_map: HashMap<String, String> = HashMap::new();
+    let mut unresolved_relative: HashSet<String> = HashSet::new();
+    for rel in &relative_refs {
+        if let Some(canonical) = ctx.sibling_urls.get(rel.as_str()) {
+            debug!(relative = %rel, resolved = %canonical, "resolved sibling $ref");
+            sibling_map.insert(rel.clone(), canonical.clone());
+        } else {
+            unresolved_relative.insert(rel.clone());
+        }
+    }
+    if !sibling_map.is_empty() {
+        rewrite_refs(value, &sibling_map);
+    }
+
+    // Resolve remaining relative refs against source_url for download
+    let resolved_relative = if unresolved_relative.is_empty() {
+        HashMap::new()
+    } else {
+        let all_resolved = resolve_all_relative_refs(value, ctx.source_url.as_deref());
+        all_resolved
+            .into_iter()
+            .filter(|(rel, _)| unresolved_relative.contains(rel))
+            .collect::<HashMap<_, _>>()
+    };
 
     if external_refs.is_empty() && resolved_relative.is_empty() {
-        // No external refs — still fix invalid URI references
-        fix_ref_uris(value);
-        inject_lintel(value, ctx);
+        crate::postprocess::postprocess_schema(&postprocess_ctx(ctx), value);
         crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
         return Ok(());
     }
@@ -416,14 +356,41 @@ pub async fn resolve_and_rewrite_value(
 
     // Rewrite refs in the root schema and write it
     rewrite_refs(value, &url_map);
-    fix_ref_uris(value);
-    inject_lintel(value, ctx);
+    crate::postprocess::postprocess_schema(&postprocess_ctx(ctx), value);
     crate::download::write_schema_json(value, schema_dest, ctx.processed).await?;
 
     // Process and write each dependency
     write_dep_schemas(ctx, dep_values, &url_map).await?;
 
     Ok(())
+}
+
+/// Check whether a `$ref` key looks like a relative file path (e.g. `./rule.json`,
+/// `../other.json`, `subdir/c.json`) as opposed to an absolute HTTP URL.
+fn is_relative_path(ref_key: &str) -> bool {
+    !ref_key.is_empty()
+        && !ref_key.starts_with("http://")
+        && !ref_key.starts_with("https://")
+        && !ref_key.starts_with('#')
+}
+
+/// Scan a dependency value for transitive `$ref`s and enqueue any new ones.
+fn enqueue_transitive_refs(
+    dep_value: &serde_json::Value,
+    source_url: Option<&str>,
+    already_downloaded: &HashMap<String, String>,
+    pending: &mut Vec<(String, String, Option<String>)>,
+) {
+    for url in find_external_refs(dep_value) {
+        if !already_downloaded.contains_key(&url) {
+            pending.push((url.clone(), url.clone(), Some(url.clone())));
+        }
+    }
+    for (rel, abs) in resolve_all_relative_refs(dep_value, source_url) {
+        if !already_downloaded.contains_key(&abs) {
+            pending.push((rel, abs.clone(), Some(abs)));
+        }
+    }
 }
 
 /// Queue-based concurrent fetcher for `$ref` dependencies. Unlike BFS waves,
@@ -475,7 +442,36 @@ async fn fetch_refs_queued(
                 ctx.base_url_for_shared.trim_end_matches('/'),
                 filename,
             );
-            url_map.insert(ref_key, local_url.clone());
+            url_map.insert(ref_key.clone(), local_url.clone());
+
+            // Try to read from local filesystem for relative refs
+            if let Some(local_dir) = ctx.local_source_dir
+                && is_relative_path(&ref_key)
+            {
+                let local_path = local_dir.join(&ref_key);
+                if let Ok(text) = tokio::fs::read_to_string(&local_path).await {
+                    match serde_json::from_str::<serde_json::Value>(&text) {
+                        Ok(dep_value) => {
+                            info!(path = %local_path.display(), "read local $ref dependency");
+                            enqueue_transitive_refs(
+                                &dep_value,
+                                source_url.as_deref(),
+                                ctx.already_downloaded,
+                                &mut pending,
+                            );
+                            dep_values.push((filename, dep_value, source_url));
+                            continue;
+                        }
+                        Err(e) => {
+                            debug!(
+                                path = %local_path.display(),
+                                error = %e,
+                                "local file not valid JSON, falling back to HTTP"
+                            );
+                        }
+                    }
+                }
+            }
 
             let cache = ctx.cache.clone();
             in_flight.push(async move {
@@ -499,17 +495,12 @@ async fn fetch_refs_queued(
             Ok((dep_value, status)) => {
                 info!(url = %download_url, status = %status, "downloaded $ref dependency");
 
-                // Immediately enqueue transitive refs (will be submitted next iteration)
-                for url in find_external_refs(&dep_value) {
-                    if !ctx.already_downloaded.contains_key(&url) {
-                        pending.push((url.clone(), url.clone(), Some(url.clone())));
-                    }
-                }
-                for (rel, abs) in resolve_all_relative_refs(&dep_value, source_url.as_deref()) {
-                    if !ctx.already_downloaded.contains_key(&abs) {
-                        pending.push((rel, abs.clone(), Some(abs)));
-                    }
-                }
+                enqueue_transitive_refs(
+                    &dep_value,
+                    source_url.as_deref(),
+                    ctx.already_downloaded,
+                    &mut pending,
+                );
 
                 dep_values.push((filename, dep_value, source_url));
             }
@@ -559,21 +550,16 @@ async fn write_dep_schemas(
         }
         jsonschema_migrate::migrate_to_2020_12(&mut dep_value);
         rewrite_refs(&mut dep_value, &dep_url_map);
-        fix_ref_uris(&mut dep_value);
-        if let Some(ref source_url) = source_url {
-            crate::download::inject_lintel_extra_from_cache(
-                &mut dep_value,
-                ctx.cache,
-                crate::download::LintelExtra {
-                    source: source_url.clone(),
-                    source_sha256: String::new(),
-                    invalid: false,
-                    file_match: Vec::new(),
-                    parsers: Vec::new(),
-                    catalog_description: None,
-                },
-            );
-        }
+        crate::postprocess::postprocess_schema(
+            &crate::postprocess::PostprocessContext {
+                cache: ctx.cache,
+                source_url,
+                lintel_source: None,
+                file_match: Vec::new(),
+                parsers: Vec::new(),
+            },
+            &mut dep_value,
+        );
         crate::download::write_schema_json(&dep_value, &dep_dest, ctx.processed).await?;
     }
 
@@ -679,79 +665,6 @@ mod tests {
         assert_eq!(schema["properties"]["bar"]["$ref"], "_shared/other.json");
         // Local refs are untouched
         assert_eq!(schema["properties"]["local"]["$ref"], "#/definitions/Local");
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_spaces() {
-        assert_eq!(
-            encode_ref_fragment("#/$defs/Parameter Node"),
-            Some("#/$defs/Parameter%20Node".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_brackets() {
-        assert_eq!(
-            encode_ref_fragment("#/$defs/ConfigTranslated[string]"),
-            Some("#/$defs/ConfigTranslated%5Bstring%5D".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_angle_brackets() {
-        assert_eq!(
-            encode_ref_fragment("#/definitions/Dictionary<any>"),
-            Some("#/definitions/Dictionary%3Cany%3E".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_with_pipe() {
-        assert_eq!(
-            encode_ref_fragment("#/definitions/k8s.io|api|core|v1.TaintEffect"),
-            Some("#/definitions/k8s.io%7Capi%7Ccore%7Cv1.TaintEffect".to_string())
-        );
-    }
-
-    #[test]
-    fn encode_ref_fragment_valid_unchanged() {
-        // Already-valid refs should return None (no change needed)
-        assert_eq!(encode_ref_fragment("#/definitions/Foo"), None);
-        assert_eq!(encode_ref_fragment("#/$defs/bar-baz"), None);
-    }
-
-    #[test]
-    fn encode_ref_no_fragment() {
-        assert_eq!(encode_ref_fragment("https://example.com/foo.json"), None);
-    }
-
-    #[test]
-    fn fix_ref_uris_encodes_spaces_in_schema() {
-        let mut schema = serde_json::json!({
-            "oneOf": [
-                { "$ref": "#/$defs/Parameter Node" },
-                { "$ref": "#/$defs/Event Node" }
-            ],
-            "properties": {
-                "ok": { "$ref": "#/definitions/Valid" }
-            }
-        });
-        fix_ref_uris(&mut schema);
-        assert_eq!(schema["oneOf"][0]["$ref"], "#/$defs/Parameter%20Node");
-        assert_eq!(schema["oneOf"][1]["$ref"], "#/$defs/Event%20Node");
-        assert_eq!(schema["properties"]["ok"]["$ref"], "#/definitions/Valid");
-    }
-
-    #[test]
-    fn fix_ref_uris_encodes_complex_rust_types() {
-        let mut schema = serde_json::json!({
-            "$ref": "#/definitions/core::option::Option<vector::template::Template>"
-        });
-        fix_ref_uris(&mut schema);
-        assert_eq!(
-            schema["$ref"],
-            "#/definitions/core::option::Option%3Cvector::template::Template%3E"
-        );
     }
 
     // --- find_relative_refs ---

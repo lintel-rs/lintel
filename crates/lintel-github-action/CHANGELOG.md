@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.13...lintel-github-action-v0.0.14) - 2026-03-01
+
+### Other
+
+- updated the following local packages: lintel-validate, lintel-format, lintel-check
+
+## [0.0.13](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.12...lintel-github-action-v0.0.13) - 2026-02-28
+
+### Other
+
+- Merge origin/master into jsonl-support
+- Add JSONL/NDJSON support across the lintel pipeline
+
 ## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.11...lintel-github-action-v0.0.12) - 2026-02-27
 
 ### Other

@@ -8,7 +8,6 @@
 //! Configs: [`CATALOG_SORT`] for `lintel-catalog.toml`,
 //! [`LINTEL_SORT`] for `lintel.toml`.
 
-use alloc::borrow::Cow;
 use core::cmp::Ordering;
 use std::path::Path;
 
@@ -88,13 +87,22 @@ pub fn format_text(
         None
     };
 
-    let content = if let Some(sort_config) = sort_config {
-        Cow::Owned(sort_toml(content, sort_config).map_err(|e| anyhow::anyhow!("{e}"))?)
+    let sorted = if let Some(sort_config) = sort_config {
+        Some(sort_toml(content, sort_config).map_err(|e| anyhow::anyhow!("{e}"))?)
     } else {
-        Cow::Borrowed(content)
+        None
     };
+    let to_format = sorted.as_deref().unwrap_or(content);
 
-    dprint_plugin_toml::format_text(path, &content, config).map_err(|e| anyhow::anyhow!("{e}"))
+    match dprint_plugin_toml::format_text(path, to_format, config)
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+    {
+        Some(formatted) => Ok(Some(formatted)),
+        // dprint says the content is already formatted, but sorting may
+        // have changed it relative to the original input.
+        None if sorted.as_deref().is_some_and(|s| s != content) => Ok(sorted),
+        None => Ok(None),
+    }
 }
 
 /// Sort a TOML document according to the given configuration.
@@ -388,12 +396,20 @@ fn reorder_sections(content: &str, order: &[&str]) -> String {
     let preamble = preamble.trim_end();
     if !preamble.is_empty() {
         output.push_str(preamble);
-        output.push_str("\n\n");
+        if chunks.is_empty() {
+            output.push('\n');
+        } else {
+            output.push_str("\n\n");
+        }
     }
-    for (_, chunk) in &chunks {
+    for (i, (_, chunk)) in chunks.iter().enumerate() {
         let trimmed = chunk.trim_end();
         output.push_str(trimmed);
-        output.push_str("\n\n");
+        if i + 1 < chunks.len() {
+            output.push_str("\n\n");
+        } else {
+            output.push('\n');
+        }
     }
     output
 }
@@ -996,5 +1012,27 @@ root = true\n";
             result.find("root").unwrap() < result.find("registries").unwrap(),
             "root should be before registries, got:\n{result}"
         );
+    }
+
+    /// A lintel.toml with only top-level keys (no section headers) must be
+    /// idempotent: formatting it once and then formatting again should produce
+    /// no further changes.
+    #[test]
+    fn lintel_no_sections_idempotent() {
+        let input = "exclude = [\"**/testdata/**\", \"e2e-tests/**\"]\n";
+        let path = Path::new("lintel.toml");
+        let config = dprint_plugin_toml::configuration::ConfigurationBuilder::new().build();
+        // First format: should return None (already formatted) or Some(same).
+        match format_text(path, input, &config).unwrap() {
+            None => {} // already formatted — good
+            Some(formatted) => {
+                // If it did change, a second pass must return None.
+                assert_eq!(
+                    format_text(path, &formatted, &config).unwrap(),
+                    None,
+                    "formatting should be idempotent, got a change on second pass"
+                );
+            }
+        }
     }
 }

@@ -96,6 +96,15 @@ fn migrate_object_keywords(
 
     // --- Cleanup/normalization fixes (always applied) ---
 
+    // Strip fragment from $schema (e.g. "…/draft-07/schema#" → "…/draft-07/schema").
+    // Fragments in base URIs cause compilation failures in jsonschema 0.42.2+.
+    if let Some(serde_json::Value::String(s)) = map.get("$schema")
+        && let Some(pos) = s.find('#')
+    {
+        let stripped = s[..pos].to_string();
+        map.insert("$schema".to_string(), serde_json::Value::String(stripped));
+    }
+
     // String "deprecated" → boolean true
     if let Some(dep) = map.get("deprecated")
         && dep.is_string()
@@ -318,6 +327,39 @@ mod tests {
         migrate_to_2020_12(&mut schema);
         assert!(schema["patternProperties"].get(r"^\{[a-z]+\}$").is_some());
         assert!(schema["patternProperties"].get("^{[a-z]+}$").is_none());
+    }
+
+    #[test]
+    fn schema_fragment_stripped() {
+        let mut schema = json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object"
+        });
+        migrate_to_2020_12(&mut schema);
+        // After migration $schema is replaced with 2020-12 (no fragment).
+        assert_eq!(
+            schema["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
+    }
+
+    #[test]
+    fn nested_schema_fragment_stripped() {
+        let mut schema = json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "Sub": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "string"
+                }
+            }
+        });
+        migrate_to_2020_12(&mut schema);
+        // The nested $schema fragment should also be stripped.
+        assert_eq!(
+            schema["$defs"]["Sub"]["$schema"],
+            "http://json-schema.org/draft-07/schema"
+        );
     }
 
     #[test]

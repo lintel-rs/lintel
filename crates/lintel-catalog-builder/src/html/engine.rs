@@ -107,6 +107,10 @@ fn register_templates(env: &mut Environment<'static>) -> Result<()> {
         ("schema.html", include_str!("templates/schema.html")),
         ("version.html", include_str!("templates/version.html")),
         ("shared.html", include_str!("templates/shared.html")),
+        (
+            "schemas_index.html",
+            include_str!("templates/schemas_index.html"),
+        ),
         ("sitemap.xml", include_str!("templates/sitemap.xml")),
         (
             "components/schema_card.html",

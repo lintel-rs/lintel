@@ -1,6 +1,6 @@
 [package]
 name = "lintel-explain"
-version = "0.0.7"
+version = "0.0.9"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -17,10 +17,10 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 jsonschema-explain = { version = "0.2.5", path = "../jsonschema-explain" }
-lintel-cli-common = { version = "0.0.5", path = "../lintel-cli-common" }
+lintel-cli-common = { version = "0.0.6", path = "../lintel-cli-common" }
 lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
-lintel-identify = { version = "0.0.10", path = "../lintel-identify" }
-lintel-validate = { version = "0.0.7", path = "../lintel-validate" }
+lintel-identify = { version = "0.0.12", path = "../lintel-identify" }
+lintel-validate = { version = "0.0.9", path = "../lintel-validate" }
 reqwest.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

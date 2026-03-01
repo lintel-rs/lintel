@@ -1,23 +1,42 @@
-{% extends "layout.html" %} {% block title %}{{ name }} - {{ site.title }}{%
-endblock %} {% block description %}{{ seo_description }}{% endblock %} {% block
-canonical %}{{ site.base_url }}{{ page_url }}{% endblock %} {% block og_title
-%}{{ name }} - {{ site.title }}{% endblock %} {% block og_description %}{{
-seo_description }}{% endblock %} {% block og_url %}{{ site.base_url }}{{
-page_url }}{% endblock %} {% block jsonld %}
+{% extends "layout.html" %} {% block title %}{% if group_name %}{{ name }} ({{
+group_name }}) JSON Schema{% else %}{{ name }} JSON Schema{% endif %} - {{
+site.title }}{% endblock %} {% block description %}{{ seo_description }}{%
+endblock %} {% block canonical %}{{ site.base_url }}{{ page_url }}{% endblock %}
+{% block og_title %}{% if group_name %}{{ name }} ({{ group_name }}) JSON
+Schema{% else %}{{ name }} JSON Schema{% endif %} - {{ site.title }}{% endblock
+%} {% block og_description %}{{ seo_description }}{% endblock %} {% block og_url
+%}{{ site.base_url }}{{ page_url }}{% endblock %} {% block jsonld %}
 <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareSourceCode",
-    "name": "{{ name }}",
-    "description": "{{ description }}",
-    "url": "{{ site.base_url }}{{ page_url }}",
-    "codeRepository": "{{ json_url }}",
-    "programmingLanguage": "JSON Schema",
-    "isPartOf": {
-      "@type": "WebSite",
-      "name": "{{ site.title }}",
-      "url": "{{ site.base_url }}"
-    }
+    "@graph": [
+      {
+        "@type": "SoftwareSourceCode",
+        "name": "{{ name }}",
+        "description": "{{ description }}",
+        "url": "{{ site.base_url }}{{ page_url }}",
+        "codeRepository": "{{ json_url }}",
+        "programmingLanguage": "JSON Schema",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "{{ site.title }}",
+          "url": "{{ site.base_url }}"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {% for crumb in breadcrumbs %}
+          {
+            "@type": "ListItem",
+            "position": {{ loop.index }},
+            "name": "{{ crumb.label }}"{% if crumb.url %},
+            "item": "{{ site.base_url }}{{ crumb.url|replace(site.base_path, '') }}"{% endif %}
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ]
+      }
+    ]
   }
 </script>
 {% endblock %} {% block content %} {% include "components/breadcrumb.html" %}
@@ -32,7 +51,21 @@ page_url }}{% endblock %} {% block jsonld %}
     </header>
 
     <table class="meta-table">
-      {% if schema_doc and schema_doc.schema_type %}
+      {% if schema_doc and schema_doc.type_parts %}
+      <tr>
+        <th>Type</th>
+        <td>
+          <span class="type-badge"
+            >{% for part in schema_doc.type_parts %}{% if part.href %}<a
+              href="{{ part.href }}"
+              class="type-badge-link"
+              >{{ part.text }}</a
+            >{% else %}{{ part.text }}{% endif %}{% if not loop.last %} | {%
+            endif %}{% endfor %}</span
+          >
+        </td>
+      </tr>
+      {% elif schema_doc and schema_doc.schema_type %}
       <tr>
         <th>Type</th>
         <td><span class="type-badge">{{ schema_doc.schema_type }}</span></td>

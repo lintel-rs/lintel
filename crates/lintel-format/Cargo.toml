@@ -1,6 +1,6 @@
 [package]
 name = "lintel-format"
-version = "0.0.2"
+version = "0.0.4"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -25,11 +25,11 @@ dprint-plugin-toml = "0.7.0"
 glob.workspace = true
 glob-match.workspace = true
 ignore.workspace = true
-lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-config = { version = "0.0.8", path = "../lintel-config" }
 lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 miette = { workspace = true, features = ["fancy"] }
 pretty_yaml = "0.6.0"
-semver = "1.0.27"
+semver.workspace = true
 serde_json.workspace = true
 similar = "2.7.0"
 thiserror.workspace = true

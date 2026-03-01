@@ -1,0 +1,9 @@
+---
+source: crates/lintel/tests/e2e.rs
+expression: text
+---
+error: ./data.jsonl: expected consistent $schema but found https://example.com/schema-b.json
+error: ./data.jsonl:1: failed to fetch schema: https://example.com/schema-a.json: HTTP status client error (404 Not Found) for url (https://example.com/schema-a.json)
+error: ./data.jsonl:2: failed to fetch schema: https://example.com/schema-b.json: HTTP status client error (404 Not Found) for url (https://example.com/schema-b.json)
+Checked 2 files in [TIME]. 3 error(s) found.
+exit code: 1

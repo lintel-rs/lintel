@@ -1,6 +1,6 @@
 [package]
 name = "lintel-identify"
-version = "0.0.10"
+version = "0.0.12"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -18,11 +18,11 @@ anyhow.workspace = true
 bpaf.workspace = true
 glob-match.workspace = true
 jsonschema-explain = { version = "0.2.5", path = "../jsonschema-explain" }
-lintel-cli-common = { version = "0.0.5", path = "../lintel-cli-common" }
-lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-cli-common = { version = "0.0.6", path = "../lintel-cli-common" }
+lintel-config = { version = "0.0.8", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.7", path = "../lintel-validate" }
-schema-catalog = { version = "0.0.7", path = "../schema-catalog" }
+lintel-validate = { version = "0.0.9", path = "../lintel-validate" }
+schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
 serde_json.workspace = true
 terminal_size = "0.4.3"
 tracing.workspace = true

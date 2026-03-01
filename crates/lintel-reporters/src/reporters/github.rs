@@ -33,6 +33,7 @@ fn emit_lint_error(error: &LintelDiagnostic) {
         | LintelDiagnostic::Validation { src, span, .. } => {
             offset_to_line_col(src.inner(), span.offset())
         }
+        LintelDiagnostic::SchemaMismatch { line_number, .. } => (*line_number, 1),
         LintelDiagnostic::Io { .. }
         | LintelDiagnostic::SchemaFetch { .. }
         | LintelDiagnostic::SchemaCompile { .. }
@@ -45,6 +46,7 @@ fn emit_lint_error(error: &LintelDiagnostic) {
             instance_path
         }
         LintelDiagnostic::Validation { .. } => "validation error",
+        LintelDiagnostic::SchemaMismatch { .. } => "schema mismatch",
         LintelDiagnostic::Io { .. } => "io error",
         LintelDiagnostic::SchemaFetch { .. } => "schema fetch error",
         LintelDiagnostic::SchemaCompile { .. } => "schema compile error",

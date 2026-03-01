@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.16](https://github.com/lintel-rs/lintel/compare/v0.0.15...v0.0.16) - 2026-03-01
+
+### Other
+
+- updated the following local packages: lintel-config, schema-catalog, lintel-validate, lintel-format, lintel-annotate, lintel-check, lintel-identify, lintel-explain, lintel-github-action, lintel-reporters
+
+## [0.0.15](https://github.com/lintel-rs/lintel/compare/v0.0.14...v0.0.15) - 2026-02-28
+
+### Other
+
+- Remove FileFormat re-export from parsers, import from schema_catalog directly
+- Merge origin/master into jsonl-support
+- Merge pull request #116 from lintel-rs/autocomplete-fix
+- Add shell file/directory completion to CLI arguments
+
 ## [0.0.14](https://github.com/lintel-rs/lintel/compare/v0.0.13...v0.0.14) - 2026-02-27
 
 ### Other

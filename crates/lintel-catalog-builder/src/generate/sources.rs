@@ -264,6 +264,8 @@ async fn process_one_source_schema(
                 already_downloaded: &mut already_downloaded,
                 source_url: Some(source_url.clone()),
                 processed: ctx.processed,
+                local_source_dir: None,
+                sibling_urls: HashMap::new(),
                 lintel_source: None,
                 file_match: file_match.clone(),
                 parsers,

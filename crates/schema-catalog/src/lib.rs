@@ -151,6 +151,7 @@ pub enum FileFormat {
     Json,
     Json5,
     Jsonc,
+    Jsonl,
     Toml,
     Yaml,
     Markdown,

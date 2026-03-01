@@ -11,6 +11,9 @@ pub struct SchemaDoc {
     pub title: Option<String>,
     pub description_html: Option<String>,
     pub schema_type: Option<String>,
+    /// Individual type parts for linked composite types (e.g. `Foo | Bar`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub type_parts: Vec<TypePart>,
     pub properties: Vec<PropertyDoc>,
     pub items: Option<Box<SubSchemaDoc>>,
     pub examples: Vec<ExampleDoc>,
@@ -24,6 +27,10 @@ pub struct SchemaDoc {
 pub struct PropertyDoc {
     pub name: String,
     pub schema_type: Option<String>,
+    /// Individual type segments for composed types (e.g. `oneOf`), each optionally linked.
+    /// When non-empty, the template renders these instead of the plain `schema_type` string.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub schema_type_parts: Vec<TypePart>,
     pub required: bool,
     pub description_html: Option<String>,
     pub default: Option<String>,
@@ -35,9 +42,20 @@ pub struct PropertyDoc {
     pub compositions: Vec<CompositionDoc>,
     pub properties: Vec<PropertyDoc>,
     pub has_nested: bool,
-    /// Anchor ID linking to a definition (e.g. `def-Foo`), when the type comes from a `$ref`.
+    /// Href linking to a definition or external schema page, when the type comes from a `$ref`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ref_anchor: Option<String>,
+    /// When the property is a map/record type via `additionalProperties`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_properties: Option<AdditionalPropertiesDoc>,
+}
+
+/// A segment within a composed type string, optionally linking to a definition or schema page.
+#[derive(Serialize, Default)]
+pub struct TypePart {
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub href: Option<String>,
 }
 
 /// A validation constraint (e.g. `format=email`).
@@ -64,6 +82,9 @@ pub struct VariantDoc {
     pub description_html: Option<String>,
     pub properties: Vec<PropertyDoc>,
     pub is_expanded: bool,
+    /// Link target when the variant references another schema page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ref_href: Option<String>,
 }
 
 /// A definition from `$defs` / `definitions`.
@@ -75,6 +96,10 @@ pub struct DefinitionDoc {
     pub schema_type: Option<String>,
     pub description_html: Option<String>,
     pub properties: Vec<PropertyDoc>,
+    pub examples: Vec<String>,
+    /// When the definition is a map/record type via `additionalProperties`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_properties: Option<AdditionalPropertiesDoc>,
 }
 
 /// A top-level example value.
@@ -82,6 +107,15 @@ pub struct DefinitionDoc {
 pub struct ExampleDoc {
     pub is_complex: bool,
     pub content: String,
+}
+
+/// Additional properties info for map/record types (`Record<key, Value>`).
+#[derive(Serialize)]
+pub struct AdditionalPropertiesDoc {
+    pub key_label: String,
+    pub value_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_href: Option<String>,
 }
 
 /// Sub-schema info for array `items`.
@@ -100,8 +134,39 @@ const COMPOSITION_KEYWORDS: &[(&str, &str)] = &[
 
 const MAX_DEPTH: usize = 3;
 
+/// Site context for resolving external `$ref` links.
+pub struct SiteContext<'a> {
+    /// Full base URL of the catalog (e.g. `https://catalog.lintel.tools/`).
+    pub base_url: &'a str,
+    /// Root-relative path for internal links (e.g. `/` or `/catalog/`).
+    pub base_path: &'a str,
+}
+
+/// Shared context threaded through all extraction functions.
+struct ExtractContext<'a> {
+    /// Root schema for resolving local `$ref`s.
+    root: &'a Value,
+    /// Current nesting depth (capped at [`MAX_DEPTH`]).
+    depth: usize,
+    /// Optional site context for resolving external links.
+    site: Option<&'a SiteContext<'a>>,
+}
+
+impl ExtractContext<'_> {
+    fn deeper(&self) -> Self {
+        Self {
+            root: self.root,
+            depth: self.depth + 1,
+            site: self.site,
+        }
+    }
+}
+
 /// Extract structured documentation from a JSON Schema value.
-pub fn extract_schema_doc(schema: &Value) -> SchemaDoc {
+///
+/// When `site` is provided, external `$ref` links within the same catalog are
+/// resolved to clickable page URLs.
+pub fn extract_schema_doc(schema: &Value, site: Option<&SiteContext<'_>>) -> SchemaDoc {
     let title = schema
         .get("title")
         .and_then(Value::as_str)
@@ -109,17 +174,24 @@ pub fn extract_schema_doc(schema: &Value) -> SchemaDoc {
     let desc = get_description(schema).map(md_to_html);
     let schema_type = schema_type_str(schema);
 
+    let ctx = ExtractContext {
+        root: schema,
+        depth: 0,
+        site,
+    };
+
     let required = required_set(schema);
     let properties = schema
         .get("properties")
         .and_then(Value::as_object)
-        .map(|props| extract_properties(props, &required, schema, 0))
+        .map(|props| extract_properties(props, &required, &ctx))
         .unwrap_or_default();
 
-    let items = extract_items(schema);
+    let items = extract_items(schema, &ctx);
     let examples = extract_examples(schema);
-    let compositions = extract_compositions(schema, schema, 0);
-    let definitions = extract_definitions(schema);
+    let compositions = extract_compositions(schema, &ctx);
+    let definitions = extract_definitions(schema, &ctx);
+    let type_parts = compute_type_parts(schema, site);
 
     let has_content = !properties.is_empty()
         || items.is_some()
@@ -131,6 +203,7 @@ pub fn extract_schema_doc(schema: &Value) -> SchemaDoc {
         title,
         description_html: desc,
         schema_type,
+        type_parts,
         properties,
         items,
         examples,
@@ -140,16 +213,21 @@ pub fn extract_schema_doc(schema: &Value) -> SchemaDoc {
     }
 }
 
-fn extract_items(schema: &Value) -> Option<Box<SubSchemaDoc>> {
+fn extract_items(schema: &Value, ctx: &ExtractContext<'_>) -> Option<Box<SubSchemaDoc>> {
     let items = schema.get("items")?;
-    let resolved = resolve_ref(items, schema);
+    let resolved = resolve_ref(items, ctx.root);
     let ty = schema_type_str(resolved);
     let desc = get_description(resolved).map(md_to_html);
     let required = required_set(resolved);
+    let child_ctx = ExtractContext {
+        root: ctx.root,
+        depth: 1,
+        site: ctx.site,
+    };
     let properties = resolved
         .get("properties")
         .and_then(Value::as_object)
-        .map(|p| extract_properties(p, &required, schema, 1))
+        .map(|p| extract_properties(p, &required, &child_ctx))
         .unwrap_or_default();
     Some(Box::new(SubSchemaDoc {
         schema_type: ty,
@@ -181,14 +259,14 @@ fn extract_examples(schema: &Value) -> Vec<ExampleDoc> {
         .unwrap_or_default()
 }
 
-fn extract_compositions(schema: &Value, root: &Value, depth: usize) -> Vec<CompositionDoc> {
+fn extract_compositions(schema: &Value, ctx: &ExtractContext<'_>) -> Vec<CompositionDoc> {
     let mut result = Vec::new();
     for &(keyword, label) in COMPOSITION_KEYWORDS {
         if let Some(variants) = schema.get(keyword).and_then(Value::as_array) {
             let variants: Vec<VariantDoc> = variants
                 .iter()
                 .enumerate()
-                .map(|(i, v)| extract_variant(v, root, i + 1, depth))
+                .map(|(i, v)| extract_variant(v, i + 1, ctx))
                 .collect();
             if !variants.is_empty() {
                 result.push(CompositionDoc {
@@ -202,22 +280,54 @@ fn extract_compositions(schema: &Value, root: &Value, depth: usize) -> Vec<Compo
     result
 }
 
-fn extract_variant(variant: &Value, root: &Value, index: usize, depth: usize) -> VariantDoc {
-    let resolved = resolve_ref(variant, root);
+fn extract_variant(variant: &Value, index: usize, ctx: &ExtractContext<'_>) -> VariantDoc {
+    let resolved = resolve_ref(variant, ctx.root);
     let label = variant_label(variant, resolved);
     let ty = schema_type_str(resolved);
-    let desc = get_description(resolved).map(md_to_html);
-    let required = required_set(resolved);
-    let properties = if depth < MAX_DEPTH {
-        resolved
-            .get("properties")
-            .and_then(Value::as_object)
-            .map(|p| extract_properties(p, &required, root, depth + 1))
-            .unwrap_or_default()
+
+    // Link to a local definition or external schema page
+    let ref_href = variant
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|r| {
+            if r.starts_with("#/$defs/") || r.starts_with("#/definitions/") {
+                Some(alloc::format!("#def-{}", ref_name(r)))
+            } else {
+                ctx.site.and_then(|s| ref_to_href(r, s))
+            }
+        })
+        .or_else(|| {
+            // Also check array items for external refs
+            ctx.site.and_then(|s| {
+                let ref_str = find_ref_target(variant)?;
+                ref_to_href(ref_str, s)
+            })
+        });
+
+    // When variant links to a definition, skip desc/properties — the definition section has them.
+    let is_local_def = variant
+        .get("$ref")
+        .and_then(Value::as_str)
+        .is_some_and(|r| r.starts_with("#/$defs/") || r.starts_with("#/definitions/"));
+
+    let (desc, properties) = if is_local_def {
+        (None, Vec::new())
     } else {
-        Vec::new()
+        let desc = get_description(resolved).map(md_to_html);
+        let required = required_set(resolved);
+        let props = if ctx.depth < MAX_DEPTH {
+            resolved
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|p| extract_properties(p, &required, &ctx.deeper()))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        (desc, props)
     };
     let is_expanded = desc.is_some() || !properties.is_empty();
+
     VariantDoc {
         index,
         label,
@@ -225,6 +335,7 @@ fn extract_variant(variant: &Value, root: &Value, index: usize, depth: usize) ->
         description_html: desc,
         properties,
         is_expanded,
+        ref_href,
     }
 }
 
@@ -233,31 +344,40 @@ fn variant_label(original: &Value, resolved: &Value) -> String {
         return String::from(title);
     }
     if let Some(r) = original.get("$ref").and_then(Value::as_str) {
-        return String::from(ref_name(r));
+        return ref_name(r);
     }
     schema_type_str(resolved).unwrap_or_else(|| String::from("variant"))
 }
 
-fn extract_definitions(schema: &Value) -> Vec<DefinitionDoc> {
+fn extract_definitions(schema: &Value, ctx: &ExtractContext<'_>) -> Vec<DefinitionDoc> {
     let mut defs = Vec::new();
+    let child_ctx = ExtractContext {
+        root: ctx.root,
+        depth: 1,
+        site: ctx.site,
+    };
     for key in &["$defs", "definitions"] {
         if let Some(map) = schema.get(*key).and_then(Value::as_object) {
             for (name, def_schema) in map {
-                let resolved = resolve_ref(def_schema, schema);
+                let resolved = resolve_ref(def_schema, ctx.root);
                 let ty = schema_type_str(resolved);
                 let desc = get_description(resolved).map(md_to_html);
                 let required = required_set(resolved);
                 let properties = resolved
                     .get("properties")
                     .and_then(Value::as_object)
-                    .map(|p| extract_properties(p, &required, schema, 1))
+                    .map(|p| extract_properties(p, &required, &child_ctx))
                     .unwrap_or_default();
+                let examples = extract_raw_examples(resolved);
+                let additional_properties = extract_additional_properties(resolved, &child_ctx);
                 defs.push(DefinitionDoc {
                     name: name.clone(),
                     slug: alloc::format!("def-{name}"),
                     schema_type: ty,
                     description_html: desc,
                     properties,
+                    examples,
+                    additional_properties,
                 });
             }
         }
@@ -268,29 +388,24 @@ fn extract_definitions(schema: &Value) -> Vec<DefinitionDoc> {
 fn extract_properties(
     props: &serde_json::Map<String, Value>,
     required: &[String],
-    root: &Value,
-    depth: usize,
+    ctx: &ExtractContext<'_>,
 ) -> Vec<PropertyDoc> {
     let mut sorted: Vec<_> = props.iter().collect();
     sorted.sort_by_key(|(name, _)| i32::from(!required.contains(name)));
 
     sorted
         .into_iter()
-        .map(|(name, prop_schema)| {
-            extract_single_property(name, prop_schema, required, root, depth)
-        })
+        .map(|(name, prop_schema)| extract_single_property(name, prop_schema, required, ctx))
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn extract_single_property(
     name: &str,
     prop_schema: &Value,
     required: &[String],
-    root: &Value,
-    depth: usize,
+    ctx: &ExtractContext<'_>,
 ) -> PropertyDoc {
-    let resolved = resolve_ref(prop_schema, root);
+    let resolved = resolve_ref(prop_schema, ctx.root);
     let ty = schema_type_str(resolved);
     let is_required = required.iter().any(|r| r == name);
     let desc = get_description(resolved).map(md_to_html);
@@ -306,30 +421,47 @@ fn extract_single_property(
     let const_value = resolved.get("const").map(format_value);
     let examples = extract_property_examples(resolved);
     let constraints = extract_constraints(resolved);
-    let compositions = extract_compositions(resolved, root, depth);
 
-    // Link type badge to definition anchor when the property is a local $ref
-    let ref_anchor = prop_schema
-        .get("$ref")
-        .and_then(Value::as_str)
-        .filter(|r| r.starts_with("#/$defs/") || r.starts_with("#/definitions/"))
-        .map(|r| alloc::format!("def-{}", ref_name(r)));
+    // When the type badge already shows the oneOf/anyOf composition (no explicit `type` field),
+    // skip the redundant inline composition section.
+    let type_from_composition = resolved.get("type").is_none()
+        && (resolved.get("oneOf").is_some() || resolved.get("anyOf").is_some());
+    let compositions = if type_from_composition {
+        Vec::new()
+    } else {
+        extract_compositions(resolved, ctx)
+    };
+
+    // Build individually-linkable type parts for composed types (oneOf/anyOf)
+    let schema_type_parts = compute_type_parts(resolved, ctx.site);
+
+    // Link type badge to a definition or external schema page.
+    // Check the direct `$ref` first, then walk into array `items`.
+    let ref_anchor = find_ref_target(prop_schema).and_then(|r| {
+        if r.starts_with("#/$defs/") || r.starts_with("#/definitions/") {
+            Some(alloc::format!("#def-{}", ref_name(r)))
+        } else {
+            ctx.site.and_then(|s| ref_to_href(r, s))
+        }
+    });
 
     let nested_required = required_set(resolved);
-    let nested = if depth < MAX_DEPTH {
+    let nested = if ctx.depth < MAX_DEPTH {
         resolved
             .get("properties")
             .and_then(Value::as_object)
-            .map(|p| extract_properties(p, &nested_required, root, depth + 1))
+            .map(|p| extract_properties(p, &nested_required, &ctx.deeper()))
             .unwrap_or_default()
     } else {
         Vec::new()
     };
     let has_nested = !nested.is_empty();
+    let additional_properties = extract_additional_properties(resolved, ctx);
 
     PropertyDoc {
         name: String::from(name),
         schema_type: ty,
+        schema_type_parts,
         required: is_required,
         description_html: desc,
         default,
@@ -342,7 +474,42 @@ fn extract_single_property(
         properties: nested,
         has_nested,
         ref_anchor,
+        additional_properties,
     }
+}
+
+fn extract_additional_properties(
+    schema: &Value,
+    ctx: &ExtractContext<'_>,
+) -> Option<AdditionalPropertiesDoc> {
+    let ap = schema.get("additionalProperties")?;
+    if !ap.is_object() {
+        return None;
+    }
+
+    let key_label = schema
+        .get("x-tombi-additional-key-label")
+        .and_then(Value::as_str)
+        .map_or_else(|| String::from("string"), String::from);
+
+    let resolved_ap = resolve_ref(ap, ctx.root);
+    let value_type = schema_type_str(resolved_ap)
+        .or_else(|| ap.get("$ref").and_then(Value::as_str).map(ref_name))
+        .unwrap_or_else(|| String::from("any"));
+
+    let value_href = ap.get("$ref").and_then(Value::as_str).and_then(|r| {
+        if r.starts_with("#/$defs/") || r.starts_with("#/definitions/") {
+            Some(alloc::format!("#def-{}", ref_name(r)))
+        } else {
+            ctx.site.and_then(|s| ref_to_href(r, s))
+        }
+    });
+
+    Some(AdditionalPropertiesDoc {
+        key_label,
+        value_type,
+        value_href,
+    })
 }
 
 fn extract_enum_values(schema: &Value) -> Vec<String> {
@@ -358,6 +525,25 @@ fn extract_property_examples(schema: &Value) -> Vec<String> {
         .get("examples")
         .and_then(Value::as_array)
         .map(|arr| arr.iter().map(format_value).collect())
+        .unwrap_or_default()
+}
+
+/// Extract `examples` from a definition schema as display strings.
+fn extract_raw_examples(schema: &Value) -> Vec<String> {
+    schema
+        .get("examples")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|v| {
+                    if matches!(v, Value::Object(_) | Value::Array(_)) {
+                        serde_json::to_string_pretty(v).unwrap_or_default()
+                    } else {
+                        format_value(v)
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -452,8 +638,120 @@ fn resolve_ref<'a>(schema: &'a Value, root: &'a Value) -> &'a Value {
     schema
 }
 
-fn ref_name(ref_str: &str) -> &str {
-    ref_str.rsplit('/').next().unwrap_or(ref_str)
+/// Extract a human-readable name from a `$ref` string.
+///
+/// - Fragment refs (`#/$defs/Foo`) → `Foo`
+/// - Catalog URLs (`.../permission/latest.json`) → `Permission`
+/// - Relative file refs (`./permission.json`) → `Permission`
+fn ref_name(ref_str: &str) -> String {
+    // If the ref has a fragment, extract the definition name from it.
+    if let Some((_, fragment)) = ref_str.rsplit_once('#') {
+        let name = fragment.rsplit('/').next().unwrap_or(fragment);
+        return String::from(name);
+    }
+
+    // Strip common JSON schema suffixes to get the meaningful path segment.
+    let path = ref_str
+        .strip_suffix("/latest.json")
+        .or_else(|| ref_str.strip_suffix(".json"))
+        .unwrap_or(ref_str);
+
+    let segment = path.rsplit('/').next().unwrap_or(path);
+    // Strip leading "." for relative refs like "./permission"
+    let segment = segment.strip_prefix('.').unwrap_or(segment);
+
+    if segment.is_empty() {
+        return String::from(ref_str);
+    }
+
+    title_case(segment)
+}
+
+/// Convert a kebab-case or `snake_case` segment to title case.
+///
+/// `"permission"` → `"Permission"`, `"some-rule"` → `"Some Rule"`.
+fn title_case(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut capitalize_next = true;
+    for c in s.chars() {
+        if c == '-' || c == '_' {
+            result.push(' ');
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.extend(c.to_uppercase());
+            capitalize_next = false;
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Walk through a schema (following into array items) to find the first `$ref` target.
+fn find_ref_target(schema: &Value) -> Option<&str> {
+    if let Some(r) = schema.get("$ref").and_then(Value::as_str) {
+        return Some(r);
+    }
+    if schema.get("type").and_then(Value::as_str) == Some("array")
+        && let Some(items) = schema.get("items")
+    {
+        return find_ref_target(items);
+    }
+    None
+}
+
+/// Convert an external `$ref` URL to a site-relative href, if it belongs to this catalog.
+///
+/// Returns `None` for local `#/` refs (handled separately) and for refs outside the catalog.
+fn ref_to_href(ref_str: &str, site: &SiteContext<'_>) -> Option<String> {
+    // Only handle refs that point to the same catalog
+    let relative = ref_str.strip_prefix(site.base_url)?;
+    let path = relative
+        .strip_suffix("latest.json")
+        .or_else(|| relative.strip_suffix(".json"))
+        .unwrap_or(relative);
+    let path = path.trim_end_matches('/');
+    Some(alloc::format!("{}{path}/", site.base_path))
+}
+
+/// Build individually-linkable type parts for schemas whose type comes from `oneOf`/`anyOf`.
+///
+/// Returns an empty vec when the schema has an explicit `type` field or no composition.
+fn compute_type_parts(schema: &Value, site: Option<&SiteContext<'_>>) -> Vec<TypePart> {
+    if schema.get("type").is_some() {
+        return Vec::new();
+    }
+    for keyword in &["oneOf", "anyOf"] {
+        if let Some(variants) = schema.get(*keyword).and_then(Value::as_array) {
+            let parts: Vec<TypePart> = variants
+                .iter()
+                .filter_map(|v| {
+                    let text = schema_type_str(v)
+                        .or_else(|| v.get("$ref").and_then(Value::as_str).map(ref_name))?;
+                    let href = resolve_type_part_href(v, site);
+                    Some(TypePart { text, href })
+                })
+                .collect();
+            if !parts.is_empty() {
+                return parts;
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Resolve a link target for a single type part variant.
+///
+/// Checks direct `$ref` first, then walks into array `items`. Handles both
+/// local definition refs (`#/$defs/Foo` → `#def-Foo`) and external catalog
+/// refs (via `ref_to_href`).
+fn resolve_type_part_href(variant: &Value, site: Option<&SiteContext<'_>>) -> Option<String> {
+    let ref_str = find_ref_target(variant)?;
+    if ref_str.starts_with("#/$defs/") || ref_str.starts_with("#/definitions/") {
+        Some(alloc::format!("#def-{}", ref_name(ref_str)))
+    } else {
+        site.and_then(|s| ref_to_href(ref_str, s))
+    }
 }
 
 fn schema_type_str(schema: &Value) -> Option<String> {
@@ -474,18 +772,15 @@ fn schema_type_str(schema: &Value) -> Option<String> {
         };
     }
     if let Some(r) = schema.get("$ref").and_then(Value::as_str) {
-        return Some(String::from(ref_name(r)));
+        return Some(ref_name(r));
     }
     for keyword in &["oneOf", "anyOf"] {
         if let Some(variants) = schema.get(*keyword).and_then(Value::as_array) {
             let types: Vec<String> = variants
                 .iter()
                 .filter_map(|v| {
-                    schema_type_str(v).or_else(|| {
-                        v.get("$ref")
-                            .and_then(Value::as_str)
-                            .map(|r| String::from(ref_name(r)))
-                    })
+                    schema_type_str(v)
+                        .or_else(|| v.get("$ref").and_then(Value::as_str).map(ref_name))
                 })
                 .collect();
             if !types.is_empty() {
@@ -580,7 +875,7 @@ mod tests {
                 "debug": { "type": "boolean", "default": false }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert_eq!(doc.title.as_deref(), Some("Config"));
         assert!(doc.description_html.as_ref().unwrap().contains("<strong>"));
         assert_eq!(doc.schema_type.as_deref(), Some("object"));
@@ -603,7 +898,7 @@ mod tests {
                 "version": { "const": 2 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         let level = &doc.properties[0];
         assert_eq!(level.enum_values, vec!["\"low\"", "\"high\""]);
         let version = &doc.properties[1];
@@ -623,7 +918,7 @@ mod tests {
                 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         let email = &doc.properties[0];
         assert_eq!(email.constraints.len(), 3);
         assert_eq!(email.constraints[0].label, "format");
@@ -647,7 +942,7 @@ mod tests {
                 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         let item = &doc.properties[0];
         assert_eq!(item.schema_type.as_deref(), Some("object"));
         assert!(item.description_html.as_ref().unwrap().contains("An item"));
@@ -663,7 +958,7 @@ mod tests {
                 { "type": "integer" }
             ]
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert_eq!(doc.compositions.len(), 1);
         assert_eq!(doc.compositions[0].keyword, "oneOf");
         assert_eq!(doc.compositions[0].variants.len(), 2);
@@ -677,7 +972,7 @@ mod tests {
                 "Foo": { "type": "string", "description": "A foo" }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert_eq!(doc.definitions.len(), 1);
         assert_eq!(doc.definitions[0].name, "Foo");
     }
@@ -690,7 +985,7 @@ mod tests {
                 { "key": "value" }
             ]
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert_eq!(doc.examples.len(), 2);
         assert!(!doc.examples[0].is_complex);
         assert!(doc.examples[1].is_complex);
@@ -705,7 +1000,7 @@ mod tests {
     #[test]
     fn empty_schema_has_no_content() {
         let schema = json!({});
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert!(!doc.has_content);
     }
 
@@ -720,7 +1015,7 @@ mod tests {
                 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         assert!(
             doc.properties[0]
                 .description_html
@@ -742,7 +1037,7 @@ mod tests {
                 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         let items = doc.items.as_ref().unwrap();
         assert_eq!(items.schema_type.as_deref(), Some("object"));
         assert_eq!(items.properties.len(), 1);
@@ -779,7 +1074,7 @@ mod tests {
                 }
             }
         });
-        let doc = extract_schema_doc(&schema);
+        let doc = extract_schema_doc(&schema, None);
         // a(0) -> b(1) -> c(2) -> d(3): d is extracted but d's children (e) are NOT
         let a = &doc.properties[0];
         let b = &a.properties[0];
@@ -789,6 +1084,248 @@ mod tests {
         assert!(
             d.properties.is_empty(),
             "depth limit should prevent d's children"
+        );
+    }
+
+    #[test]
+    fn ref_name_local_fragment() {
+        assert_eq!(ref_name("#/$defs/Foo"), "Foo");
+        assert_eq!(ref_name("#/definitions/Bar"), "Bar");
+    }
+
+    #[test]
+    fn ref_name_catalog_url() {
+        assert_eq!(
+            ref_name("https://catalog.lintel.tools/schemas/claude-code/permission/latest.json"),
+            "Permission"
+        );
+    }
+
+    #[test]
+    fn ref_name_relative_file() {
+        assert_eq!(ref_name("./permission.json"), "Permission");
+        assert_eq!(ref_name("./some-rule.json"), "Some Rule");
+    }
+
+    #[test]
+    fn ref_name_with_fragment_and_file() {
+        assert_eq!(ref_name("./rule.json#/$defs/MyRule"), "MyRule");
+    }
+
+    #[test]
+    fn ref_anchor_follows_array_items_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/Thing" }
+                }
+            },
+            "$defs": {
+                "Thing": { "type": "string" }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        assert_eq!(doc.properties[0].ref_anchor.as_deref(), Some("#def-Thing"));
+    }
+
+    #[test]
+    fn external_ref_produces_correct_type_display() {
+        let schema = json!({
+            "oneOf": [
+                { "type": "string" },
+                {
+                    "type": "array",
+                    "items": { "$ref": "https://example.com/schemas/tool/permission/latest.json" }
+                }
+            ]
+        });
+        let doc = extract_schema_doc(&schema, None);
+        // The oneOf type string should show "Permission[]" not "latest.json[]"
+        assert_eq!(doc.schema_type.as_deref(), Some("string | Permission[]"));
+    }
+
+    #[test]
+    fn ref_anchor_includes_hash_for_local_refs() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "item": { "$ref": "#/$defs/Item" }
+            },
+            "$defs": {
+                "Item": { "type": "string" }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        assert_eq!(doc.properties[0].ref_anchor.as_deref(), Some("#def-Item"));
+    }
+
+    #[test]
+    fn ref_anchor_resolves_external_catalog_link() {
+        let site = SiteContext {
+            base_url: "https://example.com/",
+            base_path: "/",
+        };
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "perm": { "$ref": "https://example.com/schemas/tool/permission/latest.json" }
+            }
+        });
+        let doc = extract_schema_doc(&schema, Some(&site));
+        assert_eq!(
+            doc.properties[0].ref_anchor.as_deref(),
+            Some("/schemas/tool/permission/")
+        );
+    }
+
+    #[test]
+    fn type_parts_link_to_local_definitions() {
+        let schema = json!({
+            "anyOf": [
+                { "$ref": "#/$defs/Foo" },
+                { "$ref": "#/$defs/Bar" }
+            ],
+            "$defs": {
+                "Foo": { "type": "string", "title": "Foo" },
+                "Bar": { "type": "integer", "title": "Bar" }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        assert_eq!(doc.type_parts.len(), 2);
+        assert_eq!(doc.type_parts[0].text, "Foo");
+        assert_eq!(doc.type_parts[0].href.as_deref(), Some("#def-Foo"));
+        assert_eq!(doc.type_parts[1].text, "Bar");
+        assert_eq!(doc.type_parts[1].href.as_deref(), Some("#def-Bar"));
+    }
+
+    #[test]
+    fn additional_properties_with_local_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "dependencies": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/Dependency" },
+                    "x-tombi-additional-key-label": "crate_name"
+                }
+            },
+            "$defs": {
+                "Dependency": {
+                    "anyOf": [
+                        { "type": "string" },
+                        { "type": "object" }
+                    ]
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let deps = &doc.properties[0];
+        let ap = deps.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "crate_name");
+        assert_eq!(ap.value_type, "string | object");
+        assert_eq!(ap.value_href.as_deref(), Some("#def-Dependency"));
+    }
+
+    #[test]
+    fn additional_properties_without_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let env = &doc.properties[0];
+        let ap = env.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "string");
+        assert_eq!(ap.value_type, "string");
+        assert!(ap.value_href.is_none());
+    }
+
+    #[test]
+    fn additional_properties_boolean_ignored() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "strict": {
+                    "type": "object",
+                    "additionalProperties": false
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        assert!(doc.properties[0].additional_properties.is_none());
+    }
+
+    #[test]
+    fn additional_properties_external_ref() {
+        let site = SiteContext {
+            base_url: "https://example.com/",
+            base_path: "/",
+        };
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "plugins": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "https://example.com/schemas/tool/plugin/latest.json"
+                    }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, Some(&site));
+        let ap = doc.properties[0].additional_properties.as_ref().unwrap();
+        assert_eq!(ap.value_type, "Plugin");
+        assert_eq!(ap.value_href.as_deref(), Some("/schemas/tool/plugin/"));
+    }
+
+    #[test]
+    fn definition_with_additional_properties() {
+        let schema = json!({
+            "$defs": {
+                "Features": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let features = &doc.definitions[0];
+        let ap = features.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "string");
+        assert_eq!(ap.value_type, "string[]");
+        assert!(ap.value_href.is_none());
+    }
+
+    #[test]
+    fn variant_ref_href_for_external_ref() {
+        let site = SiteContext {
+            base_url: "https://example.com/",
+            base_path: "/",
+        };
+        let schema = json!({
+            "oneOf": [
+                { "type": "string" },
+                {
+                    "type": "array",
+                    "items": { "$ref": "https://example.com/schemas/tool/permission/latest.json" }
+                }
+            ]
+        });
+        let doc = extract_schema_doc(&schema, Some(&site));
+        assert!(doc.compositions[0].variants[0].ref_href.is_none());
+        assert_eq!(
+            doc.compositions[0].variants[1].ref_href.as_deref(),
+            Some("/schemas/tool/permission/")
         );
     }
 }

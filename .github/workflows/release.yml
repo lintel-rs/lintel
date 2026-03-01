@@ -1,0 +1,185 @@
+# Release workflow.
+# Runs after the Build workflow succeeds on master. Publishes crates to
+# crates.io via release-plz, uploads binary artifacts to the GitHub release,
+# then publishes to NPM and pushes pre-built Docker images to GHCR.
+
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  release-plz-release:
+    name: Release-plz release
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.extract-lintel-tag.outputs.tag }} # lintel CLI release tag (vX.Y.Z)
+      version: ${{ steps.extract-lintel-tag.outputs.version }} # lintel CLI version (X.Y.Z)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
+      - name: Run release-plz
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Extract lintel release tag
+        id: extract-lintel-tag
+        if: steps.release-plz.outputs.releases_created == 'true'
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          TAG=$(echo "$RELEASES" | jq -r '.[] | select(.package_name == "lintel") | .tag')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  upload-assets:
+    name: Upload release assets
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          pattern: lintel-*
+          merge-multiple: true
+
+      - name: Upload artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-plz-release.outputs.tag }}
+        run: |
+          echo "Uploading artifacts for $TAG:"
+          ls -la artifacts/
+          for file in artifacts/lintel-*; do
+            echo "  Uploading $file"
+            gh release upload "$TAG" "$file" --repo "${{ github.repository }}" --clobber
+          done
+
+  npm:
+    name: Publish to NPM
+    needs: [release-plz-release, upload-assets]
+    if: needs.release-plz-release.outputs.tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-plz-release.outputs.tag }}
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh release download "${{ needs.release-plz-release.outputs.tag }}" --dir artifacts --pattern 'lintel-*'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "workspace"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Generate and publish npm packages
+        run: |
+          cargo run --release --package npm-release-binaries -- release \
+            --package lintel \
+            --release-version ${{ needs.release-plz-release.outputs.version }} \
+            --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  docker-push:
+    name: Docker push (${{ matrix.arch }})
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.tag
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Download pre-built Docker image
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-${{ matrix.arch }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Load image
+        run: docker load < result
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push
+        run: |
+          ARCH_TAG=${{ needs.release-plz-release.outputs.version }}-${{ matrix.arch }}
+
+          docker tag ghcr.io/lintel-rs/lintel:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${ARCH_TAG}
+
+  docker-manifest:
+    name: Docker Manifest
+    needs: [release-plz-release, docker-push]
+    if: needs.release-plz-release.outputs.tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          VERSION=${{ needs.release-plz-release.outputs.version }}
+          MAJOR_MINOR=${VERSION%.*}
+          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+          TAGS=("${VERSION}" "latest")
+          if [[ "${MAJOR_MINOR}" != "${VERSION}" ]]; then
+            TAGS+=("${MAJOR_MINOR}")
+          fi
+
+          for TAG in "${TAGS[@]}"; do
+            docker manifest create ${IMAGE}:${TAG} \
+              ${IMAGE}:${VERSION}-amd64 \
+              ${IMAGE}:${VERSION}-arm64
+            docker manifest push ${IMAGE}:${TAG}
+          done

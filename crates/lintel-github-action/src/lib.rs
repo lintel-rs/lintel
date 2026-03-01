@@ -73,6 +73,7 @@ fn error_to_annotation(error: &LintelDiagnostic) -> Annotation {
         | LintelDiagnostic::Validation { src, span, .. } => {
             offset_to_line_col(src.inner(), span.offset())
         }
+        LintelDiagnostic::SchemaMismatch { line_number, .. } => (*line_number, 1),
         LintelDiagnostic::Io { .. }
         | LintelDiagnostic::SchemaFetch { .. }
         | LintelDiagnostic::SchemaCompile { .. }
@@ -85,6 +86,7 @@ fn error_to_annotation(error: &LintelDiagnostic) -> Annotation {
             Some(instance_path.clone())
         }
         LintelDiagnostic::Validation { .. } => Some("validation error".to_string()),
+        LintelDiagnostic::SchemaMismatch { .. } => Some("schema mismatch".to_string()),
         LintelDiagnostic::Io { .. } => Some("io error".to_string()),
         LintelDiagnostic::SchemaFetch { .. } => Some("schema fetch error".to_string()),
         LintelDiagnostic::SchemaCompile { .. } => Some("schema compile error".to_string()),

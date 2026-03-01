@@ -14,6 +14,7 @@ use tracing::{info, warn};
 use crate::catalog::build_output_catalog;
 use crate::download::ProcessedSchemas;
 use crate::targets::{self, OutputContext};
+use lintel_catalog_builder::config::SchemaDefinition;
 use lintel_catalog_builder::config::{CatalogConfig, TargetConfig, load_config};
 
 use groups::{GroupSchemaContext, process_group_schema};
@@ -139,6 +140,47 @@ async fn generate_for_target(
         let trimmed_base = base_url.trim_end_matches('/');
         let mut group_schema_names: Vec<String> = Vec::new();
 
+        // Auto-discover local schema files in the group's source directory.
+        // Files that aren't explicit entries are processed as implicit entries
+        // so that sibling `$ref`s like `./hooks.json` resolve to canonical
+        // catalog URLs instead of being downloaded into `_shared/`.
+        let source_dir = ctx.config_dir.join("schemas").join(group_key);
+        let mut implicit_schemas: Vec<(String, SchemaDefinition)> = Vec::new();
+        if source_dir.is_dir()
+            && let Ok(mut dir) = tokio::fs::read_dir(&source_dir).await
+        {
+            while let Ok(Some(entry)) = dir.next_entry().await {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "json")
+                    && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                    && !group_config.schemas.contains_key(stem)
+                {
+                    implicit_schemas.push((
+                        stem.to_string(),
+                        SchemaDefinition {
+                            url: None,
+                            name: None,
+                            description: None,
+                            file_match: Vec::new(),
+                            versions: BTreeMap::new(),
+                        },
+                    ));
+                }
+            }
+        }
+
+        // Build sibling URL map from both explicit and implicit entries.
+        let mut sibling_urls = std::collections::HashMap::new();
+        for sibling_key in group_config
+            .schemas
+            .keys()
+            .chain(implicit_schemas.iter().map(|(k, _)| k))
+        {
+            let canonical = format!("{trimmed_base}/schemas/{group_key}/{sibling_key}/latest.json");
+            sibling_urls.insert(format!("./{sibling_key}.json"), canonical.clone());
+            sibling_urls.insert(format!("{sibling_key}.json"), canonical);
+        }
+
         let group_ctx = GroupSchemaContext {
             generate: ctx,
             group_dir: &group_dir,
@@ -146,7 +188,18 @@ async fn generate_for_target(
             trimmed_base,
             processed: ctx.processed,
             source_base_url: ctx.config.catalog.source_base_url.as_deref(),
+            sibling_urls,
         };
+
+        // Process implicit entries first so their files exist when
+        // explicit entries reference them.
+        for (key, schema_def) in &implicit_schemas {
+            let entry =
+                process_group_schema(&group_ctx, key, schema_def, &mut output_paths).await?;
+            group_schema_names.push(entry.name.clone());
+            entries.push(entry);
+        }
+
         for (key, schema_def) in &group_config.schemas {
             let entry =
                 process_group_schema(&group_ctx, key, schema_def, &mut output_paths).await?;
@@ -228,6 +281,7 @@ async fn generate_for_target(
         .site
         .as_ref()
         .and_then(|s| s.ga_tracking_id.as_deref());
+    let og_image = target.site.as_ref().and_then(|s| s.og_image.as_deref());
     let output_ctx = OutputContext {
         output_dir,
         config_path: ctx.config_path,
@@ -239,6 +293,7 @@ async fn generate_for_target(
         processed: ctx.processed,
         site_description,
         ga_tracking_id,
+        og_image,
     };
 
     targets::finalize(target, &output_ctx).await?;

@@ -4,65 +4,69 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     crane.url = "github:ipetkov/crane";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      crane,
-      flake-utils,
+    inputs@{
+      flake-parts,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        craneLib = crane.mkLib pkgs;
-        craneLibStatic =
-          if pkgs.stdenv.isLinux then
-            let
-              muslPkgs =
-                {
-                  "x86_64-linux" = pkgs.pkgsCross.musl64;
-                  "aarch64-linux" = pkgs.pkgsCross.aarch64-multiplatform-musl;
-                }
-                .${system};
-            in
-            crane.mkLib muslPkgs
-          else
-            null;
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
 
-        packages = import ./nix/packages.nix {
-          inherit
-            craneLib
-            craneLibStatic
-            pkgs
-            ;
-        };
-      in
-      {
-        checks = {
-          inherit (packages) lintel;
-        };
+      perSystem =
+        {
+          self',
+          pkgs,
+          system,
+          ...
+        }:
+        let
+          craneLib = inputs.crane.mkLib pkgs;
+          craneLibStatic =
+            if pkgs.stdenv.isLinux then
+              let
+                muslPkgs =
+                  {
+                    "x86_64-linux" = pkgs.pkgsCross.musl64;
+                    "aarch64-linux" = pkgs.pkgsCross.aarch64-multiplatform-musl;
+                  }
+                  .${system};
+              in
+              inputs.crane.mkLib muslPkgs
+            else
+              null;
 
-        packages =
-          packages
-          // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            docker = import ./nix/docker.nix {
-              inherit pkgs;
-              lintel = packages.lintel;
-            };
+          packages = import ./nix/packages.nix {
+            inherit
+              craneLib
+              craneLibStatic
+              pkgs
+              ;
           };
+        in
+        {
+          checks = packages;
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = packages.default;
-        };
+          packages =
+            packages
+            // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+              docker = import ./nix/docker.nix {
+                inherit pkgs;
+                lintel = packages.lintel;
+              };
+            };
 
-        devShells.default = craneLib.devShell {
-          checks = self.checks.${system};
+          devShells.default = craneLib.devShell {
+            checks = self'.checks;
+          };
         };
-      }
-    );
+    };
 }

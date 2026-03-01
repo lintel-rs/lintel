@@ -42,6 +42,14 @@ pub enum LintelDiagnostic {
         schema_path: String,
     },
 
+    #[error("{path}: mismatched $schema on line {line_number}: {message}")]
+    #[diagnostic(code(lintel::jsonl::schema_mismatch))]
+    SchemaMismatch {
+        path: String,
+        line_number: usize,
+        message: String,
+    },
+
     #[error("{path}: {message}")]
     #[diagnostic(code(lintel::io))]
     Io { path: String, message: String },
@@ -72,6 +80,7 @@ impl LintelDiagnostic {
         match self {
             LintelDiagnostic::Parse { src, .. } => src.name(),
             LintelDiagnostic::Validation { path, .. }
+            | LintelDiagnostic::SchemaMismatch { path, .. }
             | LintelDiagnostic::Io { path, .. }
             | LintelDiagnostic::SchemaFetch { path, .. }
             | LintelDiagnostic::SchemaCompile { path, .. }
@@ -84,6 +93,7 @@ impl LintelDiagnostic {
         match self {
             LintelDiagnostic::Parse { message, .. }
             | LintelDiagnostic::Validation { message, .. }
+            | LintelDiagnostic::SchemaMismatch { message, .. }
             | LintelDiagnostic::Io { message, .. }
             | LintelDiagnostic::SchemaFetch { message, .. }
             | LintelDiagnostic::SchemaCompile { message, .. } => message,
@@ -97,7 +107,8 @@ impl LintelDiagnostic {
             LintelDiagnostic::Parse { span, .. } | LintelDiagnostic::Validation { span, .. } => {
                 span.offset()
             }
-            LintelDiagnostic::Io { .. }
+            LintelDiagnostic::SchemaMismatch { .. }
+            | LintelDiagnostic::Io { .. }
             | LintelDiagnostic::SchemaFetch { .. }
             | LintelDiagnostic::SchemaCompile { .. }
             | LintelDiagnostic::Format { .. } => 0,
@@ -328,6 +339,14 @@ mod tests {
                     schema_path: String::new(),
                 },
                 "lintel::validation",
+            ),
+            (
+                LintelDiagnostic::SchemaMismatch {
+                    path: String::new(),
+                    line_number: 0,
+                    message: String::new(),
+                },
+                "lintel::jsonl::schema_mismatch",
             ),
             (
                 LintelDiagnostic::Io {

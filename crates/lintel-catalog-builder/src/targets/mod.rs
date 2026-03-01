@@ -24,6 +24,8 @@ pub struct OutputContext<'a> {
     pub site_description: Option<&'a str>,
     /// Optional Google Analytics tracking ID from the target's site config.
     pub ga_tracking_id: Option<&'a str>,
+    /// Optional Open Graph image URL from the target's site config.
+    pub og_image: Option<&'a str>,
 }
 
 /// Resolve the output directory for a target.
@@ -239,6 +241,7 @@ mod tests {
             processed: &processed,
             site_description: None,
             ga_tracking_id: None,
+            og_image: None,
         };
         write_readme(&ctx).await?;
         let content = tokio::fs::read_to_string(dir.path().join("README.md")).await?;
@@ -265,6 +268,7 @@ mod tests {
             processed: &processed,
             site_description: None,
             ga_tracking_id: None,
+            og_image: None,
         };
         let target = TargetConfig {
             dir: "out".into(),
@@ -272,6 +276,7 @@ mod tests {
             site: Some(SiteConfig {
                 description: None,
                 ga_tracking_id: None,
+                og_image: None,
                 github: Some(GitHubPagesConfig {
                     cname: Some("example.com".into()),
                 }),
@@ -301,6 +306,7 @@ mod tests {
             processed: &processed,
             site_description: None,
             ga_tracking_id: None,
+            og_image: None,
         };
         let target = TargetConfig {
             dir: "out".into(),

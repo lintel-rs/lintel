@@ -1,9 +1,7 @@
 ---
 source: crates/lintel/tests/e2e.rs
-assertion_line: 50
 expression: text
 ---
-error: key must be a string at line 2 column 3
-error: trailing comma at line 5 column 3
-Checked 1 files in [TIME]. 2 errors found.
+error: ./package.json: Expected string for object property on line 2 column 3
+Checked 0 files in [TIME]. 1 error found.
 exit code: 1

@@ -12,6 +12,7 @@ mod commands;
 mod download;
 mod generate;
 mod html;
+mod postprocess;
 mod refs;
 mod targets;
 
