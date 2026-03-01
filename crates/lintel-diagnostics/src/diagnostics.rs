@@ -5,21 +5,9 @@ use thiserror::Error;
 /// is available. Checked by reporters to decide whether to show the path suffix.
 pub const DEFAULT_LABEL: &str = "here";
 
-/// A parse error with exact source location.
-///
-/// Used as the error type for the [`Parser`](crate::parsers::Parser) trait.
-/// Converted into [`LintError::Parse`] via the `From` impl.
-#[derive(Debug, Error)]
-#[error("{message}")]
-pub struct ParseDiagnostic {
-    pub src: NamedSource<String>,
-    pub span: SourceSpan,
-    pub message: String,
-}
-
-/// A single lint error produced during validation.
+/// A single diagnostic produced during validation, formatting, or parsing.
 #[derive(Debug, Error, Diagnostic)]
-pub enum LintError {
+pub enum LintelDiagnostic {
     #[error("{message}")]
     #[diagnostic(code(lintel::parse))]
     Parse {
@@ -73,51 +61,57 @@ pub enum LintError {
     #[error("{path}: {message}")]
     #[diagnostic(code(lintel::schema::compile))]
     SchemaCompile { path: String, message: String },
+
+    #[error("Formatter would have printed the following content:\n\n{styled_path}\n\n{diff}")]
+    #[diagnostic(
+        code(lintel::format),
+        help("run `lintel check --fix` or `lintel format` to fix formatting")
+    )]
+    Format {
+        path: String,
+        styled_path: String,
+        diff: String,
+    },
 }
 
-impl From<ParseDiagnostic> for LintError {
-    fn from(d: ParseDiagnostic) -> Self {
-        LintError::Parse {
-            src: d.src,
-            span: d.span,
-            message: d.message,
-        }
-    }
-}
-
-impl LintError {
+impl LintelDiagnostic {
     /// File path associated with this error.
     pub fn path(&self) -> &str {
         match self {
-            LintError::Parse { src, .. } => src.name(),
-            LintError::Validation { path, .. }
-            | LintError::SchemaMismatch { path, .. }
-            | LintError::Io { path, .. }
-            | LintError::SchemaFetch { path, .. }
-            | LintError::SchemaCompile { path, .. } => path,
+            LintelDiagnostic::Parse { src, .. } => src.name(),
+            LintelDiagnostic::Validation { path, .. }
+            | LintelDiagnostic::SchemaMismatch { path, .. }
+            | LintelDiagnostic::Io { path, .. }
+            | LintelDiagnostic::SchemaFetch { path, .. }
+            | LintelDiagnostic::SchemaCompile { path, .. }
+            | LintelDiagnostic::Format { path, .. } => path,
         }
     }
 
     /// Human-readable error message.
     pub fn message(&self) -> &str {
         match self {
-            LintError::Parse { message, .. }
-            | LintError::Validation { message, .. }
-            | LintError::SchemaMismatch { message, .. }
-            | LintError::Io { message, .. }
-            | LintError::SchemaFetch { message, .. }
-            | LintError::SchemaCompile { message, .. } => message,
+            LintelDiagnostic::Parse { message, .. }
+            | LintelDiagnostic::Validation { message, .. }
+            | LintelDiagnostic::SchemaMismatch { message, .. }
+            | LintelDiagnostic::Io { message, .. }
+            | LintelDiagnostic::SchemaFetch { message, .. }
+            | LintelDiagnostic::SchemaCompile { message, .. } => message,
+            LintelDiagnostic::Format { .. } => "file is not properly formatted",
         }
     }
 
     /// Byte offset in the source file (for sorting).
     pub fn offset(&self) -> usize {
         match self {
-            LintError::Parse { span, .. } | LintError::Validation { span, .. } => span.offset(),
-            LintError::SchemaMismatch { .. }
-            | LintError::Io { .. }
-            | LintError::SchemaFetch { .. }
-            | LintError::SchemaCompile { .. } => 0,
+            LintelDiagnostic::Parse { span, .. } | LintelDiagnostic::Validation { span, .. } => {
+                span.offset()
+            }
+            LintelDiagnostic::SchemaMismatch { .. }
+            | LintelDiagnostic::Io { .. }
+            | LintelDiagnostic::SchemaFetch { .. }
+            | LintelDiagnostic::SchemaCompile { .. }
+            | LintelDiagnostic::Format { .. } => 0,
         }
     }
 }
@@ -323,9 +317,9 @@ mod tests {
     fn error_codes() {
         use miette::Diagnostic;
 
-        let cases: Vec<(LintError, &str)> = vec![
+        let cases: Vec<(LintelDiagnostic, &str)> = vec![
             (
-                LintError::Parse {
+                LintelDiagnostic::Parse {
                     src: NamedSource::new("f", String::new()),
                     span: 0.into(),
                     message: String::new(),
@@ -333,7 +327,7 @@ mod tests {
                 "lintel::parse",
             ),
             (
-                LintError::Validation {
+                LintelDiagnostic::Validation {
                     src: NamedSource::new("f", String::new()),
                     span: 0.into(),
                     schema_span: 0.into(),
@@ -347,7 +341,7 @@ mod tests {
                 "lintel::validation",
             ),
             (
-                LintError::SchemaMismatch {
+                LintelDiagnostic::SchemaMismatch {
                     path: String::new(),
                     line_number: 0,
                     message: String::new(),
@@ -355,25 +349,33 @@ mod tests {
                 "lintel::jsonl::schema_mismatch",
             ),
             (
-                LintError::Io {
+                LintelDiagnostic::Io {
                     path: String::new(),
                     message: String::new(),
                 },
                 "lintel::io",
             ),
             (
-                LintError::SchemaFetch {
+                LintelDiagnostic::SchemaFetch {
                     path: String::new(),
                     message: String::new(),
                 },
                 "lintel::schema::fetch",
             ),
             (
-                LintError::SchemaCompile {
+                LintelDiagnostic::SchemaCompile {
                     path: String::new(),
                     message: String::new(),
                 },
                 "lintel::schema::compile",
+            ),
+            (
+                LintelDiagnostic::Format {
+                    path: String::new(),
+                    styled_path: String::new(),
+                    diff: String::new(),
+                },
+                "lintel::format",
             ),
         ];
 
