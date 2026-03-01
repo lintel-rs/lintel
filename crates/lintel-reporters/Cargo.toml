@@ -15,5 +15,5 @@ workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
-lintel-validate = { version = "0.0.9", path = "../lintel-validate" }
+lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 miette = { workspace = true, features = ["fancy"] }

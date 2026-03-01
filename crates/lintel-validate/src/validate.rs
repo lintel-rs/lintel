@@ -7,12 +7,13 @@ use anyhow::{Context, Result};
 use glob::glob;
 use serde_json::Value;
 
-use crate::catalog;
+use lintel_diagnostics::reporter::{CheckResult, CheckedFile};
+use lintel_diagnostics::{DEFAULT_LABEL, LintelDiagnostic, find_instance_path_span, format_label};
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
 use schema_catalog::{CompiledCatalog, FileFormat};
 
-use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
+use crate::catalog;
 use crate::discover;
 use crate::parsers::{self, Parser};
 use crate::registry;
@@ -69,36 +70,6 @@ pub struct ValidateArgs {
 
     /// TTL for cached schemas. `None` means no expiry.
     pub schema_cache_ttl: Option<core::time::Duration>,
-}
-
-/// Re-exported from [`crate::diagnostics::LintError`] so callers can use
-/// `lintel_validate::validate::LintError` without importing diagnostics.
-pub use crate::diagnostics::LintError;
-
-/// A file that was checked and the schema it resolved to.
-pub struct CheckedFile {
-    pub path: String,
-    pub schema: String,
-    /// `None` for local schemas and builtins; `Some` for remote schemas.
-    pub cache_status: Option<CacheStatus>,
-    /// `None` when validation caching is not applicable; `Some` for validation cache hits/misses.
-    pub validation_cache_status: Option<ValidationCacheStatus>,
-}
-
-/// Result of a validation run.
-pub struct ValidateResult {
-    pub errors: Vec<LintError>,
-    pub checked: Vec<CheckedFile>,
-}
-
-impl ValidateResult {
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
-    }
-
-    pub fn files_checked(&self) -> usize {
-        self.checked.len()
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +184,7 @@ enum FileResult {
         schema_uri: String,
         parsed: ParsedFile,
     },
-    Error(LintError),
+    Error(LintelDiagnostic),
     Skip,
 }
 
@@ -281,7 +252,7 @@ fn process_one_file(
         let parser = parsers::parser_for(fmt);
         match parser.parse(&content, &path_str) {
             Ok(val) => (parser, val),
-            Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+            Err(parse_err) => return vec![FileResult::Error(parse_err)],
         }
     } else {
         match try_parse_all(&content, &path_str) {
@@ -370,7 +341,7 @@ fn process_jsonl_file(
 ) -> Vec<FileResult> {
     let lines = match parsers::jsonl::parse_jsonl(content, path_str) {
         Ok(lines) => lines,
-        Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+        Err(parse_err) => return vec![FileResult::Error(parse_err)],
     };
 
     if lines.is_empty() {
@@ -382,7 +353,7 @@ fn process_jsonl_file(
     // Check schema consistency before consuming lines.
     if let Some(mismatches) = parsers::jsonl::check_schema_consistency(&lines) {
         for m in mismatches {
-            results.push(FileResult::Error(LintError::SchemaMismatch {
+            results.push(FileResult::Error(LintelDiagnostic::SchemaMismatch {
                 path: path_str.to_string(),
                 line_number: m.line_number,
                 message: format!("expected consistent $schema but found {}", m.schema_uri),
@@ -447,19 +418,17 @@ fn process_jsonl_file(
     }
 }
 
-/// Read each file concurrently with tokio, parse its content, extract its
-/// schema URI, apply rewrites, and group by resolved schema URI.
+/// Read files concurrently with tokio, using a semaphore to avoid exhausting
+/// file descriptors. I/O errors are pushed as `LintelDiagnostic::Io`.
+///
+/// # Panics
+///
+/// Panics if the internal semaphore is unexpectedly closed (should not happen).
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
-#[allow(clippy::too_many_arguments)]
-async fn parse_and_group_files(
+pub async fn read_files(
     files: &[PathBuf],
-    config: &lintel_config::Config,
-    config_dir: &Path,
-    compiled_catalogs: &[CompiledCatalog],
-    errors: &mut Vec<LintError>,
-) -> BTreeMap<String, Vec<ParsedFile>> {
-    // Read all files concurrently using tokio async I/O, with a semaphore
-    // to avoid exhausting file descriptors on large directories.
+    errors: &mut Vec<LintelDiagnostic>,
+) -> Vec<(PathBuf, String)> {
     let semaphore = alloc::sync::Arc::new(tokio::sync::Semaphore::new(FD_CONCURRENCY_LIMIT));
     let mut read_set = tokio::task::JoinSet::new();
     for path in files {
@@ -475,24 +444,33 @@ async fn parse_and_group_files(
     let mut file_contents = Vec::with_capacity(files.len());
     while let Some(result) = read_set.join_next().await {
         match result {
-            Ok(item) => file_contents.push(item),
+            Ok((path, Ok(content))) => file_contents.push((path, content)),
+            Ok((path, Err(e))) => {
+                errors.push(LintelDiagnostic::Io {
+                    path: path.display().to_string(),
+                    message: format!("failed to read: {e}"),
+                });
+            }
             Err(e) => tracing::warn!("file read task panicked: {e}"),
         }
     }
 
-    // Process files: parse content and resolve schema URIs.
+    file_contents
+}
+
+/// Parse pre-read file contents, extract schema URIs, apply rewrites, and
+/// group by resolved schema URI.
+#[tracing::instrument(skip_all, fields(file_count = file_contents.len()))]
+#[allow(clippy::too_many_arguments)]
+fn parse_and_group_contents(
+    file_contents: Vec<(PathBuf, String)>,
+    config: &lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: &[CompiledCatalog],
+    errors: &mut Vec<LintelDiagnostic>,
+) -> BTreeMap<String, Vec<ParsedFile>> {
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
-    for (path, content_result) in file_contents {
-        let content = match content_result {
-            Ok(c) => c,
-            Err(e) => {
-                errors.push(LintError::Io {
-                    path: path.display().to_string(),
-                    message: format!("failed to read: {e}"),
-                });
-                continue;
-            }
-        };
+    for (path, content) in file_contents {
         let results = process_one_file(&path, content, config, config_dir, compiled_catalogs);
         for result in results {
             match result {
@@ -522,7 +500,7 @@ async fn fetch_schema_from_prefetched(
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
     local_cache: &mut HashMap<String, Value>,
     group: &[ParsedFile],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) -> Option<(Value, Option<CacheStatus>)> {
@@ -554,7 +532,7 @@ async fn fetch_schema_from_prefetched(
         Ok(value) => Some(value),
         Err(message) => {
             report_group_error(
-                |path| LintError::SchemaFetch {
+                |path| LintelDiagnostic::SchemaFetch {
                     path: path.to_string(),
                     message: message.clone(),
                 },
@@ -573,11 +551,11 @@ async fn fetch_schema_from_prefetched(
 /// Report the same error for every file in a schema group.
 #[allow(clippy::too_many_arguments)]
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
-    make_error: impl Fn(&str) -> LintError,
+    make_error: impl Fn(&str) -> LintelDiagnostic,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     group: &[P],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
@@ -635,12 +613,12 @@ fn clean_error_message(msg: String) -> String {
     msg
 }
 
-/// Convert [`ValidationError`]s into [`LintError::Validation`] diagnostics.
+/// Convert [`ValidationError`]s into [`LintelDiagnostic::Validation`] diagnostics.
 fn push_validation_errors(
     pf: &ParsedFile,
     schema_url: &str,
     validation_errors: &[ValidationError],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
 ) {
     for ve in validation_errors {
         let span = find_instance_path_span(&pf.content, &ve.instance_path);
@@ -651,7 +629,7 @@ fn push_validation_errors(
         };
         let label = format_label(&instance_path, &ve.schema_path);
         let source_span: miette::SourceSpan = span.into();
-        errors.push(LintError::Validation {
+        errors.push(LintelDiagnostic::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
             span: source_span,
             schema_span: source_span,
@@ -677,7 +655,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     cache_status: Option<CacheStatus>,
     group: &[P],
     vcache: &lintel_validation_cache::ValidationCache,
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
@@ -799,7 +777,7 @@ pub async fn fetch_compiled_catalogs(
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
+pub async fn run(args: &ValidateArgs) -> Result<CheckResult> {
     run_with(args, None, |_| {}).await
 }
 
@@ -810,45 +788,102 @@ pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
 #[tracing::instrument(skip_all, name = "validate")]
-#[allow(clippy::too_many_lines)]
 pub async fn run_with(
     args: &ValidateArgs,
     cache: Option<SchemaCache>,
     mut on_check: impl FnMut(&CheckedFile),
-) -> Result<ValidateResult> {
-    let retriever = if let Some(c) = cache {
-        c
-    } else {
-        let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
-        if let Some(dir) = &args.cache_dir {
-            let path = PathBuf::from(dir);
-            let _ = fs::create_dir_all(&path);
-            builder = builder.cache_dir(path);
-        }
-        if let Some(ttl) = args.schema_cache_ttl {
-            builder = builder.ttl(ttl);
-        }
-        builder.build()
-    };
-
+) -> Result<CheckResult> {
+    let retriever = build_retriever(args, cache);
     let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
     let files = collect_files(&args.globs, &args.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
     let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
 
-    let mut errors: Vec<LintError> = Vec::new();
+    let mut errors: Vec<LintelDiagnostic> = Vec::new();
+    let file_contents = read_files(&files, &mut errors).await;
+
+    run_with_contents_inner(
+        file_contents,
+        args,
+        retriever,
+        config,
+        &config_dir,
+        compiled_catalogs,
+        errors,
+        &mut on_check,
+    )
+    .await
+}
+
+/// Like [`run_with`], but accepts pre-read file contents instead of reading
+/// from disk. Use this when the caller has already read files (e.g. to share
+/// reads between format checking and validation).
+///
+/// # Errors
+///
+/// Returns an error if schema validation encounters an I/O or network error.
+pub async fn run_with_contents(
+    args: &ValidateArgs,
+    file_contents: Vec<(PathBuf, String)>,
+    cache: Option<SchemaCache>,
+    mut on_check: impl FnMut(&CheckedFile),
+) -> Result<CheckResult> {
+    let retriever = build_retriever(args, cache);
+    let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
+    let errors: Vec<LintelDiagnostic> = Vec::new();
+
+    run_with_contents_inner(
+        file_contents,
+        args,
+        retriever,
+        config,
+        &config_dir,
+        compiled_catalogs,
+        errors,
+        &mut on_check,
+    )
+    .await
+}
+
+fn build_retriever(args: &ValidateArgs, cache: Option<SchemaCache>) -> SchemaCache {
+    if let Some(c) = cache {
+        return c;
+    }
+    let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
+    if let Some(dir) = &args.cache_dir {
+        let path = PathBuf::from(dir);
+        let _ = fs::create_dir_all(&path);
+        builder = builder.cache_dir(path);
+    }
+    if let Some(ttl) = args.schema_cache_ttl {
+        builder = builder.ttl(ttl);
+    }
+    builder.build()
+}
+
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+async fn run_with_contents_inner(
+    file_contents: Vec<(PathBuf, String)>,
+    args: &ValidateArgs,
+    retriever: SchemaCache,
+    config: lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: Vec<CompiledCatalog>,
+    mut errors: Vec<LintelDiagnostic>,
+    on_check: &mut impl FnMut(&CheckedFile),
+) -> Result<CheckResult> {
     let mut checked: Vec<CheckedFile> = Vec::new();
 
     // Phase 1: Parse files and resolve schema URIs
-    let schema_groups = parse_and_group_files(
-        &files,
+    let schema_groups = parse_and_group_contents(
+        file_contents,
         &config,
-        &config_dir,
+        config_dir,
         &compiled_catalogs,
         &mut errors,
-    )
-    .await;
+    );
     tracing::info!(
         schema_count = schema_groups.len(),
         total_files = schema_groups.values().map(Vec::len).sum::<usize>(),
@@ -927,7 +962,7 @@ pub async fn run_with(
             group,
             &mut errors,
             &mut checked,
-            &mut on_check,
+            on_check,
         )
         .await
         else {
@@ -1026,13 +1061,13 @@ pub async fn run_with(
                             Some(ValidationCacheStatus::Miss),
                             &cache_misses,
                             &mut checked,
-                            &mut on_check,
+                            on_check,
                         );
                         continue;
                     }
                     let msg = format!("failed to compile schema: {e}");
                     report_group_error(
-                        |path| LintError::SchemaCompile {
+                        |path| LintelDiagnostic::SchemaCompile {
                             path: path.to_string(),
                             message: msg.clone(),
                         },
@@ -1041,7 +1076,7 @@ pub async fn run_with(
                         &cache_misses,
                         &mut errors,
                         &mut checked,
-                        &mut on_check,
+                        on_check,
                     );
                     continue;
                 }
@@ -1060,7 +1095,7 @@ pub async fn run_with(
             &vcache,
             &mut errors,
             &mut checked,
-            &mut on_check,
+            on_check,
         )
         .await;
         validate_time += t.elapsed();
@@ -1085,7 +1120,7 @@ pub async fn run_with(
             .then_with(|| a.offset().cmp(&b.offset()))
     });
 
-    Ok(ValidateResult { errors, checked })
+    Ok(CheckResult { errors, checked })
 }
 
 #[cfg(test)]

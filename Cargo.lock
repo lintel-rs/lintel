@@ -1665,9 +1665,9 @@ version = "0.0.16"
 dependencies = [
  "anyhow",
  "bpaf",
+ "lintel-diagnostics",
  "lintel-format",
  "lintel-validate",
- "miette",
 ]
 
 [[package]]
@@ -1704,6 +1704,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-diagnostics"
+version = "0.0.1"
+dependencies = [
+ "lintel-schema-cache",
+ "lintel-validation-cache",
+ "miette",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lintel-explain"
 version = "0.0.9"
 dependencies = [
@@ -1711,6 +1721,7 @@ dependencies = [
  "bpaf",
  "jsonschema-explain",
  "lintel-cli-common",
+ "lintel-diagnostics",
  "lintel-identify",
  "lintel-validate",
  "reqwest",
@@ -1737,6 +1748,7 @@ dependencies = [
  "glob-match",
  "ignore",
  "lintel-config",
+ "lintel-diagnostics",
  "miette",
  "pretty_yaml",
  "semver",
@@ -1753,8 +1765,7 @@ dependencies = [
  "anyhow",
  "bpaf",
  "lintel-check",
- "lintel-format",
- "lintel-validate",
+ "lintel-diagnostics",
  "reqwest",
  "serde",
  "serde_json",
@@ -1783,7 +1794,7 @@ name = "lintel-reporters"
 version = "0.0.14"
 dependencies = [
  "ansi-term-styles",
- "lintel-validate",
+ "lintel-diagnostics",
  "miette",
 ]
 
@@ -1820,6 +1831,7 @@ dependencies = [
  "jsonschema",
  "lintel-cli-common",
  "lintel-config",
+ "lintel-diagnostics",
  "lintel-schema-cache",
  "lintel-validation-cache",
  "miette",

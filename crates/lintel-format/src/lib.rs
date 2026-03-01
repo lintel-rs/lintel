@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use bpaf::{Bpaf, ShellComp};
-use miette::Diagnostic;
-use thiserror::Error;
+use lintel_diagnostics::LintelDiagnostic;
 
 // ---------------------------------------------------------------------------
 // Format detection
@@ -240,27 +239,6 @@ pub fn format_content(path: &Path, content: &str, cfg: &FormatConfig) -> Result<
 // Diagnostics
 // ---------------------------------------------------------------------------
 
-/// A formatting diagnostic: a file that is not properly formatted.
-#[derive(Debug, Error, Diagnostic)]
-#[error("Formatter would have printed the following content:\n\n{path}\n\n{diff}")]
-#[diagnostic(
-    code(lintel::format),
-    help("run `lintel check --fix` or `lintel format` to fix formatting")
-)]
-pub struct FormatDiagnostic {
-    /// Raw file path (no ANSI styling).
-    file_path: String,
-    path: String,
-    diff: String,
-}
-
-impl FormatDiagnostic {
-    /// The raw file path (without ANSI styling).
-    pub fn file_path(&self) -> &str {
-        &self.file_path
-    }
-}
-
 fn plural(n: usize) -> &'static str {
     if n == 1 { "line" } else { "lines" }
 }
@@ -383,17 +361,17 @@ fn generate_diff(original: &str, formatted: &str, color: bool) -> String {
     out
 }
 
-fn make_diagnostic(path_str: String, content: &str, formatted: &str) -> FormatDiagnostic {
+fn make_diagnostic(path_str: String, content: &str, formatted: &str) -> LintelDiagnostic {
     let color = std::io::IsTerminal::is_terminal(&std::io::stderr());
     let styled_path = if color {
         format!("\x1b[1;4;36m{path_str}\x1b[0m")
     } else {
         path_str.clone()
     };
-    FormatDiagnostic {
-        file_path: path_str,
+    LintelDiagnostic::Format {
+        path: path_str,
+        styled_path,
         diff: generate_diff(content, formatted, color),
-        path: styled_path,
     }
 }
 
@@ -551,6 +529,34 @@ pub struct FormatResult {
 // Public API
 // ---------------------------------------------------------------------------
 
+/// Check formatting of pre-read file contents, returning diagnostics for unformatted files.
+///
+/// Loads `lintel.toml` for dprint configuration. Files with unrecognized formats
+/// or parse failures are silently skipped.
+pub fn check_format_contents(
+    file_contents: &[(PathBuf, String)],
+    globs: &[String],
+    user_excludes: &[String],
+) -> Vec<LintelDiagnostic> {
+    let loaded = load_config(globs, user_excludes);
+
+    let mut diagnostics = Vec::new();
+    for (file_path, content) in file_contents {
+        if is_excluded(file_path, &loaded.excludes) {
+            continue;
+        }
+        if detect_format(file_path).is_none() {
+            continue;
+        }
+        if let Ok(Some(formatted)) = format_content(file_path, content, &loaded.format) {
+            let path_str = file_path.display().to_string();
+            diagnostics.push(make_diagnostic(path_str, content, &formatted));
+        }
+    }
+
+    diagnostics
+}
+
 /// Check formatting of files, returning diagnostics for unformatted files.
 ///
 /// Loads `lintel.toml` and merges exclude patterns. Files that fail to parse
@@ -559,7 +565,7 @@ pub struct FormatResult {
 /// # Errors
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
-pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<FormatDiagnostic>> {
+pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<LintelDiagnostic>> {
     let loaded = load_config(globs, user_excludes);
     let files = collect_files(globs, &loaded.excludes)?;
 

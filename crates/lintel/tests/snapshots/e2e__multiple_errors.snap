@@ -3,5 +3,5 @@ source: crates/lintel/tests/e2e.rs
 expression: text
 ---
 error: ./package.json: Expected string for object property on line 2 column 3
-Checked 0 files in [TIME]. 1 error(s) found.
+Checked 0 files in [TIME]. 1 error found.
 exit code: 1
