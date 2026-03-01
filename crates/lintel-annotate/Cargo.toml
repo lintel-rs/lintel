@@ -1,6 +1,6 @@
 [package]
 name = "lintel-annotate"
-version = "0.0.14"
+version = "0.0.15"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -17,9 +17,9 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 lintel-cli-common = { version = "0.0.6", path = "../lintel-cli-common" }
-lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-config = { version = "0.0.8", path = "../lintel-config" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.8", path = "../lintel-validate" }
-schema-catalog = { version = "0.0.8", path = "../schema-catalog" }
+lintel-validate = { version = "0.0.9", path = "../lintel-validate" }
+schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing.workspace = true
