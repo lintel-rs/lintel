@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel
@@ -59,6 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel
@@ -164,6 +170,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel
