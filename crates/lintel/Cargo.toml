@@ -1,6 +1,6 @@
 [package]
 name = "lintel"
-version = "0.0.16"
+version = "0.0.17"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -19,17 +19,17 @@ anyhow.workspace = true
 bpaf = { workspace = true, features = ["bright-color", "docgen"] }
 glob-match.workspace = true
 humantime = "2.3.0"
-lintel-annotate = { version = "0.0.15", path = "../lintel-annotate" }
-lintel-check = { version = "0.0.16", path = "../lintel-check" }
+lintel-annotate = { version = "0.0.16", path = "../lintel-annotate" }
+lintel-check = { version = "0.0.17", path = "../lintel-check" }
 lintel-cli-common = { version = "0.0.6", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.8", path = "../lintel-config" }
-lintel-explain = { version = "0.0.9", path = "../lintel-explain" }
-lintel-format = { version = "0.0.4", path = "../lintel-format" }
-lintel-github-action = { version = "0.0.14", path = "../lintel-github-action" }
-lintel-identify = { version = "0.0.12", path = "../lintel-identify" }
-lintel-reporters = { version = "0.0.14", path = "../lintel-reporters" }
+lintel-explain = { version = "0.0.10", path = "../lintel-explain" }
+lintel-format = { version = "0.0.5", path = "../lintel-format" }
+lintel-github-action = { version = "0.0.15", path = "../lintel-github-action" }
+lintel-identify = { version = "0.0.13", path = "../lintel-identify" }
+lintel-reporters = { version = "0.0.15", path = "../lintel-reporters" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.9", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.10", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.8", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy", "syntect-highlighter"] }
 schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
