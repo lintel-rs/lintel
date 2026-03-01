@@ -199,10 +199,28 @@ fn resolve_local_schema_path(schema_uri: &str, base_dir: Option<&Path>) -> Strin
         return schema_uri.to_string();
     }
     if let Some(dir) = base_dir {
-        dir.join(schema_uri).to_string_lossy().to_string()
+        normalize_path(&dir.join(schema_uri))
+            .to_string_lossy()
+            .to_string()
     } else {
         schema_uri.to_string()
     }
+}
+
+/// Normalize a path by resolving `.` and `..` components without touching the
+/// filesystem (unlike `std::fs::canonicalize`).
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Process a single file's already-read content: parse and resolve schema URI.
