@@ -20,6 +20,7 @@ pub mod discover;
 pub mod parsers;
 pub mod registry;
 pub mod reporter;
+pub(crate) mod suggest;
 pub mod validate;
 
 pub use reporter::Reporter;

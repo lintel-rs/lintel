@@ -16,6 +16,7 @@ use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
 use crate::discover;
 use crate::parsers::{self, Parser};
 use crate::registry;
+use crate::suggest;
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
@@ -636,11 +637,13 @@ fn clean_error_message(msg: String) -> String {
 }
 
 /// Convert [`ValidationError`]s into [`LintError::Validation`] diagnostics.
+#[allow(clippy::too_many_arguments)]
 fn push_validation_errors(
     pf: &ParsedFile,
     schema_url: &str,
     validation_errors: &[ValidationError],
     errors: &mut Vec<LintError>,
+    schema: Option<&Value>,
 ) {
     for ve in validation_errors {
         let span = find_instance_path_span(&pf.content, &ve.instance_path);
@@ -651,6 +654,10 @@ fn push_validation_errors(
         };
         let label = format_label(&instance_path, &ve.schema_path);
         let source_span: miette::SourceSpan = span.into();
+        let message = match schema {
+            Some(s) => suggest::enrich_message(&ve.message, &ve.schema_path, s),
+            None => ve.message.clone(),
+        };
         errors.push(LintError::Validation {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
             span: source_span,
@@ -658,7 +665,7 @@ fn push_validation_errors(
             path: pf.path.clone(),
             instance_path,
             label,
-            message: ve.message.clone(),
+            message,
             schema_url: schema_url.to_string(),
             schema_path: ve.schema_path.clone(),
         });
@@ -676,6 +683,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validate_formats: bool,
     cache_status: Option<CacheStatus>,
     group: &[P],
+    schema_value: &Value,
     vcache: &lintel_validation_cache::ValidationCache,
     errors: &mut Vec<LintError>,
     checked: &mut Vec<CheckedFile>,
@@ -702,7 +710,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
                 &file_errors,
             )
             .await;
-        push_validation_errors(pf, schema_uri, &file_errors, errors);
+        push_validation_errors(pf, schema_uri, &file_errors, errors, Some(schema_value));
 
         let cf = CheckedFile {
             path: pf.path.clone(),
@@ -955,7 +963,13 @@ pub async fn run_with(
                 .await;
 
             if let Some(cached_errors) = cached {
-                push_validation_errors(pf, schema_uri, &cached_errors, &mut errors);
+                push_validation_errors(
+                    pf,
+                    schema_uri,
+                    &cached_errors,
+                    &mut errors,
+                    Some(&schema_value),
+                );
                 let cf = CheckedFile {
                     path: pf.path.clone(),
                     schema: schema_uri.clone(),
@@ -1057,6 +1071,7 @@ pub async fn run_with(
             validate_formats,
             cache_status,
             &cache_misses,
+            &schema_value,
             &vcache,
             &mut errors,
             &mut checked,
