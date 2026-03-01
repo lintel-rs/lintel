@@ -1,9 +1,9 @@
 use core::time::Duration;
 
-use lintel_validate::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
-use lintel_validate::format_checked_verbose;
-use lintel_validate::reporter::Reporter;
-use lintel_validate::validate::{CheckedFile, LintError, ValidateResult};
+use lintel_diagnostics::DEFAULT_LABEL;
+use lintel_diagnostics::LintelDiagnostic;
+use lintel_diagnostics::offset_to_line_col;
+use lintel_diagnostics::reporter::{CheckResult, CheckedFile, Reporter, format_checked_verbose};
 
 /// GitHub Actions reporter: emits `::error` workflow commands to stdout.
 pub struct GithubReporter {
@@ -24,47 +24,62 @@ fn normalize_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+fn emit_lint_error(error: &LintelDiagnostic) {
+    let path = normalize_path(error.path());
+    let message = escape_workflow(error.message());
+
+    let (line, col) = match error {
+        LintelDiagnostic::Parse { src, span, .. }
+        | LintelDiagnostic::Validation { src, span, .. } => {
+            offset_to_line_col(src.inner(), span.offset())
+        }
+        LintelDiagnostic::SchemaMismatch { line_number, .. } => (*line_number, 1),
+        LintelDiagnostic::Io { .. }
+        | LintelDiagnostic::SchemaFetch { .. }
+        | LintelDiagnostic::SchemaCompile { .. }
+        | LintelDiagnostic::Format { .. } => (1, 1),
+    };
+
+    let title = match error {
+        LintelDiagnostic::Parse { .. } => "parse error",
+        LintelDiagnostic::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
+            instance_path
+        }
+        LintelDiagnostic::Validation { .. } => "validation error",
+        LintelDiagnostic::SchemaMismatch { .. } => "schema mismatch",
+        LintelDiagnostic::Io { .. } => "io error",
+        LintelDiagnostic::SchemaFetch { .. } => "schema fetch error",
+        LintelDiagnostic::SchemaCompile { .. } => "schema compile error",
+        LintelDiagnostic::Format { .. } => "format error",
+    };
+
+    println!("::error file={path},line={line},col={col},title={title}::{message}");
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "error" } else { "errors" }
+}
+
+fn print_summary(n: usize, error_count: usize, ms: u128) {
+    if error_count > 0 {
+        let label = plural(error_count);
+        eprintln!("Checked {n} files in {ms}ms. {error_count} {label} found.");
+    } else {
+        eprintln!("Checked {n} files in {ms}ms. No errors.");
+    }
+}
+
 impl Reporter for GithubReporter {
-    fn report(&mut self, result: ValidateResult, elapsed: Duration) {
-        let error_count = result.errors.len();
+    fn report(&mut self, result: CheckResult, elapsed: Duration) {
         let n = result.files_checked();
+        let error_count = result.errors.len();
 
         for error in &result.errors {
-            let path = normalize_path(error.path());
-            let message = escape_workflow(error.message());
-
-            let (line, col) = match error {
-                LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
-                    offset_to_line_col(src.inner(), span.offset())
-                }
-                LintError::SchemaMismatch { line_number, .. } => (*line_number, 1),
-                LintError::Io { .. }
-                | LintError::SchemaFetch { .. }
-                | LintError::SchemaCompile { .. } => (1, 1),
-            };
-
-            let title = match error {
-                LintError::Parse { .. } => "parse error",
-                LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
-                    instance_path
-                }
-                LintError::Validation { .. } => "validation error",
-                LintError::Io { .. } => "io error",
-                LintError::SchemaFetch { .. } => "schema fetch error",
-                LintError::SchemaMismatch { .. } => "schema mismatch",
-                LintError::SchemaCompile { .. } => "schema compile error",
-            };
-
-            println!("::error file={path},line={line},col={col},title={title}::{message}");
+            emit_lint_error(error);
         }
 
-        // Summary to stderr (not parsed as workflow commands)
         let ms = elapsed.as_millis();
-        if error_count > 0 {
-            eprintln!("Checked {n} files in {ms}ms. {error_count} error(s) found.");
-        } else {
-            eprintln!("Checked {n} files in {ms}ms. No errors.");
-        }
+        print_summary(n, error_count, ms);
     }
 
     fn on_file_checked(&mut self, file: &CheckedFile) {

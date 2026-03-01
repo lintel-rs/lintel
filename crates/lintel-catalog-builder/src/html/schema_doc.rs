@@ -45,6 +45,9 @@ pub struct PropertyDoc {
     /// Href linking to a definition or external schema page, when the type comes from a `$ref`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ref_anchor: Option<String>,
+    /// When the property is a map/record type via `additionalProperties`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_properties: Option<AdditionalPropertiesDoc>,
 }
 
 /// A segment within a composed type string, optionally linking to a definition or schema page.
@@ -94,6 +97,9 @@ pub struct DefinitionDoc {
     pub description_html: Option<String>,
     pub properties: Vec<PropertyDoc>,
     pub examples: Vec<String>,
+    /// When the definition is a map/record type via `additionalProperties`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_properties: Option<AdditionalPropertiesDoc>,
 }
 
 /// A top-level example value.
@@ -101,6 +107,15 @@ pub struct DefinitionDoc {
 pub struct ExampleDoc {
     pub is_complex: bool,
     pub content: String,
+}
+
+/// Additional properties info for map/record types (`Record<key, Value>`).
+#[derive(Serialize)]
+pub struct AdditionalPropertiesDoc {
+    pub key_label: String,
+    pub value_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_href: Option<String>,
 }
 
 /// Sub-schema info for array `items`.
@@ -354,6 +369,7 @@ fn extract_definitions(schema: &Value, ctx: &ExtractContext<'_>) -> Vec<Definiti
                     .map(|p| extract_properties(p, &required, &child_ctx))
                     .unwrap_or_default();
                 let examples = extract_raw_examples(resolved);
+                let additional_properties = extract_additional_properties(resolved, &child_ctx);
                 defs.push(DefinitionDoc {
                     name: name.clone(),
                     slug: alloc::format!("def-{name}"),
@@ -361,6 +377,7 @@ fn extract_definitions(schema: &Value, ctx: &ExtractContext<'_>) -> Vec<Definiti
                     description_html: desc,
                     properties,
                     examples,
+                    additional_properties,
                 });
             }
         }
@@ -439,6 +456,7 @@ fn extract_single_property(
         Vec::new()
     };
     let has_nested = !nested.is_empty();
+    let additional_properties = extract_additional_properties(resolved, ctx);
 
     PropertyDoc {
         name: String::from(name),
@@ -456,7 +474,42 @@ fn extract_single_property(
         properties: nested,
         has_nested,
         ref_anchor,
+        additional_properties,
     }
+}
+
+fn extract_additional_properties(
+    schema: &Value,
+    ctx: &ExtractContext<'_>,
+) -> Option<AdditionalPropertiesDoc> {
+    let ap = schema.get("additionalProperties")?;
+    if !ap.is_object() {
+        return None;
+    }
+
+    let key_label = schema
+        .get("x-tombi-additional-key-label")
+        .and_then(Value::as_str)
+        .map_or_else(|| String::from("string"), String::from);
+
+    let resolved_ap = resolve_ref(ap, ctx.root);
+    let value_type = schema_type_str(resolved_ap)
+        .or_else(|| ap.get("$ref").and_then(Value::as_str).map(ref_name))
+        .unwrap_or_else(|| String::from("any"));
+
+    let value_href = ap.get("$ref").and_then(Value::as_str).and_then(|r| {
+        if r.starts_with("#/$defs/") || r.starts_with("#/definitions/") {
+            Some(alloc::format!("#def-{}", ref_name(r)))
+        } else {
+            ctx.site.and_then(|s| ref_to_href(r, s))
+        }
+    });
+
+    Some(AdditionalPropertiesDoc {
+        key_label,
+        value_type,
+        value_href,
+    })
 }
 
 fn extract_enum_values(schema: &Value) -> Vec<String> {
@@ -1145,6 +1198,112 @@ mod tests {
         assert_eq!(doc.type_parts[0].href.as_deref(), Some("#def-Foo"));
         assert_eq!(doc.type_parts[1].text, "Bar");
         assert_eq!(doc.type_parts[1].href.as_deref(), Some("#def-Bar"));
+    }
+
+    #[test]
+    fn additional_properties_with_local_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "dependencies": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/Dependency" },
+                    "x-tombi-additional-key-label": "crate_name"
+                }
+            },
+            "$defs": {
+                "Dependency": {
+                    "anyOf": [
+                        { "type": "string" },
+                        { "type": "object" }
+                    ]
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let deps = &doc.properties[0];
+        let ap = deps.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "crate_name");
+        assert_eq!(ap.value_type, "string | object");
+        assert_eq!(ap.value_href.as_deref(), Some("#def-Dependency"));
+    }
+
+    #[test]
+    fn additional_properties_without_ref() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let env = &doc.properties[0];
+        let ap = env.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "string");
+        assert_eq!(ap.value_type, "string");
+        assert!(ap.value_href.is_none());
+    }
+
+    #[test]
+    fn additional_properties_boolean_ignored() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "strict": {
+                    "type": "object",
+                    "additionalProperties": false
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        assert!(doc.properties[0].additional_properties.is_none());
+    }
+
+    #[test]
+    fn additional_properties_external_ref() {
+        let site = SiteContext {
+            base_url: "https://example.com/",
+            base_path: "/",
+        };
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "plugins": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "https://example.com/schemas/tool/plugin/latest.json"
+                    }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, Some(&site));
+        let ap = doc.properties[0].additional_properties.as_ref().unwrap();
+        assert_eq!(ap.value_type, "Plugin");
+        assert_eq!(ap.value_href.as_deref(), Some("/schemas/tool/plugin/"));
+    }
+
+    #[test]
+    fn definition_with_additional_properties() {
+        let schema = json!({
+            "$defs": {
+                "Features": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    }
+                }
+            }
+        });
+        let doc = extract_schema_doc(&schema, None);
+        let features = &doc.definitions[0];
+        let ap = features.additional_properties.as_ref().unwrap();
+        assert_eq!(ap.key_label, "string");
+        assert_eq!(ap.value_type, "string[]");
+        assert!(ap.value_href.is_none());
     }
 
     #[test]

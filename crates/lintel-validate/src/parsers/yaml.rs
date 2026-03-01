@@ -1,14 +1,14 @@
 use miette::NamedSource;
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 use super::Parser;
 
 pub struct YamlParser;
 
 impl Parser for YamlParser {
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic> {
         // Strip UTF-8 BOM characters that can appear at the start of a file or
         // mid-stream (e.g. after a comment line), which serde_yaml misinterprets
         // as a multi-document separator.
@@ -19,7 +19,7 @@ impl Parser for YamlParser {
         };
         serde_yaml::from_str(&clean).map_err(|e| {
             let offset = e.location().map_or(0, |loc| loc.index());
-            ParseDiagnostic {
+            LintelDiagnostic::Parse {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),
                 message: e.to_string(),

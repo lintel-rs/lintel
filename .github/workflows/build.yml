@@ -22,20 +22,22 @@ jobs:
   build-nix:
     name: Nix (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-26]
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - run: nix build .#all
-      - name: Build static binary
-        if: runner.os == 'Linux'
-        run: nix build .#lintel-static
       - run: nix flake check
       - run: nix run . -- version
 
@@ -43,8 +45,10 @@ jobs:
   # Uploaded as release artifacts.
   build-static:
     name: Build (${{ matrix.binary }}-${{ matrix.target }})
-    needs: build-nix
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         include:
@@ -59,6 +63,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel
@@ -152,8 +159,10 @@ jobs:
   # uploaded as artifacts so release.yml can push them without rebuilding.
   build-docker:
     name: Docker (${{ matrix.arch }})
-    needs: build-nix
     runs-on: ${{ matrix.runner }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         include:
@@ -164,6 +173,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/flakehub-cache-action@v3
+        with:
+          upstream-cache: https://lintel.cachix.org
       - uses: cachix/cachix-action@v16
         with:
           name: lintel

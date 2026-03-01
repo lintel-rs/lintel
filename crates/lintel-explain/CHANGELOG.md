@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.9...lintel-explain-v0.0.10) - 2026-03-01
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into fix-lintel-check-unify
+
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.8...lintel-explain-v0.0.9) - 2026-03-01
+
+### Other
+
+- updated the following local packages: lintel-validate, lintel-identify
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.7...lintel-explain-v0.0.8) - 2026-02-28
 
 ### Other
