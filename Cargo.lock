@@ -1524,6 +1524,9 @@ name = "jsonschema-explain"
 version = "0.2.5"
 dependencies = [
  "ansi-term-styles",
+ "indexmap",
+ "jsonschema-migrate",
+ "jsonschema-schema",
  "markdown-to-ansi",
  "serde_json",
 ]
@@ -1533,6 +1536,16 @@ name = "jsonschema-migrate"
 version = "0.1.2"
 dependencies = [
  "regex-syntax 0.8.10",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonschema-schema"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "jsonschema-migrate",
+ "serde",
  "serde_json",
 ]
 
@@ -1676,6 +1689,7 @@ version = "0.0.6"
 dependencies = [
  "bpaf",
  "humantime",
+ "terminal_size",
 ]
 
 [[package]]
@@ -1709,14 +1723,18 @@ version = "0.0.8"
 dependencies = [
  "anyhow",
  "bpaf",
+ "glob-match",
  "jsonschema-explain",
+ "jsonschema-migrate",
+ "jsonschema-schema",
  "lintel-cli-common",
- "lintel-identify",
+ "lintel-config",
+ "lintel-schema-cache",
  "lintel-validate",
  "reqwest",
+ "schema-catalog",
  "serde_json",
  "tempfile",
- "terminal_size",
  "tokio",
  "tracing",
 ]
@@ -1766,15 +1784,8 @@ version = "0.0.11"
 dependencies = [
  "anyhow",
  "bpaf",
- "glob-match",
- "jsonschema-explain",
  "lintel-cli-common",
- "lintel-config",
- "lintel-schema-cache",
- "lintel-validate",
- "schema-catalog",
- "serde_json",
- "terminal_size",
+ "lintel-explain",
  "tracing",
 ]
 

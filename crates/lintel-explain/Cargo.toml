@@ -16,14 +16,18 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bpaf.workspace = true
+glob-match.workspace = true
 jsonschema-explain = { version = "0.2.5", path = "../jsonschema-explain" }
+jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }
+jsonschema-schema = { version = "0.1.0", path = "../jsonschema-schema" }
 lintel-cli-common = { version = "0.0.6", path = "../lintel-cli-common" }
-lintel-identify = { version = "0.0.11", path = "../lintel-identify" }
+lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.8", path = "../lintel-validate" }
 reqwest.workspace = true
+schema-catalog = { version = "0.0.8", path = "../schema-catalog" }
 serde_json.workspace = true
 tempfile.workspace = true
-terminal_size = "0.4.3"
 tracing.workspace = true
 
 [dev-dependencies]

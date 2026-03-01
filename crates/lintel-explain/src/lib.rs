@@ -1,6 +1,9 @@
 #![doc = include_str!("../README.md")]
 
 mod path;
+pub mod resolve;
+
+pub use resolve::{ResolvedFileSchema, SchemaSource, build_retriever};
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -195,14 +198,78 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
     )
     .await?;
 
-    render_output(
-        global,
-        &args,
-        &schema_value,
-        &display_name,
-        pointer.as_deref(),
+    let is_tty = std::io::stdout().is_terminal();
+    let use_color = global.use_color(is_tty);
+    let opts = jsonschema_explain::ExplainOptions {
+        color: use_color,
+        syntax_highlight: use_color && !args.no_syntax_highlighting,
+        width: lintel_cli_common::terminal_width(),
         validation_errors,
-    )
+    };
+
+    let output = match pointer.as_deref() {
+        Some(ptr) => jsonschema_explain::explain_at_path(&schema_value, ptr, &display_name, &opts)
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => jsonschema_explain::explain(&schema_value, &display_name, &opts),
+    };
+
+    if is_tty && !args.no_pager {
+        lintel_cli_common::pipe_to_pager(&output);
+    } else {
+        print!("{output}");
+    }
+
+    Ok(false)
+}
+
+// ---------------------------------------------------------------------------
+// Shared explain helper for `lintel identify --explain`
+// ---------------------------------------------------------------------------
+
+/// Display options for rendering schema documentation.
+pub struct ExplainDisplayArgs {
+    /// Disable syntax highlighting in code blocks.
+    pub no_syntax_highlighting: bool,
+    /// Print output directly instead of piping through a pager.
+    pub no_pager: bool,
+}
+
+/// Fetch, migrate, and render schema documentation for an already-resolved
+/// schema. Used by `lintel identify --explain`.
+///
+/// # Errors
+///
+/// Returns an error if the schema cannot be fetched or deserialized.
+pub async fn explain_resolved_schema(
+    resolved: &ResolvedFileSchema,
+    cache: &CliCacheOptions,
+    global: &CLIGlobalOptions,
+    display: &ExplainDisplayArgs,
+) -> Result<()> {
+    match fetch_schema(&resolved.schema_uri, resolved.is_remote, cache).await {
+        Ok(sv) => {
+            let is_tty = std::io::stdout().is_terminal();
+            let use_color = global.use_color(is_tty);
+            let opts = jsonschema_explain::ExplainOptions {
+                color: use_color,
+                syntax_highlight: use_color && !display.no_syntax_highlighting,
+                width: lintel_cli_common::terminal_width(),
+                validation_errors: vec![],
+            };
+            let output = jsonschema_explain::explain(&sv, &resolved.display_name, &opts);
+            if is_tty && !display.no_pager {
+                lintel_cli_common::pipe_to_pager(&format!("\n{output}"));
+            } else {
+                println!();
+                print!("{output}");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("  error fetching schema: {e}");
+            Ok(())
+        }
+    }
 }
 
 /// If the data source is a URL, fetch its content; otherwise return `None`.
@@ -242,7 +309,7 @@ async fn resolve_schema_info(
     } else if let Some(fetched) = fetched {
         let cwd = std::env::current_dir().ok();
         let virtual_path = PathBuf::from(&fetched.filename);
-        let resolved = lintel_identify::resolve_schema_for_content(
+        let resolved = resolve::resolve_schema_for_content(
             &fetched.content,
             &virtual_path,
             cwd.as_deref(),
@@ -272,7 +339,7 @@ async fn resolve_local_schema(
 ) -> Result<(String, String, bool)> {
     let path = Path::new(src);
     if path.exists() {
-        let resolved = lintel_identify::resolve_schema_for_file(path, cache)
+        let resolved = resolve::resolve_schema_for_file(path, cache)
             .await?
             .ok_or_else(|| anyhow::anyhow!("no schema found for {src}"))?;
         Ok((
@@ -283,7 +350,7 @@ async fn resolve_local_schema(
     } else if is_file_flag {
         anyhow::bail!("file not found: {src}");
     } else {
-        let resolved = lintel_identify::resolve_schema_for_path(path, cache)
+        let resolved = resolve::resolve_schema_for_path(path, cache)
             .await?
             .ok_or_else(|| anyhow::anyhow!("no schema found for path: {src}"))?;
         Ok((
@@ -322,65 +389,28 @@ async fn run_validation(
     }
 }
 
-/// Render the schema explanation output.
-#[allow(clippy::too_many_arguments)]
-fn render_output(
-    global: &CLIGlobalOptions,
-    args: &ExplainArgs,
-    schema_value: &serde_json::Value,
-    display_name: &str,
-    pointer: Option<&str>,
-    validation_errors: Vec<jsonschema_explain::ExplainError>,
-) -> Result<bool> {
-    let is_tty = std::io::stdout().is_terminal();
-    let use_color = match global.colors {
-        Some(lintel_cli_common::ColorsArg::Force) => true,
-        Some(lintel_cli_common::ColorsArg::Off) => false,
-        None => is_tty,
-    };
-    let opts = jsonschema_explain::ExplainOptions {
-        color: use_color,
-        syntax_highlight: use_color && !args.no_syntax_highlighting,
-        width: terminal_size::terminal_size()
-            .map(|(w, _)| w.0 as usize)
-            .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
-            .unwrap_or(80),
-        validation_errors,
-    };
-
-    let output = match pointer {
-        Some(ptr) => jsonschema_explain::explain_at_path(schema_value, ptr, display_name, &opts)
-            .map_err(|e| anyhow::anyhow!("{e}"))?,
-        None => jsonschema_explain::explain(schema_value, display_name, &opts),
-    };
-
-    if is_tty && !args.no_pager {
-        lintel_cli_common::pipe_to_pager(&output);
-    } else {
-        print!("{output}");
-    }
-
-    Ok(false)
-}
-
 async fn fetch_schema(
     schema_uri: &str,
     is_remote: bool,
     cache: &CliCacheOptions,
-) -> Result<serde_json::Value> {
-    if is_remote {
-        let retriever = lintel_identify::build_retriever(cache);
+) -> Result<jsonschema_schema::SchemaValue> {
+    let mut value: serde_json::Value = if is_remote {
+        let retriever = resolve::build_retriever(cache);
         let (val, _) = retriever
             .fetch(schema_uri)
             .await
             .map_err(|e| anyhow::anyhow!("failed to fetch schema '{schema_uri}': {e}"))?;
-        Ok(val)
+        val
     } else {
         let content = std::fs::read_to_string(schema_uri)
             .with_context(|| format!("failed to read schema: {schema_uri}"))?;
         serde_json::from_str(&content)
-            .with_context(|| format!("failed to parse schema: {schema_uri}"))
-    }
+            .with_context(|| format!("failed to parse schema: {schema_uri}"))?
+    };
+
+    jsonschema_migrate::migrate_to_2020_12(&mut value);
+    serde_json::from_value(value)
+        .with_context(|| format!("failed to deserialize schema: {schema_uri}"))
 }
 
 /// Convert a schema pointer (e.g. `/properties/badges`) to an instance path
