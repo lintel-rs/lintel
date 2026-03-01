@@ -4,8 +4,6 @@
 //! module finds close matches from the schema's valid properties and appends
 //! a suggestion to the error message.
 
-use core::fmt::Write;
-
 use serde_json::Value;
 
 /// Standard Levenshtein edit distance on Unicode characters.
@@ -28,34 +26,6 @@ fn levenshtein(a: &str, b: &str) -> usize {
     }
 
     prev[n]
-}
-
-/// The prefix that `jsonschema` uses for additionalProperties errors.
-const ADDITIONAL_PROPS_PREFIX: &str = "Additional properties are not allowed (";
-
-/// Parse property names from an additionalProperties error message.
-///
-/// Messages look like:
-/// `Additional properties are not allowed ('foo', 'bar' were unexpected)`
-fn extract_unexpected_properties(message: &str) -> Option<Vec<String>> {
-    if !message.starts_with(ADDITIONAL_PROPS_PREFIX) {
-        return None;
-    }
-
-    let mut props = Vec::new();
-    let mut remaining = &message[ADDITIONAL_PROPS_PREFIX.len()..];
-
-    while let Some(start) = remaining.find('\'') {
-        let after_quote = &remaining[start + 1..];
-        if let Some(end) = after_quote.find('\'') {
-            props.push(after_quote[..end].to_string());
-            remaining = &after_quote[end + 1..];
-        } else {
-            break;
-        }
-    }
-
-    if props.is_empty() { None } else { Some(props) }
 }
 
 /// Resolve a local `$ref` (starting with `#/`) within the schema document.
@@ -185,44 +155,20 @@ fn suggest_for_property(unexpected: &str, valid_properties: &[String]) -> Option
     best.map(|(_, prop)| prop.to_string())
 }
 
-/// Enrich an additionalProperties error message with "did you mean?"
-/// suggestions.
+/// Find the best "did you mean?" suggestion for a single unexpected property.
 ///
-/// If the message is not an additionalProperties error or no close matches are
-/// found, returns the message unchanged.
-pub fn enrich_message(message: &str, schema_path: &str, schema: &Value) -> String {
-    let Some(unexpected) = extract_unexpected_properties(message) else {
-        return message.to_string();
-    };
-
+/// Collects valid property names from the schema at `schema_path` and returns
+/// the closest match, or `None` if no close match is found.
+pub(crate) fn suggest_property(
+    property: &str,
+    schema_path: &str,
+    schema: &Value,
+) -> Option<String> {
     let valid_properties = collect_schema_properties(schema, schema_path);
     if valid_properties.is_empty() {
-        return message.to_string();
+        return None;
     }
-
-    let mut suggestions: Vec<(String, String)> = Vec::new();
-    for prop in &unexpected {
-        if let Some(suggestion) = suggest_for_property(prop, &valid_properties) {
-            suggestions.push((prop.clone(), suggestion));
-        }
-    }
-
-    if suggestions.is_empty() {
-        return message.to_string();
-    }
-
-    let mut result = message.to_string();
-    if suggestions.len() == 1 && unexpected.len() == 1 {
-        // Single unexpected property with a suggestion — simple suffix
-        let _ = write!(result, "; did you mean '{}'?", suggestions[0].1);
-    } else {
-        // Multiple unexpected properties or multiple suggestions — annotate each
-        for (prop, suggestion) in &suggestions {
-            let _ = write!(result, "; did you mean '{suggestion}'? (for '{prop}')");
-        }
-    }
-
-    result
+    suggest_for_property(property, &valid_properties)
 }
 
 #[cfg(test)]
@@ -265,28 +211,6 @@ mod tests {
     fn levenshtein_dash_vs_underscore() {
         // "argument_hint" vs "argument-hint" — distance 1
         assert_eq!(levenshtein("argument_hint", "argument-hint"), 1);
-    }
-
-    // --- extract_unexpected_properties ---
-
-    #[test]
-    fn extract_single_property() {
-        let msg = "Additional properties are not allowed ('argument_hint' was unexpected)";
-        let props = extract_unexpected_properties(msg).unwrap();
-        assert_eq!(props, vec!["argument_hint"]);
-    }
-
-    #[test]
-    fn extract_multiple_properties() {
-        let msg = "Additional properties are not allowed ('foo', 'bar', 'baz' were unexpected)";
-        let props = extract_unexpected_properties(msg).unwrap();
-        assert_eq!(props, vec!["foo", "bar", "baz"]);
-    }
-
-    #[test]
-    fn extract_non_additional_properties_message() {
-        let msg = "Some other error message";
-        assert!(extract_unexpected_properties(msg).is_none());
     }
 
     // --- collect_schema_properties ---
@@ -425,10 +349,10 @@ mod tests {
         );
     }
 
-    // --- enrich_message ---
+    // --- suggest_property ---
 
     #[test]
-    fn enrich_single_suggestion() {
+    fn suggest_property_finds_match() {
         let schema = json!({
             "properties": {
                 "argument-hint": { "type": "string" },
@@ -436,55 +360,37 @@ mod tests {
             },
             "additionalProperties": false
         });
-        let msg = "Additional properties are not allowed ('argument_hint' was unexpected)";
-        let enriched = enrich_message(msg, "/additionalProperties", &schema);
         assert_eq!(
-            enriched,
-            "Additional properties are not allowed ('argument_hint' was unexpected); did you mean 'argument-hint'?"
+            suggest_property("argument_hint", "/additionalProperties", &schema),
+            Some("argument-hint".to_string())
         );
     }
 
     #[test]
-    fn enrich_no_suggestion() {
+    fn suggest_property_no_match() {
         let schema = json!({
             "properties": {
                 "name": { "type": "string" }
             },
             "additionalProperties": false
         });
-        let msg = "Additional properties are not allowed ('completely_different' was unexpected)";
-        let enriched = enrich_message(msg, "/additionalProperties", &schema);
-        assert_eq!(enriched, msg);
+        assert_eq!(
+            suggest_property("completely_different", "/additionalProperties", &schema),
+            None
+        );
     }
 
     #[test]
-    fn enrich_non_additional_properties() {
+    fn suggest_property_empty_schema() {
         let schema = json!({"type": "object"});
-        let msg = "Some other validation error";
-        let enriched = enrich_message(msg, "/type", &schema);
-        assert_eq!(enriched, msg);
-    }
-
-    #[test]
-    fn enrich_multiple_unexpected_one_suggestion() {
-        let schema = json!({
-            "properties": {
-                "argument-hint": { "type": "string" },
-                "name": { "type": "string" }
-            },
-            "additionalProperties": false
-        });
-        let msg =
-            "Additional properties are not allowed ('argument_hint', 'zzzzzzz' were unexpected)";
-        let enriched = enrich_message(msg, "/additionalProperties", &schema);
         assert_eq!(
-            enriched,
-            "Additional properties are not allowed ('argument_hint', 'zzzzzzz' were unexpected); did you mean 'argument-hint'? (for 'argument_hint')"
+            suggest_property("foo", "/additionalProperties", &schema),
+            None
         );
     }
 
     #[test]
-    fn enrich_multiple_suggestions() {
+    fn suggest_property_typo() {
         let schema = json!({
             "properties": {
                 "argument-hint": { "type": "string" },
@@ -492,18 +398,9 @@ mod tests {
             },
             "additionalProperties": false
         });
-        let msg =
-            "Additional properties are not allowed ('argument_hint', 'desciption' were unexpected)";
-        let enriched = enrich_message(msg, "/additionalProperties", &schema);
-        assert!(enriched.contains("did you mean 'argument-hint'? (for 'argument_hint')"));
-        assert!(enriched.contains("did you mean 'description'? (for 'desciption')"));
-    }
-
-    #[test]
-    fn enrich_empty_valid_properties() {
-        let schema = json!({"type": "object"});
-        let msg = "Additional properties are not allowed ('foo' was unexpected)";
-        let enriched = enrich_message(msg, "/additionalProperties", &schema);
-        assert_eq!(enriched, msg);
+        assert_eq!(
+            suggest_property("desciption", "/additionalProperties", &schema),
+            Some("description".to_string())
+        );
     }
 }

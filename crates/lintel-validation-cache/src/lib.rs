@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 
+pub mod validation_error;
+pub use validation_error::*;
+
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -13,18 +16,6 @@ pub enum ValidationCacheStatus {
     Hit,
     /// Validation result was computed (cache miss or skip-read mode).
     Miss,
-}
-
-/// A single validation error with its location and schema context.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidationError {
-    /// JSON Pointer to the failing instance (e.g. `/jobs/build`).
-    pub instance_path: String,
-    /// Human-readable error message.
-    pub message: String,
-    /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
-    #[serde(default)]
-    pub schema_path: String,
 }
 
 /// The cache lookup/store key: file content, schema hash, and format-validation flag.
@@ -232,8 +223,11 @@ mod tests {
 
         let errors = vec![ValidationError {
             instance_path: "/name".to_string(),
-            message: "missing required property".to_string(),
             schema_path: "/required".to_string(),
+            kind: ValidationErrorKind::Required {
+                property: "\"name\"".to_string(),
+            },
+            span: (0, 0),
         }];
         let key = CacheKey {
             file_content: "content",
@@ -247,7 +241,6 @@ mod tests {
         let result = result.expect("expected cache hit");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].instance_path, "/name");
-        assert_eq!(result[0].message, "missing required property");
         assert_eq!(result[0].schema_path, "/required");
         Ok(())
     }
@@ -300,8 +293,9 @@ mod tests {
                 &key_other,
                 &[ValidationError {
                     instance_path: "path".to_string(),
-                    message: "msg".to_string(),
                     schema_path: String::new(),
+                    kind: ValidationErrorKind::FalseSchema,
+                    span: (0, 0),
                 }],
             )
             .await;
