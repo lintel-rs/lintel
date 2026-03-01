@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-format-v0.0.3...lintel-format-v0.0.4) - 2026-03-01
+
+### Other
+
+- Merge pull request #130 from lintel-rs/fixing
+- Fix non-idempotent TOML formatting for lintel.toml without sections
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-format-v0.0.2...lintel-format-v0.0.3) - 2026-02-28
 
 ### Other
