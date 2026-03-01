@@ -11,7 +11,17 @@
 >
   <div class="property-header">
     <span class="property-name">{{ property.name }}</span>
-    {% if property.schema_type_parts %}
+    {% if property.additional_properties %}
+    <span class="type-badge"
+      >Record&lt;{{ property.additional_properties.key_label }}, {% if
+      property.additional_properties.value_href %}<a
+        href="{{ property.additional_properties.value_href }}"
+        class="type-badge-link"
+        >{{ property.additional_properties.value_type }}</a
+      >{% else %}{{ property.additional_properties.value_type }}{% endif
+      %}&gt;</span
+    >
+    {% elif property.schema_type_parts %}
     <span class="type-badge"
       >{% for part in property.schema_type_parts %}{% if part.href %}<a
         href="{{ part.href }}"

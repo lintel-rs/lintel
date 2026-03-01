@@ -77,7 +77,15 @@
   <div class="definition-block" id="{{ def.slug }}">
     <div class="definition-header">
       <span class="def-name">{{ def.name }}</span>
-      {% if def.schema_type %}<span class="type-badge"
+      {% if def.additional_properties %}<span class="type-badge"
+        >Record&lt;{{ def.additional_properties.key_label }}, {% if
+        def.additional_properties.value_href %}<a
+          href="{{ def.additional_properties.value_href }}"
+          class="type-badge-link"
+          >{{ def.additional_properties.value_type }}</a
+        >{% else %}{{ def.additional_properties.value_type }}{% endif
+        %}&gt;</span
+      >{% elif def.schema_type %}<span class="type-badge"
         >{{ def.schema_type }}</span
       >{% endif %}
     </div>
