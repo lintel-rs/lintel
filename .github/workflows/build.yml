@@ -35,10 +35,6 @@ jobs:
         with:
           name: lintel
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - run: nix build .#all
-      - name: Build static binary
-        if: runner.os == 'Linux'
-        run: nix build .#lintel-static
       - run: nix flake check
       - run: nix run . -- version
 
@@ -46,7 +42,6 @@ jobs:
   # Uploaded as release artifacts.
   build-static:
     name: Build (${{ matrix.binary }}-${{ matrix.target }})
-    needs: build-nix
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -158,7 +153,6 @@ jobs:
   # uploaded as artifacts so release.yml can push them without rebuilding.
   build-docker:
     name: Docker (${{ matrix.arch }})
-    needs: build-nix
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:

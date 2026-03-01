@@ -53,9 +53,7 @@
           };
         in
         {
-          checks = {
-            inherit (packages) lintel;
-          };
+          checks = packages;
 
           packages =
             packages
