@@ -22,6 +22,9 @@ jobs:
   build-nix:
     name: Nix (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-26]
@@ -43,6 +46,9 @@ jobs:
   build-static:
     name: Build (${{ matrix.binary }}-${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         include:
@@ -154,6 +160,9 @@ jobs:
   build-docker:
     name: Docker (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         include:
