@@ -1573,7 +1573,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1715,7 +1715,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1734,7 +1734,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-format"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1760,7 +1760,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1773,7 +1773,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1791,7 +1791,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "ansi-term-styles",
  "lintel-diagnostics",
@@ -1817,7 +1817,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -1,6 +1,6 @@
 [package]
 name = "lintel-format"
-version = "0.0.4"
+version = "0.0.5"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true

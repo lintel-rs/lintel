@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.15](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.14...lintel-reporters-v0.0.15) - 2026-03-01
+
+### Other
+
+- Merge remote-tracking branch 'origin/master' into fix-lintel-check-unify
+- Remove unused lintel-validate dependency from lintel-reporters
+- Unify Reporter, CheckResult, and file reading across check pipeline
+
 ## [0.0.14](https://github.com/lintel-rs/lintel/compare/lintel-reporters-v0.0.13...lintel-reporters-v0.0.14) - 2026-03-01
 
 ### Other
