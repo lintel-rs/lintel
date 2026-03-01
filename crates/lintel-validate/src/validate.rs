@@ -996,7 +996,12 @@ pub async fn run_with(
                 .with_retriever(local_retriever)
                 .should_validate_formats(validate_formats);
             let base_uri = if is_remote_schema {
-                Some(schema_uri.clone())
+                // Strip fragment (e.g. "#") — base URIs must not contain fragments.
+                let uri = match schema_uri.find('#') {
+                    Some(pos) => schema_uri[..pos].to_string(),
+                    None => schema_uri.clone(),
+                };
+                Some(uri)
             } else {
                 std::fs::canonicalize(schema_uri)
                     .ok()
@@ -2083,6 +2088,54 @@ validate_formats = false
     fn clean_preserves_required_property() {
         let msg = "\"name\" is a required property";
         assert_eq!(clean_error_message(msg.to_string()), msg);
+    }
+
+    /// Schemas whose URI contains a fragment (e.g. `…/draft-07/schema#`)
+    /// must compile without error — the fragment is stripped before being
+    /// used as the base URI for `$ref` resolution.
+    #[tokio::test]
+    async fn schema_uri_with_fragment_compiles() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+
+        // A minimal draft-07 schema whose `$schema` ends with `#`.
+        let schema_body = r#"{
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": { "name": { "type": "string" } },
+            "required": ["name"]
+        }"#;
+
+        let schema_url = "http://json-schema.org/draft-07/schema#";
+
+        let f = tmp.path().join("data.json");
+        fs::write(
+            &f,
+            format!(r#"{{ "$schema": "{schema_url}", "name": "hello" }}"#),
+        )?;
+
+        let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
+        let client = mock(&[(
+            // The schema URI with fragment — exactly as the `$schema` value appears.
+            schema_url,
+            schema_body,
+        )]);
+        let c = ValidateArgs {
+            globs: vec![pattern],
+            exclude: vec![],
+            cache_dir: None,
+            force_schema_fetch: true,
+            force_validation: true,
+            no_catalog: true,
+            config_dir: None,
+            schema_cache_ttl: None,
+        };
+        let result = run_with(&c, Some(client), |_| {}).await?;
+        assert!(
+            !result.has_errors(),
+            "schema URI with fragment should not cause compilation error"
+        );
+        assert_eq!(result.files_checked(), 1);
+        Ok(())
     }
 
     #[tokio::test]
