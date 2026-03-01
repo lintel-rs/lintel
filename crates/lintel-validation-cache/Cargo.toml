@@ -1,6 +1,6 @@
 [package]
 name = "lintel-validation-cache"
-version = "0.0.8"
+version = "0.0.9"
 authors.workspace = true
 categories = ["caching", "development-tools"]
 edition.workspace = true

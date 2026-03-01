@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.10...lintel-validate-v0.0.11) - 2026-03-01
+
+### Other
+
+- Merge pull request #137 from lintel-rs/did-you-mean
+- Normalize local schema paths to remove . and .. segments
+- Replace flat ValidationError with typed enum and pre-computed spans
+- Merge remote-tracking branch 'origin/master' into did-you-mean
+- Add "did you mean" suggestions for additionalProperties errors
+
 ## [0.0.10](https://github.com/lintel-rs/lintel/compare/lintel-validate-v0.0.9...lintel-validate-v0.0.10) - 2026-03-01
 
 ### Other
