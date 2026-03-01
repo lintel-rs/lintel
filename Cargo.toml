@@ -20,7 +20,8 @@ insta = { version = "1.46.3", features = ["filters"] }
 jsonschema = "0.42.2"
 miette = "7.6.0"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] }
-schemars = "1.2.1"
+schemars = { version = "1.2.1", features = ["semver1"] }
+semver = "1.0.27"
 serde = "1.0.228"
 serde_json = "1.0.149"
 tempfile = "3.26.0"
