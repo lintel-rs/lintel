@@ -26,6 +26,7 @@ glob.workspace = true
 glob-match.workspace = true
 ignore.workspace = true
 lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 miette = { workspace = true, features = ["fancy"] }
 pretty_yaml = "0.6.0"
 semver = "1.0.27"

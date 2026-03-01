@@ -17,8 +17,7 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 lintel-check = { version = "0.0.14", path = "../lintel-check" }
-lintel-format = { version = "0.0.2", path = "../lintel-format" }
-lintel-validate = { version = "0.0.7", path = "../lintel-validate" }
+lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

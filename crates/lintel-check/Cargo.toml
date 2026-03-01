@@ -16,6 +16,6 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bpaf.workspace = true
+lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 lintel-format = { version = "0.0.2", path = "../lintel-format" }
 lintel-validate = { version = "0.0.7", path = "../lintel-validate" }
-miette.workspace = true

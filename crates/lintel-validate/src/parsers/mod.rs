@@ -9,7 +9,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 pub use self::json::JsonParser;
 pub use self::json5::Json5Parser;
@@ -22,13 +22,14 @@ pub use schema_catalog::FileFormat;
 
 /// Parse file content into a `serde_json::Value`.
 ///
-/// Implementations must produce a [`ParseDiagnostic`] with an accurate source
+/// Implementations must produce a [`LintelDiagnostic`] with an accurate source
 /// span when parsing fails.
 pub trait Parser {
     /// # Errors
     ///
-    /// Returns a [`ParseDiagnostic`] with an accurate source span when parsing fails.
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic>;
+    /// Returns a [`LintelDiagnostic`] with an accurate source span when parsing fails.
+    #[allow(clippy::result_large_err)]
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic>;
 
     /// Extract the `$schema` URI from file content and/or parsed value.
     ///

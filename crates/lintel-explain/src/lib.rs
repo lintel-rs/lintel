@@ -438,7 +438,7 @@ async fn collect_validation_errors(
         .errors
         .into_iter()
         .filter_map(|err| {
-            if let lintel_validate::validate::LintError::Validation {
+            if let lintel_diagnostics::LintelDiagnostic::Validation {
                 instance_path,
                 message,
                 ..

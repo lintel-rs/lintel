@@ -5,5 +5,5 @@ expression: text
 ---
 error: key must be a string at line 2 column 3
 error: trailing comma at line 5 column 3
-Checked 1 files in [TIME]. 2 error(s) found.
+Checked 1 files in [TIME]. 2 errors found.
 exit code: 1

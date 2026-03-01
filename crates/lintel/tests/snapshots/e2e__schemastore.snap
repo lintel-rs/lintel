@@ -1276,5 +1276,5 @@ error: failed to read local schema ./schemastore/src/test/sil-kit-participant-co
 error: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
 error: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
 error: failed to compile schema: "#/definitions/vector::config::sink::SinkOuter<alloc::string::String>" is not a "uri-reference"
-Checked 1742 files in [TIME]. 1087 error(s) found.
+Checked 1742 files in [TIME]. 1087 errors found.
 exit code: 1

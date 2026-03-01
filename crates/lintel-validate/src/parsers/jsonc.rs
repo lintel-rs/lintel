@@ -1,14 +1,14 @@
 use miette::NamedSource;
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 use super::Parser;
 
 pub struct JsoncParser;
 
 impl Parser for JsoncParser {
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic> {
         let opts = jsonc_parser::ParseOptions {
             allow_comments: true,
             allow_loose_object_property_names: false,
@@ -21,13 +21,13 @@ impl Parser for JsoncParser {
         jsonc_parser::parse_to_serde_value(content, &opts)
             .map_err(|e| {
                 let range = e.range();
-                ParseDiagnostic {
+                LintelDiagnostic::Parse {
                     src: NamedSource::new(file_name, content.to_string()),
                     span: (range.start, range.end - range.start).into(),
                     message: e.to_string(),
                 }
             })?
-            .ok_or_else(|| ParseDiagnostic {
+            .ok_or_else(|| LintelDiagnostic::Parse {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: 0.into(),
                 message: "empty JSONC document".to_string(),

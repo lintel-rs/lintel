@@ -6,9 +6,7 @@ use anyhow::{Context, Result, bail};
 use bpaf::Bpaf;
 use serde::Serialize;
 
-use lintel_validate::diagnostics::{DEFAULT_LABEL, offset_to_line_col};
-use lintel_validate::merge_config;
-use lintel_validate::validate::{self, LintError};
+use lintel_diagnostics::{DEFAULT_LABEL, LintelDiagnostic, offset_to_line_col};
 
 // -----------------------------------------------------------------------
 // CLI args
@@ -68,26 +66,29 @@ struct Annotation {
 // Helpers
 // -----------------------------------------------------------------------
 
-fn error_to_annotation(error: &LintError) -> Annotation {
+fn error_to_annotation(error: &LintelDiagnostic) -> Annotation {
     let path = error.path().replace('\\', "/");
     let (line, _col) = match error {
-        LintError::Parse { src, span, .. } | LintError::Validation { src, span, .. } => {
+        LintelDiagnostic::Parse { src, span, .. }
+        | LintelDiagnostic::Validation { src, span, .. } => {
             offset_to_line_col(src.inner(), span.offset())
         }
-        LintError::Io { .. } | LintError::SchemaFetch { .. } | LintError::SchemaCompile { .. } => {
-            (1, 1)
-        }
+        LintelDiagnostic::Io { .. }
+        | LintelDiagnostic::SchemaFetch { .. }
+        | LintelDiagnostic::SchemaCompile { .. }
+        | LintelDiagnostic::Format { .. } => (1, 1),
     };
 
     let title = match error {
-        LintError::Parse { .. } => Some("parse error".to_string()),
-        LintError::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
+        LintelDiagnostic::Parse { .. } => Some("parse error".to_string()),
+        LintelDiagnostic::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
             Some(instance_path.clone())
         }
-        LintError::Validation { .. } => Some("validation error".to_string()),
-        LintError::Io { .. } => Some("io error".to_string()),
-        LintError::SchemaFetch { .. } => Some("schema fetch error".to_string()),
-        LintError::SchemaCompile { .. } => Some("schema compile error".to_string()),
+        LintelDiagnostic::Validation { .. } => Some("validation error".to_string()),
+        LintelDiagnostic::Io { .. } => Some("io error".to_string()),
+        LintelDiagnostic::SchemaFetch { .. } => Some("schema fetch error".to_string()),
+        LintelDiagnostic::SchemaCompile { .. } => Some("schema compile error".to_string()),
+        LintelDiagnostic::Format { .. } => Some("format error".to_string()),
     };
 
     Annotation {
@@ -237,12 +238,6 @@ async fn patch_remaining_annotations(
 /// Returns an error if environment variables are missing, validation
 /// fails to run, or the GitHub Checks API request fails.
 pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
-    // Save original args before merge_config modifies them.
-    let original_globs = args.check.validate.globs.clone();
-    let original_exclude = args.check.validate.exclude.clone();
-
-    merge_config(&mut args.check.validate);
-
     // Read required environment variables
     let token =
         std::env::var("GITHUB_TOKEN").context("GITHUB_TOKEN environment variable is required")?;
@@ -252,38 +247,23 @@ pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
     let api_url =
         std::env::var("GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
 
-    // Run validation
-    let lib_args = validate::ValidateArgs::from(&args.check.validate);
+    // Run checks via lintel-check.
     let start = Instant::now();
-    let result = validate::run(&lib_args).await?;
+    let result = lintel_check::check(&mut args.check, |_| {}).await?;
     let elapsed = start.elapsed();
 
     let files_checked = result.files_checked();
     let ms = elapsed.as_millis();
 
-    // Convert validation errors to annotations
-    let mut annotations: Vec<Annotation> = result.errors.iter().map(error_to_annotation).collect();
-
-    // Check formatting (unless --fix was passed)
-    if !args.check.fix {
-        let format_diagnostics = lintel_format::check_format(&original_globs, &original_exclude)?;
-        for diag in &format_diagnostics {
-            annotations.push(Annotation {
-                path: diag.file_path().replace('\\', "/"),
-                start_line: 1,
-                end_line: 1,
-                annotation_level: "failure".to_string(),
-                message: "file is not properly formatted".to_string(),
-                title: Some("format error".to_string()),
-            });
-        }
-    }
+    // Convert all errors to annotations.
+    let annotations: Vec<Annotation> = result.errors.iter().map(error_to_annotation).collect();
 
     let had_errors = !annotations.is_empty();
     let error_count = annotations.len();
 
+    let error_label = if error_count == 1 { "error" } else { "errors" };
     let title = if error_count > 0 {
-        format!("{error_count} error(s) found")
+        format!("{error_count} {error_label} found")
     } else {
         "No errors".to_string()
     };
@@ -317,7 +297,7 @@ pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
     .await?;
 
     eprintln!(
-        "Checked {files_checked} files in {ms}ms. {error_count} error(s). Check run: {conclusion}."
+        "Checked {files_checked} files in {ms}ms. {error_count} {error_label}. Check run: {conclusion}."
     );
 
     Ok(had_errors)

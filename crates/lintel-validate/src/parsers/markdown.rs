@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 use super::Parser;
 
@@ -72,12 +72,12 @@ fn extract_toml_frontmatter(content: &str) -> Option<(&str, usize)> {
 }
 
 impl Parser for MarkdownParser {
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic> {
         // Try YAML frontmatter first (---)
         if let Some((frontmatter, offset)) = extract_yaml_frontmatter(content) {
             return serde_yaml::from_str(frontmatter).map_err(|e| {
                 let span = e.location().map_or(offset, |loc| offset + loc.index());
-                ParseDiagnostic {
+                LintelDiagnostic::Parse {
                     src: miette::NamedSource::new(file_name, content.to_string()),
                     span: span.into(),
                     message: format!("YAML frontmatter: {e}"),
@@ -89,13 +89,13 @@ impl Parser for MarkdownParser {
         if let Some((frontmatter, offset)) = extract_toml_frontmatter(content) {
             let toml_value: toml::Value = toml::from_str(frontmatter).map_err(|e| {
                 let span = e.span().map_or(offset, |s| offset + s.start);
-                ParseDiagnostic {
+                LintelDiagnostic::Parse {
                     src: miette::NamedSource::new(file_name, content.to_string()),
                     span: span.into(),
                     message: format!("TOML frontmatter: {e}"),
                 }
             })?;
-            return serde_json::to_value(toml_value).map_err(|e| ParseDiagnostic {
+            return serde_json::to_value(toml_value).map_err(|e| LintelDiagnostic::Parse {
                 src: miette::NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),
                 message: format!("TOML frontmatter conversion: {e}"),

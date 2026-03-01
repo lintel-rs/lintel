@@ -4,5 +4,5 @@ assertion_line: 46
 expression: text
 ---
 error: expected `,` or `}` at line 5 column 5
-Checked 1 files in [TIME]. 1 error(s) found.
+Checked 1 files in [TIME]. 1 error found.
 exit code: 1

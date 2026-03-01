@@ -24,6 +24,7 @@ jsonc-parser = { version = "0.29.0", features = ["serde"] }
 jsonschema = { workspace = true, features = ["resolve-async"] }
 lintel-cli-common = { version = "0.0.5", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.7", path = "../lintel-config" }
+lintel-diagnostics = { version = "0.0.1", path = "../lintel-diagnostics" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
 lintel-validation-cache = { version = "0.0.8", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }

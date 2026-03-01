@@ -4,5 +4,5 @@ assertion_line: 49
 expression: text
 ---
 error: key must be a string at line 3 column 3
-Checked 1 files in [TIME]. 1 error(s) found.
+Checked 1 files in [TIME]. 1 error found.
 exit code: 1

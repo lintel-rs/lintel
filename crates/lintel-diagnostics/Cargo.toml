@@ -1,0 +1,20 @@
+[package]
+name = "lintel-diagnostics"
+version = "0.0.1"
+authors.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
+homepage.workspace = true
+keywords = ["json-schema", "validation", "diagnostics", "linter"]
+license.workspace = true
+repository.workspace = true
+description = "Shared diagnostic types for Lintel — errors, results, and the Reporter trait"
+
+[lints]
+workspace = true
+
+[dependencies]
+lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-validation-cache = { version = "0.0.8", path = "../lintel-validation-cache" }
+miette = { workspace = true, features = ["fancy"] }
+thiserror.workspace = true
