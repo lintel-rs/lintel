@@ -8,7 +8,7 @@ mod sections;
 
 use core::fmt::Write;
 
-use serde_json::Value;
+use jsonschema_schema::{Schema, SchemaValue};
 
 use fmt::{Fmt, format_header, format_type};
 use man::{write_description, write_section};
@@ -43,15 +43,29 @@ pub struct ExplainOptions {
 
 /// Render a JSON Schema as human-readable terminal documentation.
 ///
-/// `schema` is a parsed JSON Schema value. `name` is a display name
+/// `schema` is a parsed `SchemaValue`. `name` is a display name
 /// (e.g. from a catalog entry). `opts` controls color, syntax highlighting,
 /// and terminal width.
-pub fn explain(schema: &Value, name: &str, opts: &ExplainOptions) -> String {
+pub fn explain(schema: &SchemaValue, name: &str, opts: &ExplainOptions) -> String {
+    let Some(s) = schema.as_schema() else {
+        // Bool schema — just show header
+        let mut out = String::new();
+        let f = Fmt::from_opts(opts);
+        let upper = name.to_uppercase();
+        let header = format_header(&upper, name, opts.width);
+        let _ = writeln!(out, "{}{header}{}\n", f.bold, f.reset);
+        return out;
+    };
+    explain_schema(s, schema, name, opts)
+}
+
+/// Render a `Schema` as human-readable terminal documentation.
+fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOptions) -> String {
     let mut out = String::new();
     let f = Fmt::from_opts(opts);
 
-    let title = schema.get("title").and_then(Value::as_str);
-    let description = get_description(schema);
+    let title = s.title.as_deref();
+    let description = get_description(s);
 
     let upper = name.to_uppercase();
     let center = title.unwrap_or(name);
@@ -83,33 +97,33 @@ pub fn explain(schema: &Value, name: &str, opts: &ExplainOptions) -> String {
         out.push('\n');
     }
 
-    render_schema_section(&mut out, schema, &f);
+    render_schema_section(&mut out, s, &f);
 
-    let type_str = schema_type_str(schema);
+    let type_str = schema_type_str(s);
     if let Some(ref ty) = type_str {
         write_section(&mut out, "TYPE", &f);
         let _ = writeln!(out, "    {}", format_type(ty, &f));
         out.push('\n');
     }
 
-    let required = required_set(schema);
-    if let Some(props) = schema.get("properties").and_then(Value::as_object) {
+    let required = required_set(s);
+    if let Some(ref props) = s.properties {
         write_section(&mut out, "PROPERTIES", &f);
-        render_properties(&mut out, props, &required, schema, &f, 1);
+        render_properties(&mut out, props, &required, root, &f, 1);
         out.push('\n');
     }
 
     if type_str.as_deref() == Some("array")
-        && let Some(items) = schema.get("items")
+        && let Some(ref items) = s.items
     {
         write_section(&mut out, "ITEMS", &f);
-        render_subschema(&mut out, items, schema, &f, 1);
+        render_subschema(&mut out, items, root, &f, 1);
         out.push('\n');
     }
 
-    render_examples_section(&mut out, schema, &f);
-    render_variants_section(&mut out, schema, &f);
-    render_definitions_section(&mut out, schema, &f);
+    render_examples_section(&mut out, s, &f);
+    render_variants_section(&mut out, s, root, &f);
+    render_definitions_section(&mut out, s, root, &f);
 
     out
 }
@@ -123,7 +137,7 @@ pub fn explain(schema: &Value, name: &str, opts: &ExplainOptions) -> String {
 ///
 /// Returns an error if the pointer cannot be resolved within the schema.
 pub fn explain_at_path(
-    schema: &Value,
+    schema: &SchemaValue,
     pointer: &str,
     name: &str,
     opts: &ExplainOptions,
@@ -138,6 +152,13 @@ mod tests {
     use super::*;
     use crate::fmt::{BLUE, BOLD, CYAN, GREEN, RESET, format_header, format_type};
     use serde_json::json;
+
+    /// Parse a JSON value into a `SchemaValue`, running migration first
+    /// to ensure compatibility with older JSON Schema drafts.
+    fn sv(mut val: serde_json::Value) -> SchemaValue {
+        jsonschema_migrate::migrate_to_2020_12(&mut val);
+        serde_json::from_value(val).unwrap()
+    }
 
     fn plain() -> ExplainOptions {
         ExplainOptions {
@@ -159,7 +180,7 @@ mod tests {
 
     #[test]
     fn simple_object_schema() {
-        let schema = json!({
+        let schema = sv(json!({
             "title": "Test",
             "description": "A test schema",
             "type": "object",
@@ -173,7 +194,7 @@ mod tests {
                     "description": "The age field"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "test", &plain());
         assert!(output.contains("TITLE"));
@@ -189,7 +210,7 @@ mod tests {
 
     #[test]
     fn nested_object_renders_with_indentation() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "config": {
@@ -203,7 +224,7 @@ mod tests {
                     }
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "nested", &plain());
         assert!(output.contains("config (object)"));
@@ -213,7 +234,7 @@ mod tests {
 
     #[test]
     fn enum_values_listed() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "level": {
@@ -221,7 +242,7 @@ mod tests {
                     "enum": ["low", "medium", "high"]
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "enum-test", &plain());
         assert!(output.contains("Values: low, medium, high"));
@@ -229,7 +250,7 @@ mod tests {
 
     #[test]
     fn required_properties_marked() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "required": ["name"],
             "properties": {
@@ -240,7 +261,7 @@ mod tests {
                     "type": "string"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "required-test", &plain());
         assert!(output.contains("name (string, *required)"));
@@ -262,10 +283,10 @@ mod tests {
 
     #[test]
     fn schema_with_no_properties_handled() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "string",
             "description": "A plain string type"
-        });
+        }));
 
         let output = explain(&schema, "simple", &plain());
         assert!(!output.contains("TITLE"));
@@ -276,13 +297,13 @@ mod tests {
 
     #[test]
     fn color_output_contains_ansi() {
-        let schema = json!({
+        let schema = sv(json!({
             "title": "Colored",
             "type": "object",
             "properties": {
                 "x": { "type": "string" }
             }
-        });
+        }));
 
         let colored_out = explain(&schema, "colored", &colored());
         let plain_out = explain(&schema, "colored", &plain());
@@ -297,7 +318,7 @@ mod tests {
 
     #[test]
     fn default_value_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "port": {
@@ -305,7 +326,7 @@ mod tests {
                     "default": 8080
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "defaults", &plain());
         assert!(output.contains("Default: 8080"));
@@ -313,7 +334,7 @@ mod tests {
 
     #[test]
     fn ref_resolution() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "item": { "$ref": "#/$defs/Item" }
@@ -324,7 +345,7 @@ mod tests {
                     "description": "An item definition"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "ref-test", &plain());
         assert!(output.contains("item (object)"));
@@ -350,7 +371,7 @@ mod tests {
 
     #[test]
     fn explain_output_uses_width() {
-        let schema = json!({"type": "object", "title": "Test"});
+        let schema = sv(json!({"type": "object", "title": "Test"}));
         let opts_120 = ExplainOptions {
             width: 120,
             ..plain()
@@ -414,7 +435,7 @@ mod tests {
 
     #[test]
     fn prefers_markdown_description() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "target": {
@@ -423,7 +444,7 @@ mod tests {
                     "markdownDescription": "Rich **markdown** description"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "test", &plain());
         assert!(output.contains("Rich **markdown** description"));
@@ -432,7 +453,7 @@ mod tests {
 
     #[test]
     fn no_premature_wrapping() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "x": {
@@ -440,7 +461,7 @@ mod tests {
                     "description": "This is a very long description that should not be wrapped at 72 characters because we want the pager to handle wrapping at the terminal width instead"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "test", &plain());
         let desc_line = output
@@ -454,7 +475,7 @@ mod tests {
 
     #[test]
     fn explain_at_path_shows_sub_schema() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "name": {
@@ -470,7 +491,7 @@ mod tests {
                     }
                 }
             }
-        });
+        }));
 
         let output = explain_at_path(&schema, "/properties/config", "test", &plain()).unwrap();
         assert!(output.contains("Config"));
@@ -482,13 +503,13 @@ mod tests {
 
     #[test]
     fn explain_at_path_root_pointer_shows_full_schema() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "title": "Root",
             "properties": {
                 "a": { "type": "string" }
             }
-        });
+        }));
 
         let output = explain_at_path(&schema, "", "test", &plain()).unwrap();
         assert!(output.contains("Root"));
@@ -497,7 +518,7 @@ mod tests {
 
     #[test]
     fn explain_at_path_resolves_ref() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "item": { "$ref": "#/$defs/Item" }
@@ -512,7 +533,7 @@ mod tests {
                     }
                 }
             }
-        });
+        }));
 
         let output = explain_at_path(&schema, "/properties/item", "test", &plain()).unwrap();
         assert!(output.contains("Item"));
@@ -522,7 +543,7 @@ mod tests {
 
     #[test]
     fn explain_at_path_bad_pointer_errors() {
-        let schema = json!({"type": "object"});
+        let schema = sv(json!({"type": "object"}));
         let err = explain_at_path(&schema, "/nonexistent/path", "test", &plain());
         assert!(err.is_err());
         assert!(err.unwrap_err().contains("nonexistent"));
@@ -530,7 +551,7 @@ mod tests {
 
     #[test]
     fn property_examples_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "name": {
@@ -538,7 +559,7 @@ mod tests {
                     "examples": ["TAG-ID", "DUNS"]
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "examples-test", &plain());
         assert!(output.contains("Examples: \"TAG-ID\", \"DUNS\""));
@@ -546,7 +567,7 @@ mod tests {
 
     #[test]
     fn explain_at_path_deep_nesting() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "a": {
@@ -562,7 +583,7 @@ mod tests {
                     }
                 }
             }
-        });
+        }));
 
         let output =
             explain_at_path(&schema, "/properties/a/properties/b", "test", &plain()).unwrap();
@@ -573,7 +594,7 @@ mod tests {
 
     #[test]
     fn numeric_constraints_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "port": {
@@ -582,7 +603,7 @@ mod tests {
                     "maximum": 65535
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "constraints", &plain());
         assert!(output.contains("Constraints:"));
@@ -592,7 +613,7 @@ mod tests {
 
     #[test]
     fn string_constraints_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "email": {
@@ -603,7 +624,7 @@ mod tests {
                     "pattern": "^[^@]+@[^@]+$"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "constraints", &plain());
         assert!(output.contains("format=email"));
@@ -614,7 +635,7 @@ mod tests {
 
     #[test]
     fn array_constraints_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "tags": {
@@ -625,7 +646,7 @@ mod tests {
                     "uniqueItems": true
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "constraints", &plain());
         assert!(output.contains("minItems=1"));
@@ -635,7 +656,7 @@ mod tests {
 
     #[test]
     fn exclusive_bounds_and_multiple_of_shown() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "score": {
@@ -645,7 +666,7 @@ mod tests {
                     "multipleOf": 0.5
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "constraints", &plain());
         assert!(output.contains("exclusiveMin=0"));
@@ -655,7 +676,7 @@ mod tests {
 
     #[test]
     fn no_constraints_line_when_none() {
-        let schema = json!({
+        let schema = sv(json!({
             "type": "object",
             "properties": {
                 "name": {
@@ -663,7 +684,7 @@ mod tests {
                     "description": "Just a name"
                 }
             }
-        });
+        }));
 
         let output = explain(&schema, "no-constraints", &plain());
         assert!(!output.contains("Constraints:"));
@@ -673,10 +694,10 @@ mod tests {
 
     #[test]
     fn title_section_shows_schema_title() {
-        let schema = json!({
+        let schema = sv(json!({
             "title": "My Schema",
             "type": "object"
-        });
+        }));
 
         let output = explain(&schema, "display-name", &plain());
         assert!(output.contains("TITLE"));
@@ -685,7 +706,7 @@ mod tests {
 
     #[test]
     fn title_section_hidden_without_schema_title() {
-        let schema = json!({ "type": "object" });
+        let schema = sv(json!({ "type": "object" }));
 
         let output = explain(&schema, "fallback-name", &plain());
         assert!(!output.contains("TITLE"));
@@ -695,12 +716,12 @@ mod tests {
 
     #[test]
     fn schema_section_appears_after_description() {
-        let schema = json!({
+        let schema = sv(json!({
             "$id": "https://json.schemastore.org/cargo.json",
             "type": "object",
             "title": "Cargo",
             "description": "Cargo manifest schema"
-        });
+        }));
 
         let output = explain(&schema, "cargo", &plain());
         let desc_pos = output.find("DESCRIPTION").unwrap();

@@ -16,3 +16,4 @@ workspace = true
 [dependencies]
 bpaf = { workspace = true, features = ["bright-color"] }
 humantime = "2.3.0"
+terminal_size = "0.4.3"
