@@ -17,7 +17,7 @@ workspace = true
 ansi-term-styles = "0.1.0"
 anyhow.workspace = true
 bpaf = { workspace = true, features = ["bright-color", "docgen"] }
-glob-match.workspace = true
+glob-matcher = { version = "0.1.0", path = "../glob-matcher" }
 humantime = "2.3.0"
 lintel-annotate = { version = "0.0.17", path = "../lintel-annotate" }
 lintel-check = { version = "0.0.18", path = "../lintel-check" }
