@@ -22,7 +22,7 @@ use jsonschema_explain::{explain, ExplainOptions};
 use jsonschema_schema::SchemaValue;
 
 let schema: SchemaValue = serde_json::from_str(r#"{"type": "object"}"#).unwrap();
-let opts = ExplainOptions { color: true, syntax_highlight: true, width: 120, validation_errors: vec![] };
+let opts = ExplainOptions { color: true, syntax_highlight: true, width: 120, validation_errors: vec![], extended: false };
 let output = explain(&schema, "my-config", &opts);
 println!("{output}");
 ```

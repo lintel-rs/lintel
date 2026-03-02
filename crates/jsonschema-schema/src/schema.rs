@@ -76,6 +76,11 @@ pub struct Schema {
     pub type_: Option<TypeValue>,
     #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
     pub enum_: Option<Vec<Value>>,
+    #[serde(
+        rename = "markdownEnumDescriptions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub markdown_enum_descriptions: Option<Vec<Option<String>>>,
     #[serde(rename = "const", skip_serializing_if = "Option::is_none")]
     pub const_: Option<Value>,
 

@@ -12,7 +12,9 @@ use jsonschema_schema::{Schema, SchemaValue};
 
 use fmt::{Fmt, format_header, format_type};
 use man::{write_description, write_section};
-use render::{render_properties, render_subschema};
+use render::{
+    render_additional_properties, render_pattern_properties, render_properties, render_subschema,
+};
 use schema::{get_description, required_set, schema_type_str};
 use sections::{
     render_definitions_section, render_examples_section, render_schema_section,
@@ -39,6 +41,8 @@ pub struct ExplainOptions {
     pub width: usize,
     /// Validation errors to show before the schema documentation.
     pub validation_errors: Vec<ExplainError>,
+    /// Show extended details like `$comment` annotations.
+    pub extended: bool,
 }
 
 /// Render a JSON Schema as human-readable terminal documentation.
@@ -100,6 +104,14 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
         out.push('\n');
     }
 
+    if f.extended
+        && let Some(ref comment) = s.comment
+    {
+        write_section(&mut out, "COMMENT", &f);
+        write_description(&mut out, comment, &f, "    ");
+        out.push('\n');
+    }
+
     render_schema_section(&mut out, s, &f);
 
     let type_str = schema_type_str(s);
@@ -113,6 +125,28 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
     if let Some(ref props) = s.properties {
         write_section(&mut out, "PROPERTIES", &f);
         render_properties(&mut out, props, &required, root, &f, 1);
+        out.push('\n');
+    }
+
+    render_pattern_properties(&mut out, s, root, &f, 0, "    ");
+    render_additional_properties(&mut out, s, root, &f, 0, "    ");
+
+    // Root-level if/then/else
+    if s.if_.is_some() {
+        use crate::schema::variant_summary;
+        write_section(&mut out, "CONDITIONAL", &f);
+        if let Some(ref if_sv) = s.if_ {
+            let summary = variant_summary(if_sv, root, &f);
+            let _ = writeln!(out, "    If: {summary}");
+        }
+        if let Some(ref then_sv) = s.then_ {
+            let summary = variant_summary(then_sv, root, &f);
+            let _ = writeln!(out, "    Then: {summary}");
+        }
+        if let Some(ref else_sv) = s.else_ {
+            let summary = variant_summary(else_sv, root, &f);
+            let _ = writeln!(out, "    Else: {summary}");
+        }
         out.push('\n');
     }
 
@@ -169,6 +203,7 @@ mod tests {
             syntax_highlight: false,
             width: 80,
             validation_errors: vec![],
+            extended: false,
         }
     }
 
@@ -178,6 +213,7 @@ mod tests {
             syntax_highlight: true,
             width: 80,
             validation_errors: vec![],
+            extended: false,
         }
     }
 
@@ -333,6 +369,32 @@ mod tests {
 
         let output = explain(&schema, "defaults", &plain());
         assert!(output.contains("Default: 8080"));
+    }
+
+    #[test]
+    fn long_default_wraps() {
+        let long_val = "First of: `tsconfig.json` rootDir if specified, directory containing `tsconfig.json`, or cwd if no `tsconfig.json` is loaded.";
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "declarationDir": {
+                    "type": "string",
+                    "default": long_val
+                }
+            }
+        }));
+
+        let output = explain(&schema, "wrap-test", &plain());
+        // Short defaults stay on one line, but this is too long — the label
+        // should appear on its own line with the value wrapped below.
+        assert!(
+            output.contains("Default:\n"),
+            "long default should wrap onto next line\n{output}"
+        );
+        assert!(
+            output.contains(long_val),
+            "full default value should appear in output\n{output}"
+        );
     }
 
     #[test]
@@ -735,5 +797,342 @@ mod tests {
             "SCHEMA should appear after DESCRIPTION"
         );
         assert!(schema_pos < type_pos, "SCHEMA should appear before TYPE");
+    }
+
+    // --- New keyword rendering ---
+
+    #[test]
+    fn comment_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "string",
+                    "$comment": "See https://example.com for details"
+                }
+            }
+        }));
+
+        let extended = ExplainOptions {
+            extended: true,
+            ..plain()
+        };
+        let output = explain(&schema, "comment-test", &extended);
+        assert!(output.contains("Comment:"));
+        assert!(output.contains("See https://example.com for details"));
+    }
+
+    #[test]
+    fn comment_hidden_by_default() {
+        let schema = sv(json!({
+            "type": "object",
+            "$comment": "Hidden comment",
+            "properties": {
+                "x": {
+                    "type": "string",
+                    "$comment": "Also hidden"
+                }
+            }
+        }));
+
+        let output = explain(&schema, "comment-test", &plain());
+        assert!(!output.contains("Comment"));
+        assert!(!output.contains("Hidden comment"));
+        assert!(!output.contains("Also hidden"));
+    }
+
+    #[test]
+    fn root_comment_shown() {
+        let schema = sv(json!({
+            "$comment": "Root level comment",
+            "type": "object"
+        }));
+
+        let extended = ExplainOptions {
+            extended: true,
+            ..plain()
+        };
+        let output = explain(&schema, "comment-test", &extended);
+        assert!(output.contains("COMMENT"));
+        assert!(output.contains("Root level comment"));
+        // No double blank lines — only one blank line between sections
+        assert!(
+            !output.contains("\n\n\n"),
+            "should not have triple newlines (double blank lines)\n{output}"
+        );
+    }
+
+    #[test]
+    fn additional_properties_false() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" }
+            },
+            "additionalProperties": false
+        }));
+
+        let output = explain(&schema, "ap-test", &plain());
+        assert!(output.contains("Additional properties: not allowed"));
+    }
+
+    #[test]
+    fn additional_properties_schema() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" }
+            },
+            "additionalProperties": { "type": "string" }
+        }));
+
+        let output = explain(&schema, "ap-test", &plain());
+        assert!(output.contains("Additional properties: string"));
+    }
+
+    #[test]
+    fn additional_properties_true_not_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "additionalProperties": true
+        }));
+
+        let output = explain(&schema, "ap-test", &plain());
+        assert!(!output.contains("Additional properties"));
+    }
+
+    #[test]
+    fn pattern_properties_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "patternProperties": {
+                "^x-": { "type": "object", "description": "Extension properties" }
+            }
+        }));
+
+        let output = explain(&schema, "pp-test", &plain());
+        assert!(output.contains("Pattern properties:"));
+        assert!(output.contains("^x-"));
+        assert!(output.contains("Extension properties"));
+    }
+
+    #[test]
+    fn if_then_else_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "if": { "properties": { "type": { "const": "a" } } },
+            "then": { "properties": { "value": { "type": "string" } } },
+            "else": { "properties": { "value": { "type": "integer" } } }
+        }));
+
+        let output = explain(&schema, "cond-test", &plain());
+        assert!(output.contains("CONDITIONAL"));
+        assert!(output.contains("If:"));
+        assert!(output.contains("Then:"));
+        assert!(output.contains("Else:"));
+    }
+
+    #[test]
+    fn not_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "x": {
+                    "not": { "type": "string" }
+                }
+            }
+        }));
+
+        let output = explain(&schema, "not-test", &plain());
+        assert!(output.contains("Not: string"));
+    }
+
+    #[test]
+    fn dependent_required_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "dependentRequired": {
+                        "bar": ["foo"]
+                    }
+                }
+            }
+        }));
+
+        let output = explain(&schema, "dr-test", &plain());
+        assert!(output.contains("Dependent required:"));
+        assert!(output.contains("\"bar\""));
+        assert!(output.contains("\"foo\""));
+    }
+
+    #[test]
+    fn property_names_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "propertyNames": { "pattern": "^[a-z]+$" }
+                }
+            }
+        }));
+
+        let output = explain(&schema, "pn-test", &plain());
+        assert!(output.contains("Property names: pattern=^[a-z]+$"));
+    }
+
+    #[test]
+    fn prefix_items_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "tuple": {
+                    "type": "array",
+                    "prefixItems": [
+                        { "type": "string" },
+                        { "type": "integer" }
+                    ]
+                }
+            }
+        }));
+
+        let output = explain(&schema, "prefix-test", &plain());
+        assert!(output.contains("Tuple items:"));
+        assert!(output.contains("[0]: string"));
+        assert!(output.contains("[1]: integer"));
+    }
+
+    #[test]
+    fn contains_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "arr": {
+                    "type": "array",
+                    "contains": { "type": "string" },
+                    "minContains": 1
+                }
+            }
+        }));
+
+        let output = explain(&schema, "contains-test", &plain());
+        assert!(output.contains("Contains: string"));
+        assert!(output.contains("minContains=1"));
+    }
+
+    #[test]
+    fn read_only_tag_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "readOnly": true
+                }
+            }
+        }));
+
+        let output = explain(&schema, "ro-test", &plain());
+        assert!(output.contains("[READ-ONLY]"));
+    }
+
+    #[test]
+    fn write_only_tag_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "writeOnly": true
+                }
+            }
+        }));
+
+        let output = explain(&schema, "wo-test", &plain());
+        assert!(output.contains("[WRITE-ONLY]"));
+    }
+
+    #[test]
+    fn content_media_type_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string",
+                    "contentMediaType": "application/json",
+                    "contentEncoding": "base64"
+                }
+            }
+        }));
+
+        let output = explain(&schema, "content-test", &plain());
+        assert!(output.contains("Content: application/json (base64)"));
+    }
+
+    #[test]
+    fn markdown_enum_descriptions_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["fast", "safe", "auto"],
+                    "markdownEnumDescriptions": [
+                        "Optimizes for speed",
+                        "Optimizes for safety",
+                        "Automatically chooses"
+                    ]
+                }
+            }
+        }));
+
+        let output = explain(&schema, "enum-desc-test", &plain());
+        assert!(output.contains("Values:"));
+        assert!(output.contains("fast"));
+        assert!(output.contains("Optimizes for speed"));
+        assert!(output.contains("—"));
+    }
+
+    #[test]
+    fn min_max_contains_in_constraints() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "arr": {
+                    "type": "array",
+                    "minContains": 2,
+                    "maxContains": 5
+                }
+            }
+        }));
+
+        let output = explain(&schema, "contains-constraints", &plain());
+        assert!(output.contains("minContains=2"));
+        assert!(output.contains("maxContains=5"));
+    }
+
+    #[test]
+    fn dependent_schemas_shown() {
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "dependentSchemas": {
+                        "credit_card": {
+                            "properties": {
+                                "billing_address": { "type": "string" }
+                            }
+                        }
+                    }
+                }
+            }
+        }));
+
+        let output = explain(&schema, "ds-test", &plain());
+        assert!(output.contains("Dependent schemas:"));
+        assert!(output.contains("\"credit_card\""));
     }
 }
