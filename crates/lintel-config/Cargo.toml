@@ -16,7 +16,9 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 dprint-config = { version = "0.0.2", path = "../dprint-config" }
+glob.workspace = true
 glob-match.workspace = true
+ignore.workspace = true
 schemars.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

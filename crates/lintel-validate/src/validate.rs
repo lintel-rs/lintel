@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use glob::glob;
+use anyhow::Result;
 use serde_json::Value;
 
 use crate::catalog;
@@ -13,7 +12,6 @@ use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
 use schema_catalog::{CompiledCatalog, FileFormat};
 
 use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
-use crate::discover;
 use crate::parsers::{self, Parser};
 use crate::registry;
 
@@ -154,35 +152,7 @@ pub fn load_config(search_dir: Option<&Path>) -> (lintel_config::Config, PathBuf
 /// Returns an error if a glob pattern is invalid or a directory cannot be walked.
 #[tracing::instrument(skip_all, fields(glob_count = globs.len(), exclude_count = exclude.len()))]
 pub fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    if globs.is_empty() {
-        return discover::discover_files(".", exclude);
-    }
-
-    let mut result = Vec::new();
-    for pattern in globs {
-        let path = Path::new(pattern);
-        if path.is_dir() {
-            result.extend(discover::discover_files(pattern, exclude)?);
-        } else {
-            for entry in glob(pattern).with_context(|| format!("invalid glob: {pattern}"))? {
-                let path = entry?;
-                if path.is_file() && !is_excluded(&path, exclude) {
-                    result.push(path);
-                }
-            }
-        }
-    }
-    Ok(result)
-}
-
-fn is_excluded(path: &Path, excludes: &[String]) -> bool {
-    let path_str = match path.to_str() {
-        Some(s) => s.strip_prefix("./").unwrap_or(s),
-        None => return false,
-    };
-    excludes
-        .iter()
-        .any(|pattern| glob_match::glob_match(pattern, path_str))
+    lintel_config::discover::collect_files(globs, exclude, |p| parsers::detect_format(p).is_some())
 }
 
 // ---------------------------------------------------------------------------
@@ -809,11 +779,29 @@ pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-#[tracing::instrument(skip_all, name = "validate")]
-#[allow(clippy::too_many_lines)]
 pub async fn run_with(
     args: &ValidateArgs,
     cache: Option<SchemaCache>,
+    on_check: impl FnMut(&CheckedFile),
+) -> Result<ValidateResult> {
+    let files = collect_files(&args.globs, &args.exclude)?;
+    run_with_files(args, cache, files, on_check).await
+}
+
+/// Like [`run_with`] but operates on a pre-discovered file list.
+///
+/// Use this when files have already been collected (e.g. by `lintel check`
+/// doing a single discovery pass shared between validate and format).
+///
+/// # Errors
+///
+/// Returns an error if schema validation encounters an I/O error.
+#[tracing::instrument(skip_all, name = "validate")]
+#[allow(clippy::too_many_lines)]
+pub async fn run_with_files(
+    args: &ValidateArgs,
+    cache: Option<SchemaCache>,
+    files: Vec<PathBuf>,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<ValidateResult> {
     let retriever = if let Some(c) = cache {
@@ -832,7 +820,6 @@ pub async fn run_with(
     };
 
     let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
-    let files = collect_files(&args.globs, &args.exclude)?;
     tracing::info!(file_count = files.len(), "collected files");
 
     let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;

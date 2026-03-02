@@ -16,7 +16,6 @@ use lintel_cli_common::CliCacheOptions;
 
 pub mod catalog;
 pub mod diagnostics;
-pub mod discover;
 pub mod parsers;
 pub mod registry;
 pub mod reporter;
@@ -135,6 +134,38 @@ pub async fn run(args: &mut ValidateArgs, reporter: &mut dyn Reporter) -> Result
     let lib_args = validate::ValidateArgs::from(&*args);
     let start = Instant::now();
     let result = validate::run_with(&lib_args, None, |file| {
+        reporter.on_file_checked(file);
+    })
+    .await?;
+    let had_errors = result.has_errors();
+    let elapsed = start.elapsed();
+
+    reporter.report(result, elapsed);
+
+    Ok(had_errors)
+}
+
+/// Run validation on pre-discovered files and report results.
+///
+/// Like [`run`] but skips file discovery — uses the provided file list directly.
+/// Config is still loaded and merged for schema mappings, but excludes are not
+/// re-applied since the caller already filtered them.
+///
+/// Returns `true` if there were validation errors, `false` if clean.
+///
+/// # Errors
+///
+/// Returns an error if schema validation encounters an I/O error.
+pub async fn run_with_files(
+    args: &mut ValidateArgs,
+    files: Vec<std::path::PathBuf>,
+    reporter: &mut dyn Reporter,
+) -> Result<bool> {
+    merge_config(args);
+
+    let lib_args = validate::ValidateArgs::from(&*args);
+    let start = Instant::now();
+    let result = validate::run_with_files(&lib_args, None, files, |file| {
         reporter.on_file_checked(file);
     })
     .await?;
