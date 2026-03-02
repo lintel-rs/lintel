@@ -1,6 +1,5 @@
 {
   craneLib,
-  craneLibStatic ? null,
   pkgs,
 }:
 let
@@ -109,35 +108,8 @@ let
       ;
   };
 
-  # Static musl packages (Linux only)
-  staticPackages = pkgs.lib.optionalAttrs (craneLibStatic != null) (
-    let
-      staticCargoArtifacts = craneLibStatic.buildDepsOnly (
-        commonArgs // { CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static"; }
-      );
-
-      mkStaticPackage =
-        cratePath:
-        let
-          meta = craneLibStatic.crateNameFromCargoToml { cargoToml = "${cratePath}/Cargo.toml"; };
-        in
-        craneLibStatic.buildPackage (
-          commonArgs
-          // {
-            cargoArtifacts = staticCargoArtifacts;
-            inherit (meta) pname;
-            cargoExtraArgs = "-p ${meta.pname}";
-            CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
-          }
-        );
-    in
-    {
-      lintel-static = mkStaticPackage ../crates/lintel;
-    }
-  );
 in
 packages
-// staticPackages
 // {
   default = lintel;
   all = pkgs.symlinkJoin {
