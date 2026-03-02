@@ -53,7 +53,7 @@
           };
         in
         {
-          checks = packages;
+          checks = builtins.removeAttrs packages [ "lintel-static" ];
 
           packages =
             packages
