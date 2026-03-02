@@ -1,80 +1,65 @@
+use alloc::collections::BTreeMap;
+
 use crate::schema::{Schema, SchemaValue, navigate_pointer};
-
-/// A schema with its `allOf` entries merged into the root, plus provenance info.
-pub struct FlattenedSchema {
-    /// The merged schema (allOf entries folded in).
-    pub schema: Schema,
-    /// Metadata about each sub-schema that was merged.
-    pub includes: Vec<IncludedSchema>,
-}
-
-/// Metadata about a sub-schema that was merged via `allOf`.
-pub struct IncludedSchema {
-    /// The title of the sub-schema (or a fallback label).
-    pub title: String,
-    /// Short type string (e.g. "object | boolean").
-    pub type_str: Option<String>,
-    /// Source URL if available (from `x-lintel.source` or `$id`).
-    pub source: Option<String>,
-}
 
 /// Flatten `allOf` entries into the root schema.
 ///
-/// Clones the schema, takes the `all_of` entries out, resolves any `$ref`
-/// pointers, extracts provenance metadata, and merges each entry into the
-/// root using `Schema`'s `Add` implementation (left-bias).
+/// Clones the schema, resolves each `allOf` entry, merges its properties into
+/// the root using `Schema`'s `Add` implementation (left-bias), and replaces
+/// inline entries with `$ref` pointers into `$defs`.
 ///
-/// Returns the merged schema and a list of included sub-schemas.
-/// If the schema has no `allOf`, returns it unchanged with an empty includes list.
-pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> FlattenedSchema {
+/// The returned schema keeps `allOf` (now all `$ref` entries) so the ALL OF
+/// section shows what was composed, while PROPERTIES shows the merged view.
+pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> Schema {
     let mut merged = schema.clone();
     let Some(all_of) = merged.all_of.take() else {
-        return FlattenedSchema {
-            schema: merged,
-            includes: Vec::new(),
-        };
+        return merged;
     };
 
-    let mut includes = Vec::new();
+    let mut new_all_of = Vec::new();
 
-    for entry in all_of {
-        // Resolve $ref if present
-        let resolved_sv = resolve_entry(&entry, root);
-        let Some(resolved) = resolved_sv.as_schema() else {
-            continue;
+    for (i, entry) in all_of.into_iter().enumerate() {
+        let is_ref = entry.as_schema().is_some_and(|s| s.ref_.is_some());
+
+        // Resolve $ref against the original root (before mutations)
+        let resolved = if is_ref {
+            let resolved_sv = resolve_entry_in_root(&entry, root);
+            let Some(s) = resolved_sv.as_schema() else {
+                new_all_of.push(entry);
+                continue;
+            };
+            s.clone()
+        } else {
+            let Some(s) = entry.as_schema() else {
+                new_all_of.push(entry);
+                continue;
+            };
+            s.clone()
         };
 
-        // Extract provenance metadata
-        let title = resolved
-            .title
-            .clone()
-            .or_else(|| {
-                // Fall back to $ref name if the entry was a $ref
-                entry
-                    .as_schema()
-                    .and_then(|s| s.ref_.as_ref())
-                    .map(|r| crate::schema::ref_name(r).to_string())
-            })
-            .unwrap_or_else(|| "(anonymous)".to_string());
+        // Build the allOf entry: keep existing $ref or create one for inline schemas
+        let ref_entry = if is_ref {
+            entry
+        } else {
+            // Inline schema — move it to $defs and replace with $ref
+            let def_name = resolved
+                .title
+                .clone()
+                .unwrap_or_else(|| format!("allOf-{i}"));
 
-        let type_str = resolved.type_str();
-        let source = resolved
-            .x_lintel
-            .as_ref()
-            .and_then(|xl| xl.source.clone())
-            .or_else(|| resolved.id.clone());
+            let defs = merged.defs.get_or_insert_with(BTreeMap::new);
+            defs.entry(def_name.clone()).or_insert(entry);
 
-        includes.push(IncludedSchema {
-            title,
-            type_str,
-            source,
-        });
+            SchemaValue::Schema(Box::new(Schema {
+                ref_: Some(format!("#/$defs/{def_name}")),
+                ..Default::default()
+            }))
+        };
+        new_all_of.push(ref_entry);
 
-        // Merge: root (left) wins over the allOf entry (right)
-        let entry_schema = resolved.clone();
-        // Strip fields we don't want to merge from the entry
-        let mut clean = entry_schema;
-        // Don't carry over the entry's allOf/anyOf/oneOf into the merged result
+        // Merge resolved properties into root (left-bias)
+        let mut clean = resolved;
+        // Don't carry over composition keywords
         clean.all_of = None;
         clean.any_of = None;
         clean.one_of = None;
@@ -89,14 +74,12 @@ pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> FlattenedSchema {
         merged = merged + clean;
     }
 
-    FlattenedSchema {
-        schema: merged,
-        includes,
-    }
+    merged.all_of = Some(new_all_of);
+    merged
 }
 
 /// Resolve a `$ref` entry against the root schema.
-fn resolve_entry<'a>(entry: &'a SchemaValue, root: &'a SchemaValue) -> &'a SchemaValue {
+fn resolve_entry_in_root<'a>(entry: &'a SchemaValue, root: &'a SchemaValue) -> &'a SchemaValue {
     let Some(schema) = entry.as_schema() else {
         return entry;
     };
@@ -128,8 +111,8 @@ mod tests {
         let s = schema(json!({"type": "object", "title": "Root"}));
         let root = sv(json!({"type": "object", "title": "Root"}));
         let result = flatten_all_of(&s, &root);
-        assert!(result.includes.is_empty());
-        assert_eq!(result.schema.title.as_deref(), Some("Root"));
+        assert!(result.all_of.is_none());
+        assert_eq!(result.title.as_deref(), Some("Root"));
     }
 
     #[test]
@@ -152,14 +135,20 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        assert_eq!(result.includes.len(), 1);
-        assert_eq!(result.includes[0].title, "Extra");
-
-        let props = result.schema.properties.unwrap();
+        // Properties merged
+        let props = result.properties.unwrap();
         assert!(props.contains_key("a"));
         assert!(props.contains_key("b"));
-        // allOf should be cleared
-        assert!(result.schema.all_of.is_none());
+
+        // allOf kept with $ref entry
+        let all_of = result.all_of.unwrap();
+        assert_eq!(all_of.len(), 1);
+        let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
+        assert_eq!(ref_str, Some("#/$defs/Extra"));
+
+        // Inline schema moved to $defs
+        let defs = result.defs.unwrap();
+        assert!(defs.contains_key("Extra"));
     }
 
     #[test]
@@ -183,10 +172,13 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        assert_eq!(result.includes.len(), 1);
-        assert_eq!(result.includes[0].title, "Base Schema");
-        let props = result.schema.properties.unwrap();
+        let props = result.properties.unwrap();
         assert!(props.contains_key("name"));
+
+        // allOf kept as original $ref
+        let all_of = result.all_of.unwrap();
+        let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
+        assert_eq!(ref_str, Some("#/$defs/Base"));
     }
 
     #[test]
@@ -208,7 +200,7 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        let props = result.schema.properties.unwrap();
+        let props = result.properties.unwrap();
         let x_schema = props["x"].as_schema().unwrap();
         assert!(
             matches!(x_schema.type_, Some(crate::schema::TypeValue::Single(ref t)) if t == "string")
@@ -228,7 +220,7 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        let req = result.schema.required.unwrap();
+        let req = result.required.unwrap();
         assert!(req.contains(&"a".to_string()));
         assert!(req.contains(&"b".to_string()));
         assert!(req.contains(&"c".to_string()));
@@ -236,30 +228,21 @@ mod tests {
     }
 
     #[test]
-    fn includes_provenance_with_source() {
+    fn inline_without_title_uses_index_name() {
         let val = json!({
             "allOf": [
-                { "$ref": "#/$defs/Core" }
-            ],
-            "$defs": {
-                "Core": {
-                    "title": "Core vocabulary",
-                    "type": ["object", "boolean"],
-                    "x-lintel": {
-                        "source": "https://json-schema.org/draft/2020-12/meta/core"
-                    }
-                }
-            }
+                { "properties": { "x": { "type": "string" } } }
+            ]
         });
         let s = schema(val.clone());
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        assert_eq!(result.includes.len(), 1);
-        assert_eq!(result.includes[0].title, "Core vocabulary");
-        assert_eq!(
-            result.includes[0].source.as_deref(),
-            Some("https://json-schema.org/draft/2020-12/meta/core")
-        );
+        let all_of = result.all_of.unwrap();
+        let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
+        assert_eq!(ref_str, Some("#/$defs/allOf-0"));
+
+        let defs = result.defs.unwrap();
+        assert!(defs.contains_key("allOf-0"));
     }
 }

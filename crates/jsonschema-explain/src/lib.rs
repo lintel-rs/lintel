@@ -17,8 +17,8 @@ use render::{
 };
 use schema::{get_description, required_set, schema_type_str};
 use sections::{
-    render_definitions_section, render_examples_section, render_includes_section,
-    render_schema_section, render_variants_section,
+    render_definitions_section, render_examples_section, render_schema_section,
+    render_variants_section,
 };
 
 pub use schema::{navigate_pointer, resolve_ref as resolve_schema_ref};
@@ -65,25 +65,15 @@ pub fn explain(schema: &SchemaValue, name: &str, opts: &ExplainOptions) -> Strin
 
 /// Render a `Schema` as human-readable terminal documentation.
 fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOptions) -> String {
-    // Flatten allOf into the root schema if present
-    let flattened = s.flatten(root);
-    let s = &flattened.schema;
-    let includes = &flattened.includes;
-
-    // If allOf was flattened, wrap the merged schema in a SchemaValue for rendering
-    let merged_root;
-    let render_root = if includes.is_empty() {
-        root
-    } else {
-        merged_root = SchemaValue::Schema(Box::new(s.clone()));
-        &merged_root
-    };
+    // Flatten allOf: merge properties into root, move inline entries to $defs
+    let s = s.flatten(root);
+    let render_root = SchemaValue::Schema(Box::new(s.clone()));
 
     let mut out = String::new();
     let f = Fmt::from_opts(opts);
 
     let title = s.title.as_deref();
-    let description = get_description(s);
+    let description = get_description(&s);
 
     let label = std::path::Path::new(name)
         .file_name()
@@ -126,24 +116,24 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
         out.push('\n');
     }
 
-    render_schema_section(&mut out, s, &f);
+    render_schema_section(&mut out, &s, &f);
 
-    let type_str = schema_type_str(s);
+    let type_str = schema_type_str(&s);
     if let Some(ref ty) = type_str {
         write_section(&mut out, "TYPE", &f);
         let _ = writeln!(out, "    {}", format_type(ty, &f));
         out.push('\n');
     }
 
-    let required = required_set(s);
+    let required = required_set(&s);
     if let Some(ref props) = s.properties {
         write_section(&mut out, "PROPERTIES", &f);
-        render_properties(&mut out, props, &required, render_root, &f, 1);
+        render_properties(&mut out, props, &required, &render_root, &f, 1);
         out.push('\n');
     }
 
-    render_pattern_properties(&mut out, s, root, &f, 0, "    ");
-    render_additional_properties(&mut out, s, root, &f, 0, "    ");
+    render_pattern_properties(&mut out, &s, root, &f, 0, "    ");
+    render_additional_properties(&mut out, &s, root, &f, 0, "    ");
 
     // Root-level if/then/else
     if s.if_.is_some() {
@@ -168,14 +158,13 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
         && let Some(ref items) = s.items
     {
         write_section(&mut out, "ITEMS", &f);
-        render_subschema(&mut out, items, render_root, &f, 1);
+        render_subschema(&mut out, items, &render_root, &f, 1);
         out.push('\n');
     }
 
-    render_examples_section(&mut out, s, &f);
-    render_includes_section(&mut out, includes, &f);
-    render_variants_section(&mut out, s, render_root, &f);
-    render_definitions_section(&mut out, s, render_root, &f);
+    render_examples_section(&mut out, &s, &f);
+    render_variants_section(&mut out, &s, &render_root, &f);
+    render_definitions_section(&mut out, &s, &render_root, &f);
 
     out
 }

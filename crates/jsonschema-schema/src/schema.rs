@@ -242,9 +242,11 @@ impl Schema {
 
     /// Flatten composition keywords (currently `allOf`) into a single merged schema.
     ///
-    /// Returns a [`FlattenedSchema`](crate::FlattenedSchema) containing the merged
-    /// schema and provenance information about which sub-schemas were included.
-    pub fn flatten(&self, root: &SchemaValue) -> crate::flatten::FlattenedSchema {
+    /// Properties from `allOf` entries are merged into the root. Inline entries
+    /// are moved to `$defs` and replaced with `$ref` pointers. The `allOf` array
+    /// is preserved (now all `$ref` entries) so provenance remains visible.
+    #[must_use]
+    pub fn flatten(&self, root: &SchemaValue) -> Schema {
         crate::flatten::flatten_all_of(self, root)
     }
 
@@ -654,7 +656,7 @@ impl Add for Schema {
             merged
         };
 
-        let x_tombi = TombiExt {
+        let x_tombi = TombiSchemaExt {
             toml_version: self.x_tombi.toml_version.or(rhs.x_tombi.toml_version),
             table_keys_order: self
                 .x_tombi
@@ -695,6 +697,9 @@ impl Add for Schema {
             // Type
             type_: self.type_.or(rhs.type_),
             enum_: self.enum_.or(rhs.enum_),
+            markdown_enum_descriptions: self
+                .markdown_enum_descriptions
+                .or(rhs.markdown_enum_descriptions),
             const_: self.const_.or(rhs.const_),
 
             // Object — map fields are merged
@@ -761,6 +766,20 @@ impl Add for Schema {
             x_taplo: self.x_taplo.or(rhs.x_taplo),
             x_taplo_info: self.x_taplo_info.or(rhs.x_taplo_info),
             x_tombi,
+            x_intellij: IntellijSchemaExt {
+                html_description: self
+                    .x_intellij
+                    .html_description
+                    .or(rhs.x_intellij.html_description),
+                language_injection: self
+                    .x_intellij
+                    .language_injection
+                    .or(rhs.x_intellij.language_injection),
+                enum_metadata: self
+                    .x_intellij
+                    .enum_metadata
+                    .or(rhs.x_intellij.enum_metadata),
+            },
 
             extra,
         }

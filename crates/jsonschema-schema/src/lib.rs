@@ -3,7 +3,7 @@
 extern crate alloc;
 
 pub mod extensions;
-pub mod flatten;
+pub(crate) mod flatten;
 mod schema;
 
 pub use extensions::{
