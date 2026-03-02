@@ -771,36 +771,34 @@ mod tests {
 
     #[test]
     fn x_intellij_fixture_huskyrc() {
-        let path = "../../e2e-tests/cases/schemastore/schemastore/src/schemas/json/huskyrc.json";
-        let Ok(content) = std::fs::read_to_string(path) else {
-            // e2e-tests submodule not checked out (e.g. CI)
-            return;
-        };
-        let value: Value = serde_json::from_str(&content).unwrap();
+        let content = include_str!("../tests/fixtures/huskyrc.json");
+        let value: Value = serde_json::from_str(content).expect("parse huskyrc.json");
         let mut migrated = value;
         jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).unwrap();
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize huskyrc schema");
 
         // definitions/hook has x-intellij-language-injection
-        let hook = schema.defs.as_ref().unwrap()["hook"].as_schema().unwrap();
+        let hook = schema.defs.as_ref().expect("defs present")["hook"]
+            .as_schema()
+            .expect("hook is a schema");
         assert_eq!(
             hook.x_intellij.language_injection.as_deref(),
             Some("Shell Script")
         );
 
         // hooks/applypatch-msg has x-intellij-html-description
-        let hooks = schema.properties.as_ref().unwrap()["hooks"]
+        let hooks = schema.properties.as_ref().expect("properties present")["hooks"]
             .as_schema()
-            .unwrap();
-        let applypatch = hooks.properties.as_ref().unwrap()["applypatch-msg"]
+            .expect("hooks is a schema");
+        let applypatch = hooks.properties.as_ref().expect("hooks has properties")["applypatch-msg"]
             .as_schema()
-            .unwrap();
+            .expect("applypatch-msg is a schema");
         assert!(
             applypatch
                 .x_intellij
                 .html_description
                 .as_ref()
-                .unwrap()
+                .expect("html_description present")
                 .starts_with("<p>This hook is invoked by")
         );
 
@@ -811,20 +809,21 @@ mod tests {
 
     #[test]
     fn x_intellij_fixture_monade() {
-        let path = "../../e2e-tests/cases/schemastore/schemastore/src/schemas/json/monade-stack-config.json";
-        let Ok(content) = std::fs::read_to_string(path) else {
-            return;
-        };
-        let value: Value = serde_json::from_str(&content).unwrap();
+        let content = include_str!("../tests/fixtures/monade-stack-config.json");
+        let value: Value = serde_json::from_str(content).expect("parse monade-stack-config.json");
         let mut migrated = value;
         jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).unwrap();
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize monade schema");
 
         // properties/nginx has x-intellij-enum-metadata
-        let nginx = schema.properties.as_ref().unwrap()["nginx"]
+        let nginx = schema.properties.as_ref().expect("properties present")["nginx"]
             .as_schema()
-            .unwrap();
-        let meta = nginx.x_intellij.enum_metadata.as_ref().unwrap();
+            .expect("nginx is a schema");
+        let meta = nginx
+            .x_intellij
+            .enum_metadata
+            .as_ref()
+            .expect("enum_metadata present");
         assert_eq!(meta.len(), 2);
         assert_eq!(
             meta["system"].description.as_deref(),
@@ -931,12 +930,11 @@ mod tests {
 
     #[test]
     fn parse_cargo_fixture() {
-        let content =
-            std::fs::read_to_string("../jsonschema-migrate/tests/fixtures/cargo.json").unwrap();
-        let value: Value = serde_json::from_str(&content).unwrap();
+        let content = include_str!("../../jsonschema-migrate/tests/fixtures/cargo.json");
+        let value: Value = serde_json::from_str(content).expect("parse cargo.json");
         let mut migrated = value;
         jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).unwrap();
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize cargo schema");
         assert!(schema.title.is_some() || schema.type_.is_some());
         // Verify x-taplo is parsed if present
         if schema.x_taplo.is_some() {
