@@ -67,9 +67,12 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
     let title = s.title.as_deref();
     let description = get_description(s);
 
-    let upper = name.to_uppercase();
-    let center = title.unwrap_or(name);
-    let header = format_header(&upper, center, opts.width);
+    let label = std::path::Path::new(name)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(name);
+    let center = title.unwrap_or(label);
+    let header = format_header(label, center, opts.width);
     let _ = writeln!(out, "{}{header}{}\n", f.bold, f.reset);
 
     if !opts.validation_errors.is_empty() {
@@ -710,8 +713,8 @@ mod tests {
 
         let output = explain(&schema, "fallback-name", &plain());
         assert!(!output.contains("TITLE"));
-        // display name still appears in the header banner
-        assert!(output.contains("FALLBACK-NAME"));
+        // display name still appears in the header banner (not uppercased)
+        assert!(output.contains("fallback-name"));
     }
 
     #[test]
