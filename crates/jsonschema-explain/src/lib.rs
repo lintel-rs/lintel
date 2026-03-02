@@ -104,7 +104,7 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
 
     if let Some(ref comment) = s.comment {
         write_section(&mut out, "COMMENT", &f);
-        let _ = writeln!(out, "    {comment}");
+        write_description(&mut out, comment, &f, "    ");
         out.push('\n');
     }
 
@@ -782,7 +782,8 @@ mod tests {
         }));
 
         let output = explain(&schema, "comment-test", &plain());
-        assert!(output.contains("Comment: See https://example.com for details"));
+        assert!(output.contains("Comment:"));
+        assert!(output.contains("See https://example.com for details"));
     }
 
     #[test]

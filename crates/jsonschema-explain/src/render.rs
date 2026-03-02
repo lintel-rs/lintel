@@ -154,7 +154,8 @@ fn render_property_details(
     }
 
     if let Some(ref comment) = prop_schema.comment {
-        write_label(out, desc_indent, "Comment", comment);
+        let _ = writeln!(out, "{desc_indent}{}Comment:{}", f.dim, f.reset);
+        write_description(out, comment, f, &format!("{desc_indent}  "));
     }
 
     if let Some(ref default) = prop_schema.default {
