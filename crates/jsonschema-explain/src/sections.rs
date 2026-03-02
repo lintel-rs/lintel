@@ -94,44 +94,30 @@ pub(crate) fn render_definitions_section(
     root: &SchemaValue,
     f: &Fmt<'_>,
 ) {
-    // Check $defs (typed field) and definitions (in extra)
-    let defs_sources: Vec<(&str, &indexmap::IndexMap<String, SchemaValue>)> = {
-        let mut sources = Vec::new();
-        if let Some(ref defs) = schema.defs {
-            sources.push(("$defs", defs));
-        }
-        sources
-    };
-
-    // Also check "definitions" in extra (pre-2020-12 schemas might have it)
-    let definitions_value = schema.extra.get("definitions");
-    let definitions_map: Option<indexmap::IndexMap<String, SchemaValue>> =
-        definitions_value.and_then(|v| serde_json::from_value(v.clone()).ok());
-
-    for (_, defs) in &defs_sources {
-        render_defs_block(out, defs, root, f);
-    }
-
-    if let Some(ref defs) = definitions_map
+    if let Some(ref defs) = schema.defs
         && !defs.is_empty()
     {
-        render_defs_block(out, defs, root, f);
+        render_defs_block(out, defs.iter(), root, f);
+    }
+
+    // Also check "definitions" in extra (pre-2020-12 schemas might have it)
+    if let Some(defs) = schema.extra.get("definitions").and_then(|v| {
+        serde_json::from_value::<indexmap::IndexMap<String, SchemaValue>>(v.clone()).ok()
+    }) && !defs.is_empty()
+    {
+        render_defs_block(out, defs.iter(), root, f);
     }
 }
 
-fn render_defs_block(
+fn render_defs_block<'a>(
     out: &mut String,
-    defs: &indexmap::IndexMap<String, SchemaValue>,
+    defs: impl Iterator<Item = (&'a String, &'a SchemaValue)>,
     root: &SchemaValue,
     f: &Fmt<'_>,
 ) {
-    if defs.is_empty() {
-        return;
-    }
-
     write_section(out, "DEFINITIONS", f);
     // Sort deprecated definitions to the end.
-    let mut sorted_defs: Vec<_> = defs.iter().collect();
+    let mut sorted_defs: Vec<_> = defs.collect();
     sorted_defs.sort_by_key(|(_, sv)| i32::from(sv.as_schema().is_some_and(Schema::is_deprecated)));
     for (def_name, def_sv) in sorted_defs {
         let Some(def_schema) = def_sv.as_schema() else {

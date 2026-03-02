@@ -1,4 +1,5 @@
-use indexmap::IndexMap;
+use alloc::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -11,5 +12,5 @@ pub struct LintelExt {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_sha256: Option<String>,
     #[serde(flatten)]
-    pub extra: IndexMap<String, Value>,
+    pub extra: BTreeMap<String, Value>,
 }
