@@ -1,35 +1,4 @@
-//! Proc macros for compile-time struct field merging.
-//!
-//! Two macros work together:
-//!
-//! - `#[derive(Fields)]` on each source struct generates a companion
-//!   callback macro that can replay its field definitions.
-//! - `#[combine_fields(A, B, C)]` on the target struct merges in the
-//!   fields from structs `A`, `B`, `C` (which must derive `Fields`).
-//!
-//! # Example
-//!
-//! ```ignore
-//! use combine_structs::Fields;
-//!
-//! #[derive(Fields)]
-//! pub struct Foo {
-//!     pub x: i32,
-//! }
-//!
-//! #[derive(Fields)]
-//! pub struct Bar {
-//!     pub y: String,
-//! }
-//!
-//! #[combine_fields(Foo, Bar)]
-//! #[derive(Debug, Default)]
-//! pub struct Combined {
-//!     pub z: bool,
-//! }
-//!
-//! // Produces a struct with fields x, y, and z.
-//! ```
+#![doc = include_str!("../README.md")]
 
 use proc_macro::TokenStream;
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, Span, TokenStream as TokenStream2};
