@@ -13,10 +13,12 @@ fn print_lint_errors(errors: &[LintelDiagnostic]) {
     for error in errors {
         let path = error.path();
         match error {
-            LintelDiagnostic::Validation { instance_path, .. }
-                if instance_path != DEFAULT_LABEL =>
-            {
-                eprintln!("error: {path}: {} (at {instance_path})", error.message(),);
+            LintelDiagnostic::Validation(v) if v.instance_path != DEFAULT_LABEL => {
+                eprintln!(
+                    "error: {path}: {} (at {})",
+                    error.message(),
+                    v.instance_path,
+                );
             }
             _ => {
                 eprintln!("error: {path}: {}", error.message());

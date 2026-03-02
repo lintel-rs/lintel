@@ -1,9 +1,71 @@
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, LabeledSpan, NamedSource, SourceSpan};
 use thiserror::Error;
 
 /// Default label text used for span annotations when no specific instance path
 /// is available. Checked by reporters to decide whether to show the path suffix.
 pub const DEFAULT_LABEL: &str = "here";
+
+/// A validation diagnostic with a granular error code (e.g. `lintel::validation::required`).
+///
+/// Implements [`Diagnostic`] manually so the code can be computed at runtime
+/// from the [`ValidationErrorKind`](lintel_validation_cache::ValidationErrorKind).
+#[derive(Debug, Error)]
+#[error("{message}")]
+pub struct ValidationDiagnostic {
+    pub src: NamedSource<String>,
+    pub span: SourceSpan,
+    pub schema_span: SourceSpan,
+    pub path: String,
+    pub instance_path: String,
+    pub label: String,
+    pub message: String,
+    /// Schema URI this file was validated against (shown as a clickable link
+    /// in terminals for remote schemas).
+    pub schema_url: String,
+    /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
+    pub schema_path: String,
+    /// Granular diagnostic code (e.g. `lintel::validation::required`).
+    pub validation_code: String,
+}
+
+impl Diagnostic for ValidationDiagnostic {
+    fn code<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
+        Some(Box::new(&self.validation_code))
+    }
+
+    fn url<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
+        Some(Box::new(&self.schema_url))
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn core::fmt::Display + 'a>> {
+        Some(Box::new(format!(
+            "run `lintel explain --file {}` to see the full schema definition",
+            self.path
+        )))
+    }
+
+    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
+        Some(&self.src)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(
+            [
+                LabeledSpan::new(
+                    Some(self.label.clone()),
+                    self.span.offset(),
+                    self.span.len(),
+                ),
+                LabeledSpan::new(
+                    Some(format!("from {}", self.schema_url)),
+                    self.schema_span.offset(),
+                    self.schema_span.len(),
+                ),
+            ]
+            .into_iter(),
+        ))
+    }
+}
 
 /// A single diagnostic produced during validation, formatting, or parsing.
 #[derive(Debug, Error, Diagnostic)]
@@ -18,29 +80,9 @@ pub enum LintelDiagnostic {
         message: String,
     },
 
-    #[error("{message}")]
-    #[diagnostic(
-        code(lintel::validation),
-        url("{schema_url}"),
-        help("run `lintel explain --file {path}` to see the full schema definition")
-    )]
-    Validation {
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("{label}")]
-        span: SourceSpan,
-        #[label("from {schema_url}")]
-        schema_span: SourceSpan,
-        path: String,
-        instance_path: String,
-        label: String,
-        message: String,
-        /// Schema URI this file was validated against (shown as a clickable link
-        /// in terminals for remote schemas).
-        schema_url: String,
-        /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
-        schema_path: String,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Validation(ValidationDiagnostic),
 
     #[error("{path}: mismatched $schema on line {line_number}: {message}")]
     #[diagnostic(code(lintel::jsonl::schema_mismatch))]
@@ -79,8 +121,8 @@ impl LintelDiagnostic {
     pub fn path(&self) -> &str {
         match self {
             LintelDiagnostic::Parse { src, .. } => src.name(),
-            LintelDiagnostic::Validation { path, .. }
-            | LintelDiagnostic::SchemaMismatch { path, .. }
+            LintelDiagnostic::Validation(v) => &v.path,
+            LintelDiagnostic::SchemaMismatch { path, .. }
             | LintelDiagnostic::Io { path, .. }
             | LintelDiagnostic::SchemaFetch { path, .. }
             | LintelDiagnostic::SchemaCompile { path, .. }
@@ -92,11 +134,11 @@ impl LintelDiagnostic {
     pub fn message(&self) -> &str {
         match self {
             LintelDiagnostic::Parse { message, .. }
-            | LintelDiagnostic::Validation { message, .. }
             | LintelDiagnostic::SchemaMismatch { message, .. }
             | LintelDiagnostic::Io { message, .. }
             | LintelDiagnostic::SchemaFetch { message, .. }
             | LintelDiagnostic::SchemaCompile { message, .. } => message,
+            LintelDiagnostic::Validation(v) => &v.message,
             LintelDiagnostic::Format { .. } => "file is not properly formatted",
         }
     }
@@ -104,9 +146,8 @@ impl LintelDiagnostic {
     /// Byte offset in the source file (for sorting).
     pub fn offset(&self) -> usize {
         match self {
-            LintelDiagnostic::Parse { span, .. } | LintelDiagnostic::Validation { span, .. } => {
-                span.offset()
-            }
+            LintelDiagnostic::Parse { span, .. } => span.offset(),
+            LintelDiagnostic::Validation(v) => v.span.offset(),
             LintelDiagnostic::SchemaMismatch { .. }
             | LintelDiagnostic::Io { .. }
             | LintelDiagnostic::SchemaFetch { .. }
@@ -327,7 +368,7 @@ mod tests {
                 "lintel::parse",
             ),
             (
-                LintelDiagnostic::Validation {
+                LintelDiagnostic::Validation(ValidationDiagnostic {
                     src: NamedSource::new("f", String::new()),
                     span: 0.into(),
                     schema_span: 0.into(),
@@ -337,8 +378,9 @@ mod tests {
                     message: String::new(),
                     schema_url: String::new(),
                     schema_path: String::new(),
-                },
-                "lintel::validation",
+                    validation_code: "lintel::validation::required".to_string(),
+                }),
+                "lintel::validation::required",
             ),
             (
                 LintelDiagnostic::SchemaMismatch {

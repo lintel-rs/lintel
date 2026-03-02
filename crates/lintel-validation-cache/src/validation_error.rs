@@ -20,8 +20,9 @@ pub struct ValidationError {
 ///
 /// Non-serializable nested errors (e.g. `AnyOf`, `OneOf*` context) drop their
 /// sub-error context. Non-serializable error types store a `message: String`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, strum::AsRefStr)]
 #[serde(tag = "type")]
+#[strum(serialize_all = "snake_case")]
 pub enum ValidationErrorKind {
     AdditionalItems {
         limit: usize,
