@@ -57,6 +57,9 @@ pub(crate) fn render_variant_block(
             let req = required_set(resolved);
             render_properties(out, props, &req, root, f, 2);
         }
+    } else if let Some(ref values) = resolved.enum_ {
+        let prefix = format!("    {}({index}){} ", f.dim, f.reset);
+        render_enum_values(out, values, f, &prefix);
     } else {
         // Single-line summary
         let summary = variant_summary(original, root, f);
@@ -271,10 +274,67 @@ fn render_inline_variant(
             let req = required_set(resolved);
             render_properties(out, props, &req, root, f, depth + 2);
         }
+    } else if let Some(ref values) = resolved.enum_ {
+        let prefix = format!("{desc_indent}  - ");
+        render_enum_values(out, values, f, &prefix);
     } else {
         let summary = variant_summary(original, root, f);
         let _ = writeln!(out, "{desc_indent}  - {summary}");
     }
+}
+
+/// Render enum values with line-wrapping when they exceed the terminal width.
+///
+/// `prefix` is what starts the first line (e.g. `"        - "`).
+/// Continuation lines are indented to align after the prefix.
+fn render_enum_values(out: &mut String, values: &[serde_json::Value], f: &Fmt<'_>, prefix: &str) {
+    let items: Vec<String> = values
+        .iter()
+        .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
+        .collect();
+
+    // Try single line first.
+    let single_line = items.join(", ");
+    let prefix_visual_len = prefix.chars().filter(|c| !c.is_control()).count();
+    if prefix_visual_len + single_line.len() <= f.width {
+        let colored = items
+            .iter()
+            .map(|s| format!("{}{s}{}", f.magenta, f.reset))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "{prefix}{colored}");
+        return;
+    }
+
+    // Wrap: continuation lines align with the first value.
+    let cont_indent = " ".repeat(prefix_visual_len);
+    let mut line_len = prefix_visual_len;
+    let mut first_on_line = true;
+    out.push_str(prefix);
+
+    for (i, item) in items.iter().enumerate() {
+        let sep = if i > 0 { ", " } else { "" };
+        let needed = sep.len() + item.len();
+
+        if !first_on_line && line_len + needed > f.width {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push('\n');
+            out.push_str(&cont_indent);
+            line_len = cont_indent.len();
+            first_on_line = true;
+        }
+
+        if !first_on_line {
+            out.push_str(sep);
+            line_len += sep.len();
+        }
+        let _ = write!(out, "{}{item}{}", f.magenta, f.reset);
+        line_len += item.len();
+        first_on_line = false;
+    }
+    out.push('\n');
 }
 
 /// Return a `" [DEPRECATED]"` tag if the schema has `"deprecated": true`.
