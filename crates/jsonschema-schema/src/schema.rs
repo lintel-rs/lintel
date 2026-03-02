@@ -240,6 +240,14 @@ impl Schema {
         schema_type_str(self)
     }
 
+    /// Validate structural integrity of this schema.
+    ///
+    /// Recursively walks the schema tree and checks that all local `$ref`
+    /// pointers (starting with `#/`) resolve to valid targets.
+    pub fn validate(&self) -> Vec<crate::validate::SchemaError> {
+        crate::validate::validate(self)
+    }
+
     /// Flatten composition keywords (currently `allOf`) into a single merged schema.
     ///
     /// Properties from `allOf` entries are merged into the root. Inline entries
