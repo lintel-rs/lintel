@@ -340,7 +340,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
 
     // oneOf/anyOf
     for variants in [&schema.one_of, &schema.any_of].into_iter().flatten() {
-        let types: Vec<String> = variants
+        let mut types: Vec<String> = variants
             .iter()
             .filter_map(|v| match v {
                 SchemaValue::Schema(s) => {
@@ -349,6 +349,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
                 SchemaValue::Bool(_) => None,
             })
             .collect();
+        types.dedup();
         if !types.is_empty() {
             return Some(types.join(" | "));
         }
@@ -359,8 +360,15 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
         return Some(format!("const: {c}"));
     }
 
-    // enum
-    if schema.enum_.is_some() {
+    // enum — single-value enums show the value (e.g. `"lf"`), multi-value show `enum`
+    if let Some(ref values) = schema.enum_ {
+        if values.len() == 1 {
+            let val = &values[0];
+            return Some(
+                val.as_str()
+                    .map_or_else(|| val.to_string(), |s| format!("\"{s}\"")),
+            );
+        }
         return Some("enum".to_string());
     }
 

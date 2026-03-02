@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use jsonschema_schema::{Schema, SchemaValue, ref_name};
+use jsonschema_schema::{Schema, SchemaValue};
 use serde_json::Value;
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type_suffix, format_value};
@@ -28,6 +28,10 @@ pub(crate) fn render_schema_section(out: &mut String, schema: &Schema, f: &Fmt<'
 }
 
 /// Render `oneOf`/`anyOf`/`allOf` variant sections.
+///
+/// All composition keywords use the same rendering style:
+/// - `$ref` entries show label, type, description, and URL (not expanded inline)
+/// - Inline entries are expanded normally with properties
 pub(crate) fn render_variants_section(
     out: &mut String,
     schema: &Schema,
@@ -42,7 +46,6 @@ pub(crate) fn render_variants_section(
             _ => None,
         };
         if let Some(variants) = variants {
-            let is_all_of = *keyword == "allOf";
             let label = match *keyword {
                 "oneOf" => "ONE OF",
                 "anyOf" => "ANY OF",
@@ -50,57 +53,14 @@ pub(crate) fn render_variants_section(
                 _ => keyword,
             };
             write_section(out, label, f);
-            for (i, variant) in variants.iter().enumerate() {
+            for variant in variants {
                 let resolved_sv = resolve_ref(variant, root);
                 if let Some(resolved) = resolved_sv.as_schema() {
-                    if is_all_of {
-                        render_allof_summary(out, resolved, variant, f, i + 1);
-                    } else {
-                        render_variant_block(out, resolved, variant, root, f, i + 1);
-                    }
+                    render_variant_block(out, resolved, variant, root, f);
                 }
             }
             out.push('\n');
         }
-    }
-}
-
-/// Render a compact summary line for an allOf entry.
-///
-/// Since allOf content is merged into PROPERTIES, we only show provenance:
-/// the entry name/title and type.
-#[allow(clippy::too_many_arguments)]
-fn render_allof_summary(
-    out: &mut String,
-    resolved: &Schema,
-    original: &SchemaValue,
-    f: &Fmt<'_>,
-    index: usize,
-) {
-    let label = if let Some(ref title) = resolved.title {
-        title.clone()
-    } else if let Some(orig_schema) = original.as_schema()
-        && let Some(ref r) = orig_schema.ref_
-    {
-        ref_name(r).to_string()
-    } else if let Some(ty) = schema_type_str(resolved) {
-        ty
-    } else {
-        format!("variant {index}")
-    };
-
-    let ty = schema_type_str(resolved).unwrap_or_default();
-    let suffix = format_type_suffix(&ty, f);
-    let _ = writeln!(
-        out,
-        "    {}({index}){} {}{label}{}{suffix}",
-        f.dim, f.reset, f.green, f.reset
-    );
-    // Show the $ref URL so users can navigate to the original definition
-    if let Some(orig_schema) = original.as_schema()
-        && let Some(ref r) = orig_schema.ref_
-    {
-        let _ = writeln!(out, "        {}{r}{}", f.dim, f.reset);
     }
 }
 
@@ -374,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn allof_refs_rendered_as_variants() {
+    fn allof_refs_show_description_and_url() {
         let mut out = String::new();
         let f = Fmt::plain(80);
         let val = json!({
@@ -400,5 +360,37 @@ mod tests {
         render_variants_section(&mut out, &schema, &root, &f);
         assert!(out.contains("ALL OF"));
         assert!(out.contains("base"));
+        // Description is shown for $ref entries
+        assert!(out.contains("Base configuration"));
+        // $ref URL is shown
+        assert!(out.contains("#/$defs/base"));
+        // Properties are NOT expanded inline for $ref entries
+        assert!(!out.contains("The name"));
+        // No numbered indexes
+        assert!(!out.contains("(1)"));
+    }
+
+    #[test]
+    fn allof_uses_same_style_as_oneof_anyof() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+        let val = json!({
+            "allOf": [
+                { "$ref": "#/$defs/First" }
+            ],
+            "$defs": {
+                "First": { "type": "object", "description": "First schema" }
+            }
+        });
+        let schema = parse_schema(val.clone());
+        let root = parse_sv(val);
+
+        render_variants_section(&mut out, &schema, &root, &f);
+        assert!(out.contains("ALL OF"));
+        assert!(out.contains("First"));
+        assert!(out.contains("First schema"));
+        assert!(out.contains("#/$defs/First"));
+        // No numbered indexes
+        assert!(!out.contains("(1)"));
     }
 }
