@@ -41,58 +41,9 @@ jobs:
       - run: nix flake check
       - run: nix run . -- version
 
-  # Build statically-linked musl binaries via Nix for Linux x86_64 and aarch64.
-  # Uploaded as release artifacts.
-  build-static:
-    name: Build (${{ matrix.binary }}-${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    permissions:
-      id-token: write
-      contents: read
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            nix-package: .#lintel-static
-            binary: lintel
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            nix-package: .#lintel-static
-            binary: lintel
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-      - uses: DeterminateSystems/flakehub-cache-action@v3
-        with:
-          upstream-cache: https://lintel.cachix.org
-      - uses: cachix/cachix-action@v16
-        with:
-          name: lintel
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      - name: Build
-        run: nix build ${{ matrix.nix-package }}
-
-      - name: Smoke test
-        run: ./result/bin/${{ matrix.binary }} version
-
-      - name: Verify static linking
-        if: contains(matrix.target, 'musl')
-        run: ldd ./result/bin/${{ matrix.binary }} 2>&1 | grep -qE "statically linked|not a dynamic executable"
-
-      - name: Package
-        run: tar czf ${{ matrix.binary }}-${{ matrix.target }}.tar.gz -C result/bin ${{ matrix.binary }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.binary }}-${{ matrix.target }}
-          path: ${{ matrix.binary }}-${{ matrix.target }}.tar.gz
-
-  # Build dynamic binaries with Cargo for GNU/Linux, macOS, and Windows.
-  # GNU/Linux builds use Debian 11 (bullseye) containers for older glibc
-  # compatibility. Inspired by Biome's build setup:
+  # Build binaries with Cargo. GNU/Linux glibc builds use Debian 11 (bullseye)
+  # containers for older glibc compatibility; musl builds use musl-tools on
+  # native runners. Inspired by Biome's build setup:
   # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
   build-cargo:
     name: Build (${{ matrix.target }})
@@ -109,6 +60,10 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
             container: rust:bullseye
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-apple-darwin
@@ -126,6 +81,12 @@ jobs:
         with:
           shared-key: build-${{ matrix.target }}
 
+      - name: Install musl toolchain
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Build
         run: cargo build --release --package lintel --target ${{ matrix.target }}
 
@@ -138,6 +99,10 @@ jobs:
         run: |
           ldd ./target/${{ matrix.target }}/release/lintel
           ./target/${{ matrix.target }}/release/lintel version
+
+      - name: Verify static linking
+        if: contains(matrix.target, 'musl')
+        run: ldd ./target/${{ matrix.target }}/release/lintel 2>&1 | grep -qE "statically linked|not a dynamic executable"
 
       - name: Package (tar.gz)
         if: "!contains(matrix.target, 'windows')"
