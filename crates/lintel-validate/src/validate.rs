@@ -8,7 +8,9 @@ use glob::glob;
 use serde_json::Value;
 
 use lintel_diagnostics::reporter::{CheckResult, CheckedFile};
-use lintel_diagnostics::{DEFAULT_LABEL, LintelDiagnostic, find_instance_path_span, format_label};
+use lintel_diagnostics::{
+    DEFAULT_LABEL, LintelDiagnostic, ValidationDiagnostic, find_instance_path_span, format_label,
+};
 use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError, ValidationErrorKind};
 use schema_catalog::{CompiledCatalog, FileFormat};
@@ -639,7 +641,7 @@ fn push_validation_errors(
         {
             message = format!("{message}; did you mean '{suggestion}'?");
         }
-        errors.push(LintelDiagnostic::Validation {
+        errors.push(LintelDiagnostic::Validation(ValidationDiagnostic {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
             span: source_span,
             schema_span: source_span,
@@ -649,7 +651,8 @@ fn push_validation_errors(
             message,
             schema_url: schema_url.to_string(),
             schema_path: ve.schema_path.clone(),
-        });
+            validation_code: format!("lintel::validation::{}", ve.kind.as_ref()),
+        }));
     }
 }
 

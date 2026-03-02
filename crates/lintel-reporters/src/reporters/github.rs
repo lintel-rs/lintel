@@ -29,10 +29,8 @@ fn emit_lint_error(error: &LintelDiagnostic) {
     let message = escape_workflow(error.message());
 
     let (line, col) = match error {
-        LintelDiagnostic::Parse { src, span, .. }
-        | LintelDiagnostic::Validation { src, span, .. } => {
-            offset_to_line_col(src.inner(), span.offset())
-        }
+        LintelDiagnostic::Parse { src, span, .. } => offset_to_line_col(src.inner(), span.offset()),
+        LintelDiagnostic::Validation(v) => offset_to_line_col(v.src.inner(), v.span.offset()),
         LintelDiagnostic::SchemaMismatch { line_number, .. } => (*line_number, 1),
         LintelDiagnostic::Io { .. }
         | LintelDiagnostic::SchemaFetch { .. }
@@ -42,10 +40,8 @@ fn emit_lint_error(error: &LintelDiagnostic) {
 
     let title = match error {
         LintelDiagnostic::Parse { .. } => "parse error",
-        LintelDiagnostic::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
-            instance_path
-        }
-        LintelDiagnostic::Validation { .. } => "validation error",
+        LintelDiagnostic::Validation(v) if v.instance_path != DEFAULT_LABEL => &v.instance_path,
+        LintelDiagnostic::Validation(_) => "validation error",
         LintelDiagnostic::SchemaMismatch { .. } => "schema mismatch",
         LintelDiagnostic::Io { .. } => "io error",
         LintelDiagnostic::SchemaFetch { .. } => "schema fetch error",

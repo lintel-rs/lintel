@@ -468,21 +468,16 @@ async fn collect_validation_errors(
         .errors
         .into_iter()
         .filter_map(|err| {
-            if let lintel_diagnostics::LintelDiagnostic::Validation {
-                instance_path,
-                message,
-                ..
-            } = err
-            {
+            if let lintel_diagnostics::LintelDiagnostic::Validation(v) = err {
                 // When explaining the root, show all errors.
                 // Otherwise only show errors under the given property.
                 if instance_prefix.is_empty()
-                    || instance_path == instance_prefix
-                    || instance_path.starts_with(&format!("{instance_prefix}/"))
+                    || v.instance_path == instance_prefix
+                    || v.instance_path.starts_with(&format!("{instance_prefix}/"))
                 {
                     Some(jsonschema_explain::ExplainError {
-                        instance_path,
-                        message,
+                        instance_path: v.instance_path,
+                        message: v.message,
                     })
                 } else {
                     None

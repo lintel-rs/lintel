@@ -69,10 +69,8 @@ struct Annotation {
 fn error_to_annotation(error: &LintelDiagnostic) -> Annotation {
     let path = error.path().replace('\\', "/");
     let (line, _col) = match error {
-        LintelDiagnostic::Parse { src, span, .. }
-        | LintelDiagnostic::Validation { src, span, .. } => {
-            offset_to_line_col(src.inner(), span.offset())
-        }
+        LintelDiagnostic::Parse { src, span, .. } => offset_to_line_col(src.inner(), span.offset()),
+        LintelDiagnostic::Validation(v) => offset_to_line_col(v.src.inner(), v.span.offset()),
         LintelDiagnostic::SchemaMismatch { line_number, .. } => (*line_number, 1),
         LintelDiagnostic::Io { .. }
         | LintelDiagnostic::SchemaFetch { .. }
@@ -82,10 +80,10 @@ fn error_to_annotation(error: &LintelDiagnostic) -> Annotation {
 
     let title = match error {
         LintelDiagnostic::Parse { .. } => Some("parse error".to_string()),
-        LintelDiagnostic::Validation { instance_path, .. } if instance_path != DEFAULT_LABEL => {
-            Some(instance_path.clone())
+        LintelDiagnostic::Validation(v) if v.instance_path != DEFAULT_LABEL => {
+            Some(v.instance_path.clone())
         }
-        LintelDiagnostic::Validation { .. } => Some("validation error".to_string()),
+        LintelDiagnostic::Validation(_) => Some("validation error".to_string()),
         LintelDiagnostic::SchemaMismatch { .. } => Some("schema mismatch".to_string()),
         LintelDiagnostic::Io { .. } => Some("io error".to_string()),
         LintelDiagnostic::SchemaFetch { .. } => Some("schema fetch error".to_string()),
