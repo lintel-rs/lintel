@@ -450,15 +450,8 @@ fn render_enum_with_descriptions(out: &mut String, schema: &Schema, f: &Fmt<'_>,
             }
         }
     } else {
-        let joined: String = values
-            .iter()
-            .map(|v| {
-                let display = v.as_str().map_or_else(|| v.to_string(), str::to_string);
-                format!("{}{display}{}", f.magenta, f.reset)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        write_label(out, indent, "Values", &joined);
+        let prefix = format!("{indent}Values: ");
+        render_enum_values(out, values, f, &prefix);
     }
 }
 
