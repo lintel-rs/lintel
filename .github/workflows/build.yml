@@ -46,7 +46,7 @@ jobs:
   # native runners. Inspired by Biome's build setup:
   # https://github.com/biomejs/biome/blob/main/.github/workflows/release_cli.yml
   build-cargo:
-    name: Build (${{ matrix.target }})
+    name: Cargo (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
     env:
