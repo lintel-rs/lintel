@@ -1,7 +1,12 @@
 use alloc::collections::BTreeMap;
-use core::fmt;
 
 use indexmap::IndexMap;
+
+/// Helper for `#[serde(skip_serializing_if)]` on `bool` fields.
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T
+fn is_false(v: &bool) -> bool {
+    !v
+}
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
@@ -22,7 +27,7 @@ use crate::extensions::TombiSchemaExt;
 /// - `false` — never validates successfully (equivalent to `{"not": {}}`).
 ///
 /// See [JSON Schema Core §4.3.2](https://json-schema.org/draft/2020-12/json-schema-core#section-4.3.2).
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum SchemaValue {
     /// A boolean schema: `true` accepts everything, `false` rejects everything.
@@ -38,8 +43,11 @@ pub enum SchemaValue {
 /// `"integer"` which matches any number with a zero fractional part.
 ///
 /// See [JSON Schema Validation §6.1.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, strum::Display,
+)]
 #[serde(rename_all = "camelCase")]
+#[strum(serialize_all = "lowercase")]
 pub enum SimpleType {
     /// A JSON array (ordered sequence of values).
     Array,
@@ -57,28 +65,13 @@ pub enum SimpleType {
     String,
 }
 
-impl fmt::Display for SimpleType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            Self::Array => "array",
-            Self::Boolean => "boolean",
-            Self::Integer => "integer",
-            Self::Null => "null",
-            Self::Number => "number",
-            Self::Object => "object",
-            Self::String => "string",
-        };
-        f.write_str(s)
-    }
-}
-
 /// The value of the JSON Schema `type` keyword.
 ///
 /// The value of this keyword MUST be either a string or an array. If it is
 /// an array, elements of the array MUST be strings and MUST be unique.
 ///
 /// See [JSON Schema Validation §6.1.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1).
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum TypeValue {
     /// A single type constraint, e.g. `"type": "string"`.
@@ -117,7 +110,8 @@ pub enum TypeValue {
 /// - **Applicator — conditional** (`if`, `then`, `else`,
 ///   `dependentSchemas`)
 /// - **Content** (`contentMediaType`, `contentEncoding`, `contentSchema`)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[allow(clippy::struct_excessive_bools)] // mirrors the JSON Schema spec
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Schema {
     // ---------------------------------------------------------------
     // Core vocabulary (JSON Schema Core §8)
@@ -386,6 +380,7 @@ pub struct Schema {
     ///
     /// See [JSON Schema Core §8.1.2](https://json-schema.org/draft/2020-12/json-schema-core#section-8.1.2).
     #[serde(rename = "$vocabulary", skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("propertyNames" = { "format": "uri" }))]
     pub vocabulary: Option<IndexMap<Url, bool>>,
 
     // ---------------------------------------------------------------
@@ -429,8 +424,9 @@ pub struct Schema {
     /// Omitting this keyword has the same behavior as a value of false.
     ///
     /// See [JSON Schema Validation §9.3](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.3).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deprecated: Option<bool>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[schemars(extend("default" = false))]
+    pub deprecated: bool,
 
     /// The `readOnly` keyword — read-only annotation.
     ///
@@ -453,8 +449,9 @@ pub struct Schema {
     /// Omitting this keyword has the same behavior as a value of false.
     ///
     /// See [JSON Schema Validation §9.4](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.4).
-    #[serde(rename = "readOnly", skip_serializing_if = "Option::is_none")]
-    pub read_only: Option<bool>,
+    #[serde(default, rename = "readOnly", skip_serializing_if = "is_false")]
+    #[schemars(extend("default" = false))]
+    pub read_only: bool,
 
     /// The `writeOnly` keyword — write-only annotation.
     ///
@@ -475,8 +472,9 @@ pub struct Schema {
     /// Omitting this keyword has the same behavior as a value of false.
     ///
     /// See [JSON Schema Validation §9.4](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.4).
-    #[serde(rename = "writeOnly", skip_serializing_if = "Option::is_none")]
-    pub write_only: Option<bool>,
+    #[serde(default, rename = "writeOnly", skip_serializing_if = "is_false")]
+    #[schemars(extend("default" = false))]
+    pub write_only: bool,
 
     /// The `examples` keyword — example values annotation.
     ///
@@ -582,8 +580,9 @@ pub struct Schema {
     /// empty object.
     ///
     /// See [JSON Schema Core §10.3.2.1](https://json-schema.org/draft/2020-12/json-schema-core#section-10.3.2.1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<IndexMap<String, SchemaValue>>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(extend("default" = {}))]
+    pub properties: IndexMap<String, SchemaValue>,
 
     /// The `patternProperties` keyword — regex-matched property
     /// subschemas.
@@ -609,8 +608,13 @@ pub struct Schema {
     /// empty object.
     ///
     /// See [JSON Schema Core §10.3.2.2](https://json-schema.org/draft/2020-12/json-schema-core#section-10.3.2.2).
-    #[serde(rename = "patternProperties", skip_serializing_if = "Option::is_none")]
-    pub pattern_properties: Option<IndexMap<String, SchemaValue>>,
+    #[serde(
+        default,
+        rename = "patternProperties",
+        skip_serializing_if = "IndexMap::is_empty"
+    )]
+    #[schemars(extend("default" = {}), extend("propertyNames" = { "format": "regex" }))]
+    pub pattern_properties: IndexMap<String, SchemaValue>,
 
     /// The `additionalProperties` keyword — schema for unmatched
     /// properties.
@@ -847,6 +851,7 @@ pub struct Schema {
     ///
     /// See [JSON Schema Validation §6.4.5](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.4.5).
     #[serde(rename = "minContains", skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("default" = 1))]
     pub min_contains: Option<u64>,
 
     /// The `maxContains` keyword — maximum `contains` matches.
@@ -903,8 +908,9 @@ pub struct Schema {
     /// Omitting this keyword has the same behavior as a value of false.
     ///
     /// See [JSON Schema Validation §6.4.3](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.4.3).
-    #[serde(rename = "uniqueItems", skip_serializing_if = "Option::is_none")]
-    pub unique_items: Option<bool>,
+    #[serde(default, rename = "uniqueItems", skip_serializing_if = "is_false")]
+    #[schemars(extend("default" = false))]
+    pub unique_items: bool,
 
     /// The `unevaluatedItems` keyword — schema for array items not
     /// covered by other keywords.
@@ -1237,8 +1243,13 @@ pub struct Schema {
     /// Omitting this keyword has the same behavior as an empty object.
     ///
     /// See [JSON Schema Core §10.2.2.4](https://json-schema.org/draft/2020-12/json-schema-core#section-10.2.2.4).
-    #[serde(rename = "dependentSchemas", skip_serializing_if = "Option::is_none")]
-    pub dependent_schemas: Option<IndexMap<String, SchemaValue>>,
+    #[serde(
+        default,
+        rename = "dependentSchemas",
+        skip_serializing_if = "IndexMap::is_empty"
+    )]
+    #[schemars(extend("default" = {}))]
+    pub dependent_schemas: IndexMap<String, SchemaValue>,
 
     // ---------------------------------------------------------------
     // Content vocabulary (JSON Schema Validation §8)
@@ -1356,7 +1367,7 @@ impl Schema {
 
     /// Whether this schema is deprecated.
     pub fn is_deprecated(&self) -> bool {
-        self.deprecated.unwrap_or(false)
+        self.deprecated
     }
 
     /// Produce a short human-readable type string.
@@ -1391,10 +1402,10 @@ impl Schema {
     /// for the `name` property.
     pub fn get_map_entry(&self, keyword: &str, key: &str) -> Option<&SchemaValue> {
         match keyword {
-            "properties" => self.properties.as_ref()?.get(key),
-            "patternProperties" => self.pattern_properties.as_ref()?.get(key),
+            "properties" => self.properties.get(key),
+            "patternProperties" => self.pattern_properties.get(key),
             "$defs" => self.defs.as_ref()?.get(key),
-            "dependentSchemas" => self.dependent_schemas.as_ref()?.get(key),
+            "dependentSchemas" => self.dependent_schemas.get(key),
             _ => None,
         }
     }
@@ -1686,19 +1697,10 @@ impl Schema {
         // For pointer navigation, when we're inside a "properties" object,
         // the segment is the property name.
         self.properties
-            .as_ref()
-            .and_then(|m| m.get(segment))
-            .or_else(|| {
-                self.pattern_properties
-                    .as_ref()
-                    .and_then(|m| m.get(segment))
-            })
-            .or_else(|| {
-                self.defs
-                    .as_ref()
-                    .and_then(|m: &BTreeMap<String, SchemaValue>| m.get(segment))
-            })
-            .or_else(|| self.dependent_schemas.as_ref().and_then(|m| m.get(segment)))
+            .get(segment)
+            .or_else(|| self.pattern_properties.get(segment))
+            .or_else(|| self.defs.as_ref().and_then(|m| m.get(segment)))
+            .or_else(|| self.dependent_schemas.get(segment))
     }
 }
 
@@ -1719,7 +1721,7 @@ mod tests {
         });
         let schema: Schema = serde_json::from_value(json.clone()).unwrap();
         assert_eq!(schema.title.as_deref(), Some("Test"));
-        assert!(schema.properties.is_some());
+        assert!(!schema.properties.is_empty());
 
         let back = serde_json::to_value(&schema).unwrap();
         assert_eq!(back["type"], "object");
@@ -1856,7 +1858,7 @@ mod tests {
     #[test]
     fn is_deprecated_true() {
         let schema = Schema {
-            deprecated: Some(true),
+            deprecated: true,
             ..Default::default()
         };
         assert!(schema.is_deprecated());
@@ -1953,10 +1955,10 @@ mod tests {
         );
 
         // hooks/applypatch-msg has x-intellij-html-description
-        let hooks = schema.properties.as_ref().expect("properties present")["hooks"]
+        let hooks = &schema.properties["hooks"]
             .as_schema()
             .expect("hooks is a schema");
-        let applypatch = hooks.properties.as_ref().expect("hooks has properties")["applypatch-msg"]
+        let applypatch = &hooks.properties["applypatch-msg"]
             .as_schema()
             .expect("applypatch-msg is a schema");
         assert!(
@@ -1982,7 +1984,7 @@ mod tests {
         let schema: Schema = serde_json::from_value(migrated).expect("deserialize monade schema");
 
         // properties/nginx has x-intellij-enum-metadata
-        let nginx = schema.properties.as_ref().expect("properties present")["nginx"]
+        let nginx = &schema.properties["nginx"]
             .as_schema()
             .expect("nginx is a schema");
         let meta = nginx
@@ -2054,7 +2056,7 @@ mod tests {
         let mut props = IndexMap::new();
         props.insert("name".into(), name_schema);
         let root = SchemaValue::Schema(Box::new(Schema {
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         }));
         let result = navigate_pointer(&root, &root, "/properties/name").unwrap();
@@ -2081,7 +2083,7 @@ mod tests {
         let mut props = IndexMap::new();
         props.insert("item".into(), ref_schema);
         let root = SchemaValue::Schema(Box::new(Schema {
-            properties: Some(props),
+            properties: props,
             defs: Some(defs),
             ..Default::default()
         }));

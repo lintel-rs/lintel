@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 /// ```
 ///
 /// [IntelliJ IDEA]: https://www.jetbrains.com/help/idea/json.html
-#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct IntellijSchemaExt {
     /// Rich HTML description shown in editor hover popups and documentation
     /// panels.
@@ -76,7 +76,7 @@ pub struct IntellijSchemaExt {
 
 /// Metadata for a single enum value in
 /// [`x-intellij-enum-metadata`](IntellijSchemaExt::enum_metadata).
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EnumValueMeta {
     /// Human-readable description of what this enum value means.
     #[serde(skip_serializing_if = "Option::is_none")]

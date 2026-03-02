@@ -18,6 +18,7 @@ indexmap.workspace = true
 schemars.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+strum.workspace = true
 url.workspace = true
 
 [dev-dependencies]

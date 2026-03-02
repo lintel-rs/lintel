@@ -54,7 +54,7 @@ assert_eq!(schema.required_set(), &["name"]);
 assert_eq!(schema.type_str().as_deref(), Some("object"));
 
 // Access a nested property schema
-let name_sv = schema.properties.as_ref().unwrap().get("name").unwrap();
+let name_sv = schema.properties.get("name").unwrap();
 let name = name_sv.as_schema().unwrap();
 assert!(matches!(name.type_, Some(TypeValue::Single(ref t)) if *t == SimpleType::String));
 ```
@@ -74,7 +74,7 @@ props.insert("email".to_string(), SchemaValue::Schema(Box::new(Schema {
 
 let schema = Schema {
     type_: Some(TypeValue::Single(SimpleType::Object)),
-    properties: Some(props),
+    properties: props,
     required: Some(vec!["email".into()]),
     ..Default::default()
 };

@@ -21,7 +21,7 @@ use serde_json::Value;
 /// ```
 ///
 /// [Lintel]: https://github.com/lintel-rs/lintel
-#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LintelSchemaExt {
     /// URL the schema was originally fetched from.

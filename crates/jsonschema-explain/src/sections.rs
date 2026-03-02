@@ -136,9 +136,9 @@ fn render_defs_block<'a>(
         if let Some(desc) = get_description(def_schema) {
             write_description(out, desc, f, "        ");
         }
-        if let Some(ref props) = def_schema.properties {
+        if !def_schema.properties.is_empty() {
             let req = required_set(def_schema);
-            render_properties(out, props, &req, root, f, 2);
+            render_properties(out, &def_schema.properties, &req, root, f, 2);
         }
         out.push('\n');
     }

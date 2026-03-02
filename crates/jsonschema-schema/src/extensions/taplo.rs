@@ -117,7 +117,7 @@ pub struct ExtLinks {
 ///
 /// [Taplo]: https://taplo.tamasfe.dev
 /// [taplo-info]: https://github.com/tamasfe/taplo/blob/main/crates/taplo-common/src/schema/ext.rs
-#[derive(Debug, Default, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct TaploInfoSchemaExt {
     /// Schema author credits, typically `"Name (url)"`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
