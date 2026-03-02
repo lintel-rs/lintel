@@ -1,9 +1,13 @@
+use alloc::collections::BTreeMap;
+
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ext_lintel::LintelExt;
-use crate::ext_taplo::TaploSchemaExt;
+use crate::extensions::LintelExt;
+use crate::extensions::TaploInfo;
+use crate::extensions::TaploSchemaExt;
+use crate::extensions::TombiExt;
 
 /// A JSON Schema value — either a boolean schema or an object schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +33,19 @@ pub struct Schema {
     pub schema: Option<String>,
     #[serde(rename = "$id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(
+        rename = "markdownDescription",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub markdown_description: Option<String>,
+    #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
+    pub x_lintel: Option<LintelExt>,
+
     #[serde(rename = "$ref", skip_serializing_if = "Option::is_none")]
     pub ref_: Option<String>,
     #[serde(rename = "$anchor", skip_serializing_if = "Option::is_none")]
@@ -40,18 +57,9 @@ pub struct Schema {
     #[serde(rename = "$comment", skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
     #[serde(rename = "$defs", skip_serializing_if = "Option::is_none")]
-    pub defs: Option<IndexMap<String, SchemaValue>>,
+    pub defs: Option<BTreeMap<String, SchemaValue>>,
 
     // --- Metadata ---
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(
-        rename = "markdownDescription",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub markdown_description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -169,37 +177,16 @@ pub struct Schema {
     #[serde(rename = "contentSchema", skip_serializing_if = "Option::is_none")]
     pub content_schema: Option<Box<SchemaValue>>,
 
-    // --- Extensions ---
     #[serde(rename = "x-taplo", skip_serializing_if = "Option::is_none")]
     pub x_taplo: Option<TaploSchemaExt>,
     #[serde(rename = "x-taplo-info", skip_serializing_if = "Option::is_none")]
-    pub x_taplo_info: Option<Value>,
-    #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
-    pub x_lintel: Option<LintelExt>,
-    #[serde(
-        rename = "x-tombi-toml-version",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_toml_version: Option<String>,
-    #[serde(
-        rename = "x-tombi-table-keys-order",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_table_keys_order: Option<Value>,
-    #[serde(
-        rename = "x-tombi-additional-key-label",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_additional_key_label: Option<String>,
-    #[serde(
-        rename = "x-tombi-array-values-order",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_array_values_order: Option<Value>,
+    pub x_taplo_info: Option<TaploInfo>,
+    #[serde(flatten)]
+    pub x_tombi: TombiExt,
 
     // --- Catch-all for unknown properties ---
     #[serde(flatten)]
-    pub extra: IndexMap<String, Value>,
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl SchemaValue {
@@ -568,7 +555,11 @@ impl Schema {
                     .as_ref()
                     .and_then(|m| m.get(segment))
             })
-            .or_else(|| self.defs.as_ref().and_then(|m| m.get(segment)))
+            .or_else(|| {
+                self.defs
+                    .as_ref()
+                    .and_then(|m: &BTreeMap<String, SchemaValue>| m.get(segment))
+            })
             .or_else(|| self.dependent_schemas.as_ref().and_then(|m| m.get(segment)))
     }
 }
@@ -802,7 +793,7 @@ mod tests {
             ref_: Some("#/$defs/Item".into()),
             ..Default::default()
         }));
-        let mut defs = IndexMap::new();
+        let mut defs = BTreeMap::new();
         defs.insert("Item".into(), item_schema);
         let mut props = IndexMap::new();
         props.insert("item".into(), ref_schema);
