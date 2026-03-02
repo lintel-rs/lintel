@@ -4,8 +4,7 @@ use indexmap::IndexMap;
 use jsonschema_schema::{Schema, SchemaValue, ref_name};
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type, format_type_suffix, format_value};
-use crate::man::write_description;
-use crate::man::write_label;
+use crate::man::{write_description, write_label, write_label_wrapped};
 use crate::schema::{get_description, required_set, resolve_ref, schema_type_str, variant_summary};
 
 /// Maximum nesting depth for recursive property rendering.
@@ -159,23 +158,13 @@ fn render_property_details(
     }
 
     if let Some(ref default) = prop_schema.default {
-        write_label(
-            out,
-            desc_indent,
-            "Default",
-            &format!("{}{}{}", f.magenta, format_value(default), f.reset),
-        );
+        write_label_wrapped(out, desc_indent, "Default", &format_value(default), f);
     }
 
     render_enum_with_descriptions(out, prop_schema, f, desc_indent);
 
     if let Some(ref c) = prop_schema.const_ {
-        write_label(
-            out,
-            desc_indent,
-            "Constant",
-            &format!("{}{c}{}", f.magenta, f.reset),
-        );
+        write_label_wrapped(out, desc_indent, "Constant", &c.to_string(), f);
     }
 
     if let Some(ref examples) = prop_schema.examples
@@ -183,13 +172,10 @@ fn render_property_details(
     {
         let joined: String = examples
             .iter()
-            .map(|v| {
-                let display = format_value(v);
-                format!("{}{display}{}", f.magenta, f.reset)
-            })
+            .map(format_value)
             .collect::<Vec<_>>()
             .join(", ");
-        write_label(out, desc_indent, "Examples", &joined);
+        write_label_wrapped(out, desc_indent, "Examples", &joined, f);
     }
 
     render_constraints(out, prop_schema, f, desc_indent);

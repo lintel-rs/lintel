@@ -366,6 +366,32 @@ mod tests {
     }
 
     #[test]
+    fn long_default_wraps() {
+        let long_val = "First of: `tsconfig.json` rootDir if specified, directory containing `tsconfig.json`, or cwd if no `tsconfig.json` is loaded.";
+        let schema = sv(json!({
+            "type": "object",
+            "properties": {
+                "declarationDir": {
+                    "type": "string",
+                    "default": long_val
+                }
+            }
+        }));
+
+        let output = explain(&schema, "wrap-test", &plain());
+        // Short defaults stay on one line, but this is too long — the label
+        // should appear on its own line with the value wrapped below.
+        assert!(
+            output.contains("Default:\n"),
+            "long default should wrap onto next line\n{output}"
+        );
+        assert!(
+            output.contains(long_val),
+            "full default value should appear in output\n{output}"
+        );
+    }
+
+    #[test]
     fn ref_resolution() {
         let schema = sv(json!({
             "type": "object",
@@ -796,6 +822,11 @@ mod tests {
         let output = explain(&schema, "comment-test", &plain());
         assert!(output.contains("COMMENT"));
         assert!(output.contains("Root level comment"));
+        // No double blank lines — only one blank line between sections
+        assert!(
+            !output.contains("\n\n\n"),
+            "should not have triple newlines (double blank lines)\n{output}"
+        );
     }
 
     #[test]
