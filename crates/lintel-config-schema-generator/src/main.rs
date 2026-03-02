@@ -25,6 +25,7 @@ fn main() {
             lintel_catalog_builder::config::schema(),
         ),
         ("catalog.json", schema_catalog::schema()),
+        ("jsonschema-2020-12.json", jsonschema_schema::schema()),
     ];
 
     for (filename, schema) in configs {

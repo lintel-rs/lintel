@@ -15,8 +15,10 @@ workspace = true
 
 [dependencies]
 indexmap.workspace = true
+schemars.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }

@@ -1,8 +1,9 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Taplo JSON Schema extension (`x-taplo`).
 /// Compatible with taplo-common's `TaploSchemaExt`.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TaploSchemaExt {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -17,7 +18,7 @@ pub struct TaploSchemaExt {
     pub plugins: Vec<String>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtDocs {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -30,7 +31,7 @@ pub struct ExtDocs {
     pub enum_values: Option<Vec<Option<String>>>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtLinks {
     #[serde(skip_serializing_if = "Option::is_none")]
