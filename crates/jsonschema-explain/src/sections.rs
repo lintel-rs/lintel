@@ -1,9 +1,10 @@
 use core::fmt::Write;
 
+use jsonschema_schema::flatten::IncludedSchema;
 use jsonschema_schema::{Schema, SchemaValue};
 use serde_json::Value;
 
-use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type_suffix, format_value};
+use crate::fmt::{Fmt, format_type_suffix, format_value};
 use crate::man::{write_description, write_label, write_section};
 use crate::render::{render_properties, render_variant_block};
 use crate::schema::{get_description, required_set, resolve_ref, schema_type_str};
@@ -27,37 +28,57 @@ pub(crate) fn render_schema_section(out: &mut String, schema: &Schema, f: &Fmt<'
     out.push('\n');
 }
 
-/// Render `oneOf`/`anyOf`/`allOf` variant sections.
+/// Render `oneOf`/`anyOf` variant sections (allOf is flattened separately).
 pub(crate) fn render_variants_section(
     out: &mut String,
     schema: &Schema,
     root: &SchemaValue,
     f: &Fmt<'_>,
 ) {
-    for keyword in COMPOSITION_KEYWORDS {
-        let variants = match *keyword {
-            "oneOf" => schema.one_of.as_ref(),
-            "anyOf" => schema.any_of.as_ref(),
-            "allOf" => schema.all_of.as_ref(),
-            _ => None,
-        };
-        if let Some(variants) = variants {
-            let label = match *keyword {
-                "oneOf" => "ONE OF",
-                "anyOf" => "ANY OF",
-                "allOf" => "ALL OF",
-                _ => keyword,
-            };
-            write_section(out, label, f);
-            for (i, variant) in variants.iter().enumerate() {
-                let resolved_sv = resolve_ref(variant, root);
-                if let Some(resolved) = resolved_sv.as_schema() {
-                    render_variant_block(out, resolved, variant, root, f, i + 1);
-                }
+    // oneOf
+    if let Some(ref variants) = schema.one_of {
+        write_section(out, "ONE OF", f);
+        for (i, variant) in variants.iter().enumerate() {
+            let resolved_sv = resolve_ref(variant, root);
+            if let Some(resolved) = resolved_sv.as_schema() {
+                render_variant_block(out, resolved, variant, root, f, i + 1);
             }
-            out.push('\n');
+        }
+        out.push('\n');
+    }
+
+    // anyOf
+    if let Some(ref variants) = schema.any_of {
+        write_section(out, "ANY OF", f);
+        for (i, variant) in variants.iter().enumerate() {
+            let resolved_sv = resolve_ref(variant, root);
+            if let Some(resolved) = resolved_sv.as_schema() {
+                render_variant_block(out, resolved, variant, root, f, i + 1);
+            }
+        }
+        out.push('\n');
+    }
+}
+
+/// Render an INCLUDES section showing provenance of merged `allOf` sub-schemas.
+pub(crate) fn render_includes_section(out: &mut String, includes: &[IncludedSchema], f: &Fmt<'_>) {
+    if includes.is_empty() {
+        return;
+    }
+
+    write_section(out, "INCLUDES", f);
+    for inc in includes {
+        let type_suffix = if let Some(ref ty) = inc.type_str {
+            format!(" {}({ty}){}", f.dim, f.reset)
+        } else {
+            String::new()
+        };
+        let _ = writeln!(out, "    {}{}{}{type_suffix}", f.green, inc.title, f.reset);
+        if let Some(ref source) = inc.source {
+            write_label(out, "        ", "Source", source);
         }
     }
+    out.push('\n');
 }
 
 /// Render an EXAMPLES section when the schema has top-level `examples`.
@@ -133,6 +154,13 @@ fn render_defs_block<'a>(
             String::new()
         };
         let _ = writeln!(out, "    {}{def_name}{}{dep_tag}{suffix}", f.green, f.reset);
+        if let Some(src) = def_schema
+            .x_lintel
+            .as_ref()
+            .and_then(|xl| xl.source.as_deref())
+        {
+            write_label(out, "        ", "Source", src);
+        }
         if let Some(desc) = get_description(def_schema) {
             write_description(out, desc, f, "        ");
         }
@@ -275,6 +303,32 @@ mod tests {
         assert!(!out.contains("..."));
     }
 
+    #[test]
+    fn definitions_show_x_lintel_source() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+        let val = json!({
+            "$defs": {
+                "Core vocabulary meta-schema": {
+                    "type": "object",
+                    "x-lintel": {
+                        "source": "https://json-schema.org/draft/2020-12/meta/core"
+                    },
+                    "properties": {
+                        "$id": { "type": "string" }
+                    }
+                }
+            }
+        });
+        let schema = parse_schema(val.clone());
+        let root = parse_sv(val);
+
+        render_definitions_section(&mut out, &schema, &root, &f);
+        assert!(out.contains("DEFINITIONS"));
+        assert!(out.contains("Core vocabulary meta-schema"));
+        assert!(out.contains("Source: https://json-schema.org/draft/2020-12/meta/core"));
+    }
+
     // --- VARIANTS section ---
 
     #[test]
@@ -297,33 +351,55 @@ mod tests {
     }
 
     #[test]
-    fn allof_refs_expanded() {
+    fn allof_not_rendered_as_variants() {
         let mut out = String::new();
         let f = Fmt::plain(80);
         let val = json!({
             "allOf": [
-                { "$ref": "#/definitions/base" }
-            ],
-            "definitions": {
-                "base": {
-                    "type": "object",
-                    "description": "Base configuration",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "The name"
-                        }
-                    }
-                }
-            }
+                { "type": "string" },
+                { "type": "integer" }
+            ]
         });
         let schema = parse_schema(val.clone());
         let root = parse_sv(val);
 
         render_variants_section(&mut out, &schema, &root, &f);
-        assert!(out.contains("ALL OF"));
-        assert!(out.contains("base"));
-        assert!(out.contains("Base configuration"));
-        assert!(out.contains("name (string)"));
+        assert!(!out.contains("ALL OF"));
+    }
+
+    // --- INCLUDES section ---
+
+    #[test]
+    fn includes_section_renders() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+        let includes = vec![
+            IncludedSchema {
+                title: "Core vocabulary meta-schema".to_string(),
+                type_str: Some("object | boolean".to_string()),
+                source: Some("https://json-schema.org/draft/2020-12/meta/core".to_string()),
+            },
+            IncludedSchema {
+                title: "Applicator vocabulary".to_string(),
+                type_str: None,
+                source: None,
+            },
+        ];
+
+        render_includes_section(&mut out, &includes, &f);
+        assert!(out.contains("INCLUDES"));
+        assert!(out.contains("Core vocabulary meta-schema"));
+        assert!(out.contains("(object | boolean)"));
+        assert!(out.contains("Source: https://json-schema.org/draft/2020-12/meta/core"));
+        assert!(out.contains("Applicator vocabulary"));
+    }
+
+    #[test]
+    fn empty_includes_not_shown() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+
+        render_includes_section(&mut out, &[], &f);
+        assert!(out.is_empty());
     }
 }

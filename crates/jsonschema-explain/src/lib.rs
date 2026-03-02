@@ -17,8 +17,8 @@ use render::{
 };
 use schema::{get_description, required_set, schema_type_str};
 use sections::{
-    render_definitions_section, render_examples_section, render_schema_section,
-    render_variants_section,
+    render_definitions_section, render_examples_section, render_includes_section,
+    render_schema_section, render_variants_section,
 };
 
 pub use schema::{navigate_pointer, resolve_ref as resolve_schema_ref};
@@ -65,6 +65,20 @@ pub fn explain(schema: &SchemaValue, name: &str, opts: &ExplainOptions) -> Strin
 
 /// Render a `Schema` as human-readable terminal documentation.
 fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOptions) -> String {
+    // Flatten allOf into the root schema if present
+    let flattened = s.flatten(root);
+    let s = &flattened.schema;
+    let includes = &flattened.includes;
+
+    // If allOf was flattened, wrap the merged schema in a SchemaValue for rendering
+    let merged_root;
+    let render_root = if includes.is_empty() {
+        root
+    } else {
+        merged_root = SchemaValue::Schema(Box::new(s.clone()));
+        &merged_root
+    };
+
     let mut out = String::new();
     let f = Fmt::from_opts(opts);
 
@@ -124,7 +138,7 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
     let required = required_set(s);
     if let Some(ref props) = s.properties {
         write_section(&mut out, "PROPERTIES", &f);
-        render_properties(&mut out, props, &required, root, &f, 1);
+        render_properties(&mut out, props, &required, render_root, &f, 1);
         out.push('\n');
     }
 
@@ -154,13 +168,14 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
         && let Some(ref items) = s.items
     {
         write_section(&mut out, "ITEMS", &f);
-        render_subschema(&mut out, items, root, &f, 1);
+        render_subschema(&mut out, items, render_root, &f, 1);
         out.push('\n');
     }
 
     render_examples_section(&mut out, s, &f);
-    render_variants_section(&mut out, s, root, &f);
-    render_definitions_section(&mut out, s, root, &f);
+    render_includes_section(&mut out, includes, &f);
+    render_variants_section(&mut out, s, render_root, &f);
+    render_definitions_section(&mut out, s, render_root, &f);
 
     out
 }

@@ -1,4 +1,5 @@
 use alloc::collections::BTreeMap;
+use core::ops::Add;
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -237,6 +238,14 @@ impl Schema {
     /// Produce a short human-readable type string.
     pub fn type_str(&self) -> Option<String> {
         schema_type_str(self)
+    }
+
+    /// Flatten composition keywords (currently `allOf`) into a single merged schema.
+    ///
+    /// Returns a [`FlattenedSchema`](crate::FlattenedSchema) containing the merged
+    /// schema and provenance information about which sub-schemas were included.
+    pub fn flatten(&self, root: &SchemaValue) -> crate::flatten::FlattenedSchema {
+        crate::flatten::flatten_all_of(self, root)
     }
 
     /// Look up a schema-keyword field by its JSON key name.
@@ -569,6 +578,192 @@ impl Schema {
                     .and_then(|m: &BTreeMap<String, SchemaValue>| m.get(segment))
             })
             .or_else(|| self.dependent_schemas.as_ref().and_then(|m| m.get(segment)))
+    }
+}
+
+/// Merge two `Option<IndexMap>` values with left-bias: entries from `source`
+/// are added only if the key does not already exist in `target`.
+fn merge_option_index_map<V>(
+    target: Option<IndexMap<String, V>>,
+    source: Option<IndexMap<String, V>>,
+) -> Option<IndexMap<String, V>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for (k, v) in s {
+                t.entry(k).or_insert(v);
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+/// Merge two `Option<BTreeMap>` values with left-bias: entries from `source`
+/// are added only if the key does not already exist in `target`.
+fn merge_option_btree_map<V>(
+    target: Option<BTreeMap<String, V>>,
+    source: Option<BTreeMap<String, V>>,
+) -> Option<BTreeMap<String, V>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for (k, v) in s {
+                t.entry(k).or_insert(v);
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+/// Merge two `Option<Vec<String>>` values by taking the union (deduplicated).
+fn union_option_vec(
+    target: Option<Vec<String>>,
+    source: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for item in s {
+                if !t.contains(&item) {
+                    t.push(item);
+                }
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+impl Add for Schema {
+    type Output = Self;
+
+    /// Merge two schemas with left-bias.
+    ///
+    /// - **Map fields** (`properties`, `pattern_properties`, `defs`, `dependent_schemas`):
+    ///   merge — rhs entries added only if key doesn't exist in self.
+    /// - **`required`**: union (deduplicate).
+    /// - **`extra`** (`BTreeMap` catch-all): merge — rhs entries added only if key doesn't exist.
+    /// - **All other `Option<T>` fields**: `self.field.or(rhs.field)` — left wins.
+    ///
+    /// Composition keywords (`all_of`, `any_of`, `one_of`) are NOT merged.
+    fn add(self, rhs: Self) -> Self {
+        let extra = {
+            let mut merged = self.extra;
+            for (k, v) in rhs.extra {
+                merged.entry(k).or_insert(v);
+            }
+            merged
+        };
+
+        let x_tombi = TombiExt {
+            toml_version: self.x_tombi.toml_version.or(rhs.x_tombi.toml_version),
+            table_keys_order: self
+                .x_tombi
+                .table_keys_order
+                .or(rhs.x_tombi.table_keys_order),
+            additional_key_label: self
+                .x_tombi
+                .additional_key_label
+                .or(rhs.x_tombi.additional_key_label),
+            array_values_order: self
+                .x_tombi
+                .array_values_order
+                .or(rhs.x_tombi.array_values_order),
+        };
+
+        Schema {
+            // Core identifiers
+            schema: self.schema.or(rhs.schema),
+            id: self.id.or(rhs.id),
+            title: self.title.or(rhs.title),
+            description: self.description.or(rhs.description),
+            markdown_description: self.markdown_description.or(rhs.markdown_description),
+            x_lintel: self.x_lintel.or(rhs.x_lintel),
+            ref_: self.ref_.or(rhs.ref_),
+            anchor: self.anchor.or(rhs.anchor),
+            dynamic_ref: self.dynamic_ref.or(rhs.dynamic_ref),
+            dynamic_anchor: self.dynamic_anchor.or(rhs.dynamic_anchor),
+            comment: self.comment.or(rhs.comment),
+            defs: merge_option_btree_map(self.defs, rhs.defs),
+
+            // Metadata
+            default: self.default.or(rhs.default),
+            deprecated: self.deprecated.or(rhs.deprecated),
+            read_only: self.read_only.or(rhs.read_only),
+            write_only: self.write_only.or(rhs.write_only),
+            examples: self.examples.or(rhs.examples),
+
+            // Type
+            type_: self.type_.or(rhs.type_),
+            enum_: self.enum_.or(rhs.enum_),
+            const_: self.const_.or(rhs.const_),
+
+            // Object — map fields are merged
+            properties: merge_option_index_map(self.properties, rhs.properties),
+            pattern_properties: merge_option_index_map(
+                self.pattern_properties,
+                rhs.pattern_properties,
+            ),
+            additional_properties: self.additional_properties.or(rhs.additional_properties),
+            required: union_option_vec(self.required, rhs.required),
+            property_names: self.property_names.or(rhs.property_names),
+            min_properties: self.min_properties.or(rhs.min_properties),
+            max_properties: self.max_properties.or(rhs.max_properties),
+            unevaluated_properties: self.unevaluated_properties.or(rhs.unevaluated_properties),
+
+            // Array
+            items: self.items.or(rhs.items),
+            prefix_items: self.prefix_items.or(rhs.prefix_items),
+            contains: self.contains.or(rhs.contains),
+            min_contains: self.min_contains.or(rhs.min_contains),
+            max_contains: self.max_contains.or(rhs.max_contains),
+            min_items: self.min_items.or(rhs.min_items),
+            max_items: self.max_items.or(rhs.max_items),
+            unique_items: self.unique_items.or(rhs.unique_items),
+            unevaluated_items: self.unevaluated_items.or(rhs.unevaluated_items),
+
+            // Number
+            minimum: self.minimum.or(rhs.minimum),
+            maximum: self.maximum.or(rhs.maximum),
+            exclusive_minimum: self.exclusive_minimum.or(rhs.exclusive_minimum),
+            exclusive_maximum: self.exclusive_maximum.or(rhs.exclusive_maximum),
+            multiple_of: self.multiple_of.or(rhs.multiple_of),
+
+            // String
+            min_length: self.min_length.or(rhs.min_length),
+            max_length: self.max_length.or(rhs.max_length),
+            pattern: self.pattern.or(rhs.pattern),
+            format: self.format.or(rhs.format),
+
+            // Composition — NOT merged
+            all_of: self.all_of.or(rhs.all_of),
+            any_of: self.any_of.or(rhs.any_of),
+            one_of: self.one_of.or(rhs.one_of),
+            not: self.not.or(rhs.not),
+
+            // Conditional
+            if_: self.if_.or(rhs.if_),
+            then_: self.then_.or(rhs.then_),
+            else_: self.else_.or(rhs.else_),
+
+            // Dependencies
+            dependent_required: self.dependent_required.or(rhs.dependent_required),
+            dependent_schemas: merge_option_index_map(
+                self.dependent_schemas,
+                rhs.dependent_schemas,
+            ),
+
+            // Content
+            content_media_type: self.content_media_type.or(rhs.content_media_type),
+            content_encoding: self.content_encoding.or(rhs.content_encoding),
+            content_schema: self.content_schema.or(rhs.content_schema),
+
+            // Extensions
+            x_taplo: self.x_taplo.or(rhs.x_taplo),
+            x_taplo_info: self.x_taplo_info.or(rhs.x_taplo_info),
+            x_tombi,
+
+            extra,
+        }
     }
 }
 
@@ -945,5 +1140,99 @@ mod tests {
         if schema.x_taplo.is_some() {
             // Just verify it parsed without error
         }
+    }
+
+    // --- impl Add ---
+
+    #[test]
+    fn add_merges_properties() {
+        let left = Schema {
+            properties: Some(IndexMap::from([("a".into(), SchemaValue::Bool(true))])),
+            ..Default::default()
+        };
+        let right = Schema {
+            properties: Some(IndexMap::from([
+                ("a".into(), SchemaValue::Bool(false)), // should NOT overwrite
+                ("b".into(), SchemaValue::Bool(true)),
+            ])),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let props = merged.properties.unwrap();
+        assert_eq!(props.len(), 2);
+        assert!(matches!(props["a"], SchemaValue::Bool(true)));
+        assert!(matches!(props["b"], SchemaValue::Bool(true)));
+    }
+
+    #[test]
+    fn add_unions_required() {
+        let left = Schema {
+            required: Some(vec!["a".into(), "b".into()]),
+            ..Default::default()
+        };
+        let right = Schema {
+            required: Some(vec!["b".into(), "c".into()]),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let req = merged.required.unwrap();
+        assert_eq!(req, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn add_left_bias_for_scalars() {
+        let left = Schema {
+            title: Some("Left".into()),
+            type_: Some(TypeValue::Single("object".into())),
+            ..Default::default()
+        };
+        let right = Schema {
+            title: Some("Right".into()),
+            type_: Some(TypeValue::Single("string".into())),
+            description: Some("From right".into()),
+            ..Default::default()
+        };
+        let merged = left + right;
+        assert_eq!(merged.title.as_deref(), Some("Left"));
+        assert!(matches!(merged.type_, Some(TypeValue::Single(ref s)) if s == "object"));
+        assert_eq!(merged.description.as_deref(), Some("From right"));
+    }
+
+    #[test]
+    fn add_merges_defs() {
+        let left = Schema {
+            defs: Some(BTreeMap::from([("Foo".into(), SchemaValue::Bool(true))])),
+            ..Default::default()
+        };
+        let right = Schema {
+            defs: Some(BTreeMap::from([
+                ("Foo".into(), SchemaValue::Bool(false)), // should NOT overwrite
+                ("Bar".into(), SchemaValue::Bool(true)),
+            ])),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let defs = merged.defs.unwrap();
+        assert_eq!(defs.len(), 2);
+        assert!(matches!(defs["Foo"], SchemaValue::Bool(true)));
+        assert!(matches!(defs["Bar"], SchemaValue::Bool(true)));
+    }
+
+    #[test]
+    fn add_merges_extra() {
+        let left = Schema {
+            extra: BTreeMap::from([("x-a".into(), json!(1))]),
+            ..Default::default()
+        };
+        let right = Schema {
+            extra: BTreeMap::from([
+                ("x-a".into(), json!(2)), // should NOT overwrite
+                ("x-b".into(), json!(3)),
+            ]),
+            ..Default::default()
+        };
+        let merged = left + right;
+        assert_eq!(merged.extra["x-a"], json!(1));
+        assert_eq!(merged.extra["x-b"], json!(3));
     }
 }

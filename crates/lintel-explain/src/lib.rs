@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 
+extern crate alloc;
+
+mod inline;
 mod path;
 pub mod resolve;
 
@@ -402,8 +405,8 @@ async fn fetch_schema(
     is_remote: bool,
     cache: &CliCacheOptions,
 ) -> Result<jsonschema_schema::SchemaValue> {
+    let retriever = resolve::build_retriever(cache);
     let mut value: serde_json::Value = if is_remote {
-        let retriever = resolve::build_retriever(cache);
         let (val, _) = retriever
             .fetch(schema_uri)
             .await
@@ -416,6 +419,7 @@ async fn fetch_schema(
             .with_context(|| format!("failed to parse schema: {schema_uri}"))?
     };
 
+    inline::inline_external_refs(&mut value, schema_uri, &retriever).await?;
     jsonschema_migrate::migrate_to_2020_12(&mut value);
     serde_json::from_value(value)
         .with_context(|| format!("failed to deserialize schema: {schema_uri}"))
