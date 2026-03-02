@@ -3,5 +3,5 @@ source: crates/lintel/tests/e2e.rs
 expression: text
 ---
 error: ./tsconfig.json: Expected comma on line 4 column 25
-Checked 0 files in [TIME]. 1 error(s) found.
+Checked 0 files in [TIME]. 1 error found.
 exit code: 1

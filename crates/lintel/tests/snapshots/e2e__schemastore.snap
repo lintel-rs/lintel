@@ -1930,5 +1930,5 @@ error: ./schemastore/src/test/schema-org-thing/thing2.json: failed to read local
 error: ./schemastore/src/test/sil-kit-participant-configuration/full.silkit.json: failed to read local schema ./schemastore/src/test/sil-kit-participant-configuration/ParticipantConfiguration.schema.json: No such file or directory (os error 2)
 error: ./schemastore/src/test/sil-kit-registry-configuration/full.silkit-registry.json: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
 error: ./schemastore/src/test/sil-kit-registry-configuration/silkit-registry.json: failed to read local schema ./schemastore/src/test/sil-kit-registry-configuration/RegistryConfiguration.schema.json: No such file or directory (os error 2)
-Checked 1875 files in [TIME]. 1735 error(s) found.
+Checked 1875 files in [TIME]. 1735 errors found.
 exit code: 1

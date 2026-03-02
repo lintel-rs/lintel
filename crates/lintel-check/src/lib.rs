@@ -1,10 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::Result;
 use bpaf::Bpaf;
-pub use lintel_validate::Reporter;
+
+use lintel_diagnostics::reporter::{CheckResult, CheckedFile, Reporter};
 
 // -----------------------------------------------------------------------
 // CheckArgs — CLI struct for the `lintel check` command
@@ -26,29 +27,71 @@ pub fn check_args() -> impl bpaf::Parser<CheckArgs> {
     check_args_inner()
 }
 
-/// Load `lintel.toml`, merge excludes, and return the config + merged excludes.
-fn load_and_merge_config(
-    args: &lintel_validate::ValidateArgs,
-) -> (lintel_config::Config, Vec<String>) {
-    let search_dir = args
-        .globs
-        .iter()
-        .find(|g| std::path::Path::new(g).is_dir())
-        .map(PathBuf::from);
+/// Run all checks and return the result without reporting.
+///
+/// Calls `on_file_checked` for each file as it is validated (for streaming
+/// progress). The caller is responsible for reporting the result.
+///
+/// # Errors
+///
+/// Returns an error if schema validation fails to run (e.g. network or I/O issues).
+pub async fn check(
+    args: &mut CheckArgs,
+    on_file_checked: impl FnMut(&CheckedFile),
+) -> Result<CheckResult> {
+    // Save original args before validate's merge_config modifies them.
+    let original_globs = args.validate.globs.clone();
+    let original_exclude = args.validate.exclude.clone();
 
-    let cfg = match &search_dir {
-        Some(dir) => lintel_config::find_and_load(dir)
-            .ok()
-            .flatten()
-            .unwrap_or_default(),
-        None => lintel_config::load().unwrap_or_default(),
-    };
+    lintel_validate::merge_config(&mut args.validate);
 
-    // Config excludes first, then CLI excludes.
-    let mut excludes = cfg.exclude.clone();
-    excludes.extend(args.exclude.iter().cloned());
+    let lib_args = lintel_validate::validate::ValidateArgs::from(&args.validate);
 
-    (cfg, excludes)
+    // Collect and read files once.
+    let files = lintel_validate::validate::collect_files(&lib_args.globs, &lib_args.exclude)?;
+    let mut read_errors = Vec::new();
+    let file_contents = lintel_validate::validate::read_files(&files, &mut read_errors).await;
+
+    if args.fix {
+        let fixed = lintel_format::fix_format(&original_globs, &original_exclude)?;
+        if fixed > 0 {
+            eprintln!("Fixed formatting in {fixed} file(s).");
+        }
+
+        let mut result = lintel_validate::validate::run_with_contents(
+            &lib_args,
+            file_contents,
+            None,
+            on_file_checked,
+        )
+        .await?;
+        result.errors.extend(read_errors);
+        sort_errors(&mut result.errors);
+        Ok(result)
+    } else {
+        // Check formatting using pre-read contents (borrows, no extra I/O).
+        let format_errors = lintel_format::check_format_contents(
+            &file_contents,
+            &original_globs,
+            &original_exclude,
+        );
+
+        // Run validation (takes ownership of file contents).
+        let mut result = lintel_validate::validate::run_with_contents(
+            &lib_args,
+            file_contents,
+            None,
+            on_file_checked,
+        )
+        .await?;
+
+        // Merge format errors and I/O errors, then sort.
+        result.errors.extend(format_errors);
+        result.errors.extend(read_errors);
+        sort_errors(&mut result.errors);
+
+        Ok(result)
+    }
 }
 
 /// Run all checks: schema validation and formatting.
@@ -62,39 +105,18 @@ fn load_and_merge_config(
 ///
 /// Returns an error if schema validation fails to run (e.g. network or I/O issues).
 pub async fn run(args: &mut CheckArgs, reporter: &mut dyn Reporter) -> Result<bool> {
-    // 1. Load config once
-    let (config, excludes) = load_and_merge_config(&args.validate);
+    let start = Instant::now();
+    let result = check(args, |file| reporter.on_file_checked(file)).await?;
+    let had_errors = result.has_errors();
+    let elapsed = start.elapsed();
+    reporter.report(result, elapsed);
+    Ok(had_errors)
+}
 
-    // 2. Discover files once (using validate's filter — superset of format's)
-    let all_files = lintel_config::discover::collect_files(&args.validate.globs, &excludes, |p| {
-        lintel_validate::parsers::detect_format(p).is_some()
-    })?;
-
-    // 3. Merge config into validate args (for schema mappings, overrides, etc.)
-    //    We set excludes to empty since files are already filtered.
-    args.validate.exclude = excludes;
-
-    // 4. Run validation on discovered files
-    let had_validation_errors =
-        lintel_validate::run_with_files(&mut args.validate, all_files.clone(), reporter).await?;
-
-    // 5. Run format check/fix on same files (format skips unsupported extensions)
-    let format_config = lintel_format::format_config_from_lintel(&config);
-
-    if args.fix {
-        let fixed = lintel_format::fix_format_files(&all_files, &format_config)?;
-        if fixed > 0 {
-            eprintln!("Fixed formatting in {fixed} file(s).");
-        }
-        Ok(had_validation_errors)
-    } else {
-        let format_diagnostics = lintel_format::check_format_files(&all_files, &format_config);
-        let had_format_errors = !format_diagnostics.is_empty();
-
-        for diag in format_diagnostics {
-            eprintln!("{:?}", miette::Report::new(diag));
-        }
-
-        Ok(had_validation_errors || had_format_errors)
-    }
+fn sort_errors(errors: &mut [lintel_diagnostics::LintelDiagnostic]) {
+    errors.sort_by(|a, b| {
+        a.path()
+            .cmp(b.path())
+            .then_with(|| a.offset().cmp(&b.offset()))
+    });
 }

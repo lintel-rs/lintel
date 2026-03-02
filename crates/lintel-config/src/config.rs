@@ -243,7 +243,9 @@ impl Config {
     pub fn find_schema_mapping(&self, path: &str, file_name: &str) -> Option<&str> {
         let path = path.strip_prefix("./").unwrap_or(path);
         for (pattern, url) in &self.schemas {
-            if glob_match::glob_match(pattern, path) || glob_match::glob_match(pattern, file_name) {
+            if glob_matcher::glob_match(pattern, path)
+                || glob_matcher::glob_match(pattern, file_name)
+            {
                 return Some(url);
             }
         }
@@ -262,12 +264,15 @@ impl Config {
         let path = path.strip_prefix("./").unwrap_or(path);
         for ov in &self.overrides {
             let file_match = !ov.files.is_empty()
-                && ov.files.iter().any(|pat| glob_match::glob_match(pat, path));
+                && ov
+                    .files
+                    .iter()
+                    .any(|pat| glob_matcher::glob_match(pat, path));
             let schema_match = !ov.schemas.is_empty()
                 && schema_uris.iter().any(|uri| {
                     ov.schemas
                         .iter()
-                        .any(|pat| glob_match::glob_match(pat, uri))
+                        .any(|pat| glob_matcher::glob_match(pat, uri))
                 });
             if (file_match || schema_match)
                 && let Some(val) = ov.validate_formats

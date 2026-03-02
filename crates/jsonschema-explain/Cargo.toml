@@ -1,6 +1,6 @@
 [package]
 name = "jsonschema-explain"
-version = "0.2.5"
+version = "0.2.6"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -15,5 +15,10 @@ workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
+indexmap.workspace = true
+jsonschema-schema = { version = "0.1.0", path = "../jsonschema-schema" }
 markdown-to-ansi = "0.2.0"
 serde_json.workspace = true
+
+[dev-dependencies]
+jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }

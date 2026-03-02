@@ -1,6 +1,6 @@
 [package]
 name = "lintel-cli-common"
-version = "0.0.6"
+version = "0.0.7"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -16,3 +16,4 @@ workspace = true
 [dependencies]
 bpaf = { workspace = true, features = ["bright-color"] }
 humantime = "2.3.0"
+terminal_size = "0.4.3"

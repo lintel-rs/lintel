@@ -1,23 +1,23 @@
 use miette::NamedSource;
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 use super::Parser;
 
 pub struct TomlParser;
 
 impl Parser for TomlParser {
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic> {
         let toml_value: toml::Value = toml::from_str(content).map_err(|e| {
             let offset = e.span().map_or(0, |s| s.start);
-            ParseDiagnostic {
+            LintelDiagnostic::Parse {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: offset.into(),
                 message: e.message().to_string(),
             }
         })?;
-        serde_json::to_value(toml_value).map_err(|e| ParseDiagnostic {
+        serde_json::to_value(toml_value).map_err(|e| LintelDiagnostic::Parse {
             src: NamedSource::new(file_name, content.to_string()),
             span: 0.into(),
             message: e.to_string(),

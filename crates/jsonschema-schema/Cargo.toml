@@ -1,0 +1,22 @@
+[package]
+name = "jsonschema-schema"
+version = "0.1.0"
+authors.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
+homepage.workspace = true
+keywords = ["json-schema"]
+license.workspace = true
+repository.workspace = true
+description = "Typed Rust representation of JSON Schema draft 2020-12"
+
+[lints]
+workspace = true
+
+[dependencies]
+indexmap.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }

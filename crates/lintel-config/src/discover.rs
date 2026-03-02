@@ -90,7 +90,7 @@ pub fn is_excluded(path: &Path, excludes: &[String]) -> bool {
     };
     excludes
         .iter()
-        .any(|pattern| glob_match::glob_match(pattern, path_str))
+        .any(|pattern| glob_matcher::glob_match(pattern, path_str))
 }
 
 #[cfg(test)]

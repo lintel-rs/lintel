@@ -2,8 +2,8 @@
 
 pub mod reporters;
 
-pub use lintel_validate::Reporter;
-pub use lintel_validate::format_checked_verbose;
+use lintel_diagnostics::reporter::Reporter;
+
 pub use reporters::github::GithubReporter;
 pub use reporters::pretty::PrettyReporter;
 pub use reporters::text::TextReporter;

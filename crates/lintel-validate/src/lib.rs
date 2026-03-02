@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use bpaf::{Bpaf, ShellComp};
+use lintel_diagnostics::reporter::{CheckResult, Reporter};
 
 use lintel_cli_common::CliCacheOptions;
 
@@ -15,13 +16,10 @@ use lintel_cli_common::CliCacheOptions;
 // -----------------------------------------------------------------------
 
 pub mod catalog;
-pub mod diagnostics;
 pub mod parsers;
 pub mod registry;
-pub mod reporter;
+pub(crate) mod suggest;
 pub mod validate;
-
-pub use reporter::Reporter;
 
 // -----------------------------------------------------------------------
 // ValidateArgs — shared CLI struct
@@ -65,27 +63,6 @@ impl From<&ValidateArgs> for validate::ValidateArgs {
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
-
-/// Format a verbose line for a checked file, including cache status tags.
-pub fn format_checked_verbose(file: &validate::CheckedFile) -> String {
-    use lintel_schema_cache::CacheStatus;
-    use lintel_validation_cache::ValidationCacheStatus;
-
-    let schema_tag = match file.cache_status {
-        Some(CacheStatus::Hit) => " [cached]",
-        Some(CacheStatus::Miss | CacheStatus::Disabled) => " [fetched]",
-        None => "",
-    };
-    let validation_tag = match file.validation_cache_status {
-        Some(ValidationCacheStatus::Hit) => " [validated:cached]",
-        Some(ValidationCacheStatus::Miss) => " [validated]",
-        None => "",
-    };
-    format!(
-        "  {} ({}){schema_tag}{validation_tag}",
-        file.path, file.schema
-    )
-}
 
 /// Load `lintel.toml` and merge its excludes into the args.
 ///
@@ -133,39 +110,7 @@ pub async fn run(args: &mut ValidateArgs, reporter: &mut dyn Reporter) -> Result
 
     let lib_args = validate::ValidateArgs::from(&*args);
     let start = Instant::now();
-    let result = validate::run_with(&lib_args, None, |file| {
-        reporter.on_file_checked(file);
-    })
-    .await?;
-    let had_errors = result.has_errors();
-    let elapsed = start.elapsed();
-
-    reporter.report(result, elapsed);
-
-    Ok(had_errors)
-}
-
-/// Run validation on pre-discovered files and report results.
-///
-/// Like [`run`] but skips file discovery — uses the provided file list directly.
-/// Config is still loaded and merged for schema mappings, but excludes are not
-/// re-applied since the caller already filtered them.
-///
-/// Returns `true` if there were validation errors, `false` if clean.
-///
-/// # Errors
-///
-/// Returns an error if schema validation encounters an I/O error.
-pub async fn run_with_files(
-    args: &mut ValidateArgs,
-    files: Vec<std::path::PathBuf>,
-    reporter: &mut dyn Reporter,
-) -> Result<bool> {
-    merge_config(args);
-
-    let lib_args = validate::ValidateArgs::from(&*args);
-    let start = Instant::now();
-    let result = validate::run_with_files(&lib_args, None, files, |file| {
+    let result: CheckResult = validate::run_with(&lib_args, None, |file| {
         reporter.on_file_checked(file);
     })
     .await?;

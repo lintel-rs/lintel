@@ -123,6 +123,25 @@ pub struct CliCacheOptions {
     pub no_catalog: bool,
 }
 
+impl CLIGlobalOptions {
+    /// Determine whether to use color output based on `--colors` and TTY detection.
+    pub fn use_color(&self, is_tty: bool) -> bool {
+        match self.colors {
+            Some(ColorsArg::Force) => true,
+            Some(ColorsArg::Off) => false,
+            None => is_tty,
+        }
+    }
+}
+
+/// Get the current terminal width, falling back to `$COLUMNS` or 80.
+pub fn terminal_width() -> usize {
+    terminal_size::terminal_size()
+        .map(|(w, _)| w.0 as usize)
+        .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
+        .unwrap_or(80)
+}
+
 // ---------------------------------------------------------------------------
 // Pager
 // ---------------------------------------------------------------------------

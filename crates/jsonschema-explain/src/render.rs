@@ -1,13 +1,12 @@
 use core::fmt::Write;
 
-use serde_json::Value;
+use indexmap::IndexMap;
+use jsonschema_schema::{Schema, SchemaValue, ref_name};
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type, format_type_suffix, format_value};
 use crate::man::write_description;
 use crate::man::write_label;
-use crate::schema::{
-    get_description, ref_name, required_set, resolve_ref, schema_type_str, variant_summary,
-};
+use crate::schema::{get_description, required_set, resolve_ref, schema_type_str, variant_summary};
 
 /// Maximum nesting depth for recursive property rendering.
 pub(crate) const MAX_DEPTH: usize = 3;
@@ -19,15 +18,17 @@ pub(crate) const MAX_DEPTH: usize = 3;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_variant_block(
     out: &mut String,
-    resolved: &Value,
-    original: &Value,
-    root: &Value,
+    resolved: &Schema,
+    original: &SchemaValue,
+    root: &SchemaValue,
     f: &Fmt<'_>,
     index: usize,
 ) {
-    let label = if let Some(title) = resolved.get("title").and_then(Value::as_str) {
-        title.to_string()
-    } else if let Some(r) = original.get("$ref").and_then(Value::as_str) {
+    let label = if let Some(ref title) = resolved.title {
+        title.clone()
+    } else if let Some(orig_schema) = original.as_schema()
+        && let Some(ref r) = orig_schema.ref_
+    {
         ref_name(r).to_string()
     } else if let Some(ty) = schema_type_str(resolved) {
         ty
@@ -35,10 +36,7 @@ pub(crate) fn render_variant_block(
         format!("variant {index}")
     };
 
-    let has_properties = resolved
-        .get("properties")
-        .and_then(Value::as_object)
-        .is_some_and(|p| !p.is_empty());
+    let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
     let desc = get_description(resolved);
 
     let dep_tag = deprecated_tag(resolved, f);
@@ -55,7 +53,7 @@ pub(crate) fn render_variant_block(
         if let Some(desc) = desc {
             write_description(out, desc, f, "        ");
         }
-        if let Some(props) = resolved.get("properties").and_then(Value::as_object) {
+        if let Some(ref props) = resolved.properties {
             let req = required_set(resolved);
             render_properties(out, props, &req, root, f, 2);
         }
@@ -70,9 +68,9 @@ pub(crate) fn render_variant_block(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_properties(
     out: &mut String,
-    props: &serde_json::Map<String, Value>,
+    props: &IndexMap<String, SchemaValue>,
     required: &[String],
-    root: &Value,
+    root: &SchemaValue,
     f: &Fmt<'_>,
     depth: usize,
 ) {
@@ -82,23 +80,24 @@ pub(crate) fn render_properties(
     // Sort: required first, then normal, then deprecated — preserving
     // relative order within each group.
     let mut sorted_props: Vec<_> = props.iter().collect();
-    sorted_props.sort_by_key(|(name, schema)| {
-        let deprecated = resolve_ref(schema, root)
-            .get("deprecated")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+    sorted_props.sort_by_key(|(name, sv)| {
+        let deprecated = resolve_ref(sv, root)
+            .as_schema()
+            .is_some_and(Schema::is_deprecated);
         // 0 = required, 1 = normal, 2 = deprecated
         i32::from(deprecated) * 2 + i32::from(!required.contains(name))
     });
 
-    for (prop_name, prop_schema) in sorted_props {
-        let prop_schema = resolve_ref(prop_schema, root);
+    for (prop_name, prop_sv) in sorted_props {
+        let resolved_sv = resolve_ref(prop_sv, root);
+        let Some(prop_schema) = resolved_sv.as_schema() else {
+            let _ = writeln!(out, "{indent}{}{prop_name}{}", f.green, f.reset);
+            out.push('\n');
+            continue;
+        };
         let ty = schema_type_str(prop_schema).unwrap_or_default();
         let is_required = required.contains(prop_name);
-        let is_deprecated = prop_schema
-            .get("deprecated")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let is_deprecated = prop_schema.is_deprecated();
         let type_display = format_type(&ty, f);
         let req_tag = if is_required {
             format!(", {}*required{}", f.red, f.reset)
@@ -127,8 +126,8 @@ pub(crate) fn render_properties(
 #[allow(clippy::too_many_arguments)]
 fn render_property_details(
     out: &mut String,
-    prop_schema: &Value,
-    root: &Value,
+    prop_schema: &Schema,
+    root: &SchemaValue,
     f: &Fmt<'_>,
     depth: usize,
     desc_indent: &str,
@@ -137,7 +136,7 @@ fn render_property_details(
         write_description(out, desc, f, desc_indent);
     }
 
-    if let Some(default) = prop_schema.get("default") {
+    if let Some(ref default) = prop_schema.default {
         write_label(
             out,
             desc_indent,
@@ -146,7 +145,7 @@ fn render_property_details(
         );
     }
 
-    if let Some(values) = prop_schema.get("enum").and_then(Value::as_array) {
+    if let Some(ref values) = prop_schema.enum_ {
         let joined: String = values
             .iter()
             .map(|v| {
@@ -158,7 +157,7 @@ fn render_property_details(
         write_label(out, desc_indent, "Values", &joined);
     }
 
-    if let Some(c) = prop_schema.get("const") {
+    if let Some(ref c) = prop_schema.const_ {
         write_label(
             out,
             desc_indent,
@@ -167,7 +166,7 @@ fn render_property_details(
         );
     }
 
-    if let Some(examples) = prop_schema.get("examples").and_then(Value::as_array)
+    if let Some(ref examples) = prop_schema.examples
         && !examples.is_empty()
     {
         let joined: String = examples
@@ -184,7 +183,13 @@ fn render_property_details(
     render_constraints(out, prop_schema, f, desc_indent);
 
     for keyword in COMPOSITION_KEYWORDS {
-        if let Some(variants) = prop_schema.get(*keyword).and_then(Value::as_array) {
+        let variants = match *keyword {
+            "oneOf" => prop_schema.one_of.as_ref(),
+            "anyOf" => prop_schema.any_of.as_ref(),
+            "allOf" => prop_schema.all_of.as_ref(),
+            _ => None,
+        };
+        if let Some(variants) = variants {
             let label = match *keyword {
                 "oneOf" => "One of",
                 "anyOf" => "Any of",
@@ -193,14 +198,29 @@ fn render_property_details(
             };
             let _ = writeln!(out, "{desc_indent}{}{label}:{}", f.dim, f.reset);
             for (i, variant) in variants.iter().enumerate() {
-                let resolved = resolve_ref(variant, root);
-                render_inline_variant(out, resolved, variant, root, f, depth, desc_indent, i + 1);
+                let resolved_sv = resolve_ref(variant, root);
+                let resolved = resolved_sv.as_schema();
+                if let Some(resolved) = resolved {
+                    render_inline_variant(
+                        out,
+                        resolved,
+                        variant,
+                        root,
+                        f,
+                        depth,
+                        desc_indent,
+                        i + 1,
+                    );
+                } else {
+                    let summary = variant_summary(variant, root, f);
+                    let _ = writeln!(out, "{desc_indent}  - {summary}");
+                }
             }
         }
     }
 
     if depth < MAX_DEPTH
-        && let Some(nested_props) = prop_schema.get("properties").and_then(Value::as_object)
+        && let Some(ref nested_props) = prop_schema.properties
     {
         let nested_required = required_set(prop_schema);
         out.push('\n');
@@ -209,39 +229,29 @@ fn render_property_details(
 }
 
 /// Render a variant inline within a property's composition list.
-///
-/// `$ref` variants are always shown as one-line references (the DEFINITIONS
-/// section has the full details). Non-ref variants with properties are
-/// expanded inline when depth allows.
 #[allow(clippy::too_many_arguments)]
 fn render_inline_variant(
     out: &mut String,
-    resolved: &Value,
-    original: &Value,
-    root: &Value,
+    resolved: &Schema,
+    original: &SchemaValue,
+    root: &SchemaValue,
     f: &Fmt<'_>,
     depth: usize,
     desc_indent: &str,
     index: usize,
 ) {
-    let is_ref = original.get("$ref").is_some();
-    let has_properties = resolved
-        .get("properties")
-        .and_then(Value::as_object)
-        .is_some_and(|p| !p.is_empty());
+    let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
+    let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
 
-    // $ref variants are kept as one-line references; non-ref variants with
-    // properties are expanded when depth allows.
     if !is_ref && has_properties && depth < MAX_DEPTH {
         let deprecated_tag = deprecated_tag(resolved, f);
-        let (label, label_is_type) =
-            if let Some(title) = resolved.get("title").and_then(Value::as_str) {
-                (title.to_string(), false)
-            } else if let Some(ty) = schema_type_str(resolved) {
-                (ty, true)
-            } else {
-                (format!("variant {index}"), false)
-            };
+        let (label, label_is_type) = if let Some(ref title) = resolved.title {
+            (title.clone(), false)
+        } else if let Some(ty) = schema_type_str(resolved) {
+            (ty, true)
+        } else {
+            (format!("variant {index}"), false)
+        };
         let suffix = if label_is_type {
             String::new()
         } else {
@@ -257,7 +267,7 @@ fn render_inline_variant(
             let nested_indent = format!("{desc_indent}      ");
             write_description(out, desc, f, &nested_indent);
         }
-        if let Some(props) = resolved.get("properties").and_then(Value::as_object) {
+        if let Some(ref props) = resolved.properties {
             let req = required_set(resolved);
             render_properties(out, props, &req, root, f, depth + 2);
         }
@@ -268,76 +278,58 @@ fn render_inline_variant(
 }
 
 /// Return a `" [DEPRECATED]"` tag if the schema has `"deprecated": true`.
-fn deprecated_tag(schema: &Value, f: &Fmt<'_>) -> String {
-    if schema
-        .get("deprecated")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
+fn deprecated_tag(schema: &Schema, f: &Fmt<'_>) -> String {
+    if schema.is_deprecated() {
         format!(" {}[DEPRECATED]{}", f.dim, f.reset)
     } else {
         String::new()
     }
 }
 
-/// Render JSON Schema validation constraints (numeric bounds, string length,
-/// pattern, array items, format, etc.) as a compact annotation line.
-fn render_constraints(out: &mut String, schema: &Value, f: &Fmt<'_>, indent: &str) {
+/// Render JSON Schema validation constraints as a compact annotation line.
+fn render_constraints(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &str) {
     let mut parts: Vec<String> = Vec::new();
 
-    // Format
-    if let Some(fmt_val) = schema.get("format").and_then(Value::as_str) {
+    if let Some(ref fmt_val) = schema.format {
         parts.push(format!("format={}{fmt_val}{}", f.magenta, f.reset));
     }
-
-    // String constraints
-    if let Some(v) = schema.get("minLength").and_then(Value::as_u64) {
+    if let Some(v) = schema.min_length {
         parts.push(format!("minLength={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("maxLength").and_then(Value::as_u64) {
+    if let Some(v) = schema.max_length {
         parts.push(format!("maxLength={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("pattern").and_then(Value::as_str) {
+    if let Some(ref v) = schema.pattern {
         parts.push(format!("pattern={}{v}{}", f.magenta, f.reset));
     }
-
-    // Numeric constraints
-    if let Some(v) = schema.get("minimum") {
+    if let Some(ref v) = schema.minimum {
         parts.push(format!("min={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("maximum") {
+    if let Some(ref v) = schema.maximum {
         parts.push(format!("max={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("exclusiveMinimum") {
+    if let Some(ref v) = schema.exclusive_minimum {
         parts.push(format!("exclusiveMin={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("exclusiveMaximum") {
+    if let Some(ref v) = schema.exclusive_maximum {
         parts.push(format!("exclusiveMax={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("multipleOf") {
+    if let Some(ref v) = schema.multiple_of {
         parts.push(format!("multipleOf={}{v}{}", f.magenta, f.reset));
     }
-
-    // Array constraints
-    if let Some(v) = schema.get("minItems").and_then(Value::as_u64) {
+    if let Some(v) = schema.min_items {
         parts.push(format!("minItems={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("maxItems").and_then(Value::as_u64) {
+    if let Some(v) = schema.max_items {
         parts.push(format!("maxItems={}{v}{}", f.magenta, f.reset));
     }
-    if schema
-        .get("uniqueItems")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
+    if schema.unique_items.unwrap_or(false) {
         parts.push(format!("{}unique{}", f.magenta, f.reset));
     }
-
-    // Object constraints
-    if let Some(v) = schema.get("minProperties").and_then(Value::as_u64) {
+    if let Some(v) = schema.min_properties {
         parts.push(format!("minProperties={}{v}{}", f.magenta, f.reset));
     }
-    if let Some(v) = schema.get("maxProperties").and_then(Value::as_u64) {
+    if let Some(v) = schema.max_properties {
         parts.push(format!("maxProperties={}{v}{}", f.magenta, f.reset));
     }
 
@@ -356,26 +348,29 @@ fn render_constraints(out: &mut String, schema: &Value, f: &Fmt<'_>, indent: &st
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_subschema(
     out: &mut String,
-    schema: &Value,
-    root: &Value,
+    schema: &SchemaValue,
+    root: &SchemaValue,
     f: &Fmt<'_>,
     depth: usize,
 ) {
     let indent = "    ".repeat(depth);
-    let schema = resolve_ref(schema, root);
-    let ty = schema_type_str(schema).unwrap_or_default();
+    let resolved_sv = resolve_ref(schema, root);
+    let Some(resolved) = resolved_sv.as_schema() else {
+        return;
+    };
+    let ty = schema_type_str(resolved).unwrap_or_default();
 
     if !ty.is_empty() {
         write_label(out, &indent, "Type", &format_type(&ty, f));
     }
 
-    if let Some(desc) = get_description(schema) {
+    if let Some(desc) = get_description(resolved) {
         write_description(out, desc, f, &indent);
     }
 
     if depth < MAX_DEPTH {
-        let required = required_set(schema);
-        if let Some(props) = schema.get("properties").and_then(Value::as_object) {
+        let required = required_set(resolved);
+        if let Some(ref props) = resolved.properties {
             render_properties(out, props, &required, root, f, depth + 1);
         }
     }

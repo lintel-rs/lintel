@@ -1,0 +1,7 @@
+{
+  "$schema": "./did-you-mean-schema.json",
+  "name": "test",
+  "desciption": "a typo in description",
+  "argument_hint": "underscore instead of dash",
+  "vresion": "swapped letters"
+}

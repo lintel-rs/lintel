@@ -1,7 +1,7 @@
 use miette::NamedSource;
 use serde_json::Value;
 
-use crate::diagnostics::ParseDiagnostic;
+use lintel_diagnostics::LintelDiagnostic;
 
 use super::Parser;
 
@@ -28,13 +28,13 @@ const BOM: &str = "\u{feff}";
 pub struct JsonlParser;
 
 impl Parser for JsonlParser {
-    fn parse(&self, content: &str, file_name: &str) -> Result<Value, ParseDiagnostic> {
+    fn parse(&self, content: &str, file_name: &str) -> Result<Value, LintelDiagnostic> {
         let lines = parse_jsonl(content, file_name)?;
         lines
             .into_iter()
             .next()
             .map(|l| l.value)
-            .ok_or_else(|| ParseDiagnostic {
+            .ok_or_else(|| LintelDiagnostic::Parse {
                 src: NamedSource::new(file_name, content.to_string()),
                 span: 0.into(),
                 message: "empty JSONL file".to_string(),
@@ -56,8 +56,9 @@ impl Parser for JsonlParser {
 ///
 /// # Errors
 ///
-/// Returns a [`ParseDiagnostic`] on the first line that fails to parse as JSON.
-pub fn parse_jsonl(content: &str, file_name: &str) -> Result<Vec<JsonlLine>, ParseDiagnostic> {
+/// Returns a [`LintelDiagnostic`] on the first line that fails to parse as JSON.
+#[allow(clippy::result_large_err)]
+pub fn parse_jsonl(content: &str, file_name: &str) -> Result<Vec<JsonlLine>, LintelDiagnostic> {
     // Strip BOM; all offsets are relative to the post-BOM content which is
     // what we report as the source for diagnostics.
     let content = content.strip_prefix(BOM).unwrap_or(content);
@@ -89,7 +90,7 @@ pub fn parse_jsonl(content: &str, file_name: &str) -> Result<Vec<JsonlLine>, Par
             Err(e) => {
                 let error_offset =
                     byte_offset + super::line_col_to_offset(line_trimmed, e.line(), e.column());
-                return Err(ParseDiagnostic {
+                return Err(LintelDiagnostic::Parse {
                     src: NamedSource::new(file_name, content.to_string()),
                     span: error_offset.into(),
                     message: format!("line {line_number}: {e}"),
@@ -209,7 +210,7 @@ mod tests {
     fn parse_error_with_correct_line_number() {
         let content = "{\"a\":1}\n{bad json}\n{\"b\":2}\n";
         let err = parse_jsonl(content, "test.jsonl").unwrap_err();
-        assert!(err.message.starts_with("line 2:"));
+        assert!(err.message().starts_with("line 2:"));
     }
 
     #[test]

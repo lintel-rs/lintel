@@ -6,14 +6,18 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::catalog;
+use lintel_diagnostics::reporter::{CheckResult, CheckedFile};
+use lintel_diagnostics::{
+    DEFAULT_LABEL, LintelDiagnostic, ValidationDiagnostic, find_instance_path_span, format_label,
+};
 use lintel_schema_cache::{CacheStatus, SchemaCache};
-use lintel_validation_cache::{ValidationCacheStatus, ValidationError};
+use lintel_validation_cache::{ValidationCacheStatus, ValidationError, ValidationErrorKind};
 use schema_catalog::{CompiledCatalog, FileFormat};
 
-use crate::diagnostics::{DEFAULT_LABEL, find_instance_path_span, format_label};
+use crate::catalog;
 use crate::parsers::{self, Parser};
 use crate::registry;
+use crate::suggest;
 
 /// Conservative limit for concurrent file reads to avoid exhausting file
 /// descriptors. 128 is well below the default soft limit on macOS (256) and
@@ -67,36 +71,6 @@ pub struct ValidateArgs {
 
     /// TTL for cached schemas. `None` means no expiry.
     pub schema_cache_ttl: Option<core::time::Duration>,
-}
-
-/// Re-exported from [`crate::diagnostics::LintError`] so callers can use
-/// `lintel_validate::validate::LintError` without importing diagnostics.
-pub use crate::diagnostics::LintError;
-
-/// A file that was checked and the schema it resolved to.
-pub struct CheckedFile {
-    pub path: String,
-    pub schema: String,
-    /// `None` for local schemas and builtins; `Some` for remote schemas.
-    pub cache_status: Option<CacheStatus>,
-    /// `None` when validation caching is not applicable; `Some` for validation cache hits/misses.
-    pub validation_cache_status: Option<ValidationCacheStatus>,
-}
-
-/// Result of a validation run.
-pub struct ValidateResult {
-    pub errors: Vec<LintError>,
-    pub checked: Vec<CheckedFile>,
-}
-
-impl ValidateResult {
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
-    }
-
-    pub fn files_checked(&self) -> usize {
-        self.checked.len()
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +157,7 @@ enum FileResult {
         schema_uri: String,
         parsed: ParsedFile,
     },
-    Error(LintError),
+    Error(LintelDiagnostic),
     Skip,
 }
 
@@ -197,10 +171,28 @@ fn resolve_local_schema_path(schema_uri: &str, base_dir: Option<&Path>) -> Strin
         return schema_uri.to_string();
     }
     if let Some(dir) = base_dir {
-        dir.join(schema_uri).to_string_lossy().to_string()
+        normalize_path(&dir.join(schema_uri))
+            .to_string_lossy()
+            .to_string()
     } else {
         schema_uri.to_string()
     }
+}
+
+/// Normalize a path by resolving `.` and `..` components without touching the
+/// filesystem (unlike `std::fs::canonicalize`).
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Process a single file's already-read content: parse and resolve schema URI.
@@ -251,7 +243,7 @@ fn process_one_file(
         let parser = parsers::parser_for(fmt);
         match parser.parse(&content, &path_str) {
             Ok(val) => (parser, val),
-            Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+            Err(parse_err) => return vec![FileResult::Error(parse_err)],
         }
     } else {
         match try_parse_all(&content, &path_str) {
@@ -340,7 +332,7 @@ fn process_jsonl_file(
 ) -> Vec<FileResult> {
     let lines = match parsers::jsonl::parse_jsonl(content, path_str) {
         Ok(lines) => lines,
-        Err(parse_err) => return vec![FileResult::Error(parse_err.into())],
+        Err(parse_err) => return vec![FileResult::Error(parse_err)],
     };
 
     if lines.is_empty() {
@@ -352,7 +344,7 @@ fn process_jsonl_file(
     // Check schema consistency before consuming lines.
     if let Some(mismatches) = parsers::jsonl::check_schema_consistency(&lines) {
         for m in mismatches {
-            results.push(FileResult::Error(LintError::SchemaMismatch {
+            results.push(FileResult::Error(LintelDiagnostic::SchemaMismatch {
                 path: path_str.to_string(),
                 line_number: m.line_number,
                 message: format!("expected consistent $schema but found {}", m.schema_uri),
@@ -417,19 +409,17 @@ fn process_jsonl_file(
     }
 }
 
-/// Read each file concurrently with tokio, parse its content, extract its
-/// schema URI, apply rewrites, and group by resolved schema URI.
+/// Read files concurrently with tokio, using a semaphore to avoid exhausting
+/// file descriptors. I/O errors are pushed as `LintelDiagnostic::Io`.
+///
+/// # Panics
+///
+/// Panics if the internal semaphore is unexpectedly closed (should not happen).
 #[tracing::instrument(skip_all, fields(file_count = files.len()))]
-#[allow(clippy::too_many_arguments)]
-async fn parse_and_group_files(
+pub async fn read_files(
     files: &[PathBuf],
-    config: &lintel_config::Config,
-    config_dir: &Path,
-    compiled_catalogs: &[CompiledCatalog],
-    errors: &mut Vec<LintError>,
-) -> BTreeMap<String, Vec<ParsedFile>> {
-    // Read all files concurrently using tokio async I/O, with a semaphore
-    // to avoid exhausting file descriptors on large directories.
+    errors: &mut Vec<LintelDiagnostic>,
+) -> Vec<(PathBuf, String)> {
     let semaphore = alloc::sync::Arc::new(tokio::sync::Semaphore::new(FD_CONCURRENCY_LIMIT));
     let mut read_set = tokio::task::JoinSet::new();
     for path in files {
@@ -445,24 +435,33 @@ async fn parse_and_group_files(
     let mut file_contents = Vec::with_capacity(files.len());
     while let Some(result) = read_set.join_next().await {
         match result {
-            Ok(item) => file_contents.push(item),
+            Ok((path, Ok(content))) => file_contents.push((path, content)),
+            Ok((path, Err(e))) => {
+                errors.push(LintelDiagnostic::Io {
+                    path: path.display().to_string(),
+                    message: format!("failed to read: {e}"),
+                });
+            }
             Err(e) => tracing::warn!("file read task panicked: {e}"),
         }
     }
 
-    // Process files: parse content and resolve schema URIs.
+    file_contents
+}
+
+/// Parse pre-read file contents, extract schema URIs, apply rewrites, and
+/// group by resolved schema URI.
+#[tracing::instrument(skip_all, fields(file_count = file_contents.len()))]
+#[allow(clippy::too_many_arguments)]
+fn parse_and_group_contents(
+    file_contents: Vec<(PathBuf, String)>,
+    config: &lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: &[CompiledCatalog],
+    errors: &mut Vec<LintelDiagnostic>,
+) -> BTreeMap<String, Vec<ParsedFile>> {
     let mut schema_groups: BTreeMap<String, Vec<ParsedFile>> = BTreeMap::new();
-    for (path, content_result) in file_contents {
-        let content = match content_result {
-            Ok(c) => c,
-            Err(e) => {
-                errors.push(LintError::Io {
-                    path: path.display().to_string(),
-                    message: format!("failed to read: {e}"),
-                });
-                continue;
-            }
-        };
+    for (path, content) in file_contents {
         let results = process_one_file(&path, content, config, config_dir, compiled_catalogs);
         for result in results {
             match result {
@@ -492,7 +491,7 @@ async fn fetch_schema_from_prefetched(
     prefetched: &HashMap<String, Result<(Value, CacheStatus), String>>,
     local_cache: &mut HashMap<String, Value>,
     group: &[ParsedFile],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) -> Option<(Value, Option<CacheStatus>)> {
@@ -524,7 +523,7 @@ async fn fetch_schema_from_prefetched(
         Ok(value) => Some(value),
         Err(message) => {
             report_group_error(
-                |path| LintError::SchemaFetch {
+                |path| LintelDiagnostic::SchemaFetch {
                     path: path.to_string(),
                     message: message.clone(),
                 },
@@ -543,11 +542,11 @@ async fn fetch_schema_from_prefetched(
 /// Report the same error for every file in a schema group.
 #[allow(clippy::too_many_arguments)]
 fn report_group_error<P: alloc::borrow::Borrow<ParsedFile>>(
-    make_error: impl Fn(&str) -> LintError,
+    make_error: impl Fn(&str) -> LintelDiagnostic,
     schema_uri: &str,
     cache_status: Option<CacheStatus>,
     group: &[P],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
@@ -588,51 +587,176 @@ fn mark_group_checked<P: alloc::borrow::Borrow<ParsedFile>>(
     }
 }
 
-/// Clean up error messages from the `jsonschema` crate.
-///
-/// For `anyOf`/`oneOf` failures the crate dumps the entire JSON value into the
-/// message (e.g. `{...} is not valid under any of the schemas listed in the 'oneOf' keyword`).
-/// The source snippet already shows the value, so we strip the redundant prefix
-/// and keep only `"not valid under any of the schemas listed in the 'oneOf' keyword"`.
-///
-/// All other messages are returned unchanged.
-fn clean_error_message(msg: String) -> String {
-    const MARKER: &str = " is not valid under any of the schemas listed in the '";
-    if let Some(pos) = msg.find(MARKER) {
-        // pos points to " is not valid...", skip " is " (4 chars) to get "not valid..."
-        return msg[pos + 4..].to_string();
-    }
-    msg
-}
-
-/// Convert [`ValidationError`]s into [`LintError::Validation`] diagnostics.
+/// Convert [`ValidationError`]s into [`LintelDiagnostic::Validation`] diagnostics.
+#[allow(clippy::too_many_arguments)]
 fn push_validation_errors(
     pf: &ParsedFile,
     schema_url: &str,
     validation_errors: &[ValidationError],
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
+    schema: Option<&Value>,
 ) {
     for ve in validation_errors {
-        let span = find_instance_path_span(&pf.content, &ve.instance_path);
         let instance_path = if ve.instance_path.is_empty() {
             DEFAULT_LABEL.to_string()
         } else {
             ve.instance_path.clone()
         };
         let label = format_label(&instance_path, &ve.schema_path);
-        let source_span: miette::SourceSpan = span.into();
-        errors.push(LintError::Validation {
+        let source_span: miette::SourceSpan = ve.span.into();
+        let mut message = ve.kind.message();
+        if let ValidationErrorKind::AdditionalProperty { ref property } = ve.kind
+            && let Some(s) = schema
+            && let Some(suggestion) = suggest::suggest_property(property, &ve.schema_path, s)
+        {
+            message = format!("{message}; did you mean '{suggestion}'?");
+        }
+        errors.push(LintelDiagnostic::Validation(ValidationDiagnostic {
             src: miette::NamedSource::new(&pf.path, pf.content.clone()),
             span: source_span,
             schema_span: source_span,
             path: pf.path.clone(),
             instance_path,
             label,
-            message: ve.message.clone(),
+            message,
             schema_url: schema_url.to_string(),
             schema_path: ve.schema_path.clone(),
-        });
+            validation_code: format!("lintel::validation::{}", ve.kind.as_ref()),
+        }));
     }
+}
+
+/// Map a `jsonschema::error::ValidationErrorKind` to our serializable
+/// [`ValidationErrorKind`]. `AdditionalProperties` is handled separately
+/// in [`convert_error`].
+fn convert_kind(kind: &jsonschema::error::ValidationErrorKind) -> ValidationErrorKind {
+    use jsonschema::error::{TypeKind, ValidationErrorKind as JK};
+
+    match kind {
+        JK::AdditionalItems { limit } => ValidationErrorKind::AdditionalItems { limit: *limit },
+        JK::AdditionalProperties { .. } => unreachable!("handled in convert_error"),
+        JK::AnyOf { .. } => ValidationErrorKind::AnyOf,
+        JK::BacktrackLimitExceeded { error } => ValidationErrorKind::BacktrackLimitExceeded {
+            message: error.to_string(),
+        },
+        JK::Constant { expected_value } => ValidationErrorKind::Constant {
+            expected_value: expected_value.clone(),
+        },
+        JK::Contains => ValidationErrorKind::Contains,
+        JK::ContentEncoding { content_encoding } => ValidationErrorKind::ContentEncoding {
+            content_encoding: content_encoding.clone(),
+        },
+        JK::ContentMediaType { content_media_type } => ValidationErrorKind::ContentMediaType {
+            content_media_type: content_media_type.clone(),
+        },
+        JK::Custom { keyword, message } => ValidationErrorKind::Custom {
+            keyword: keyword.clone(),
+            message: message.clone(),
+        },
+        JK::Enum { options } => ValidationErrorKind::Enum {
+            options: options.clone(),
+        },
+        JK::ExclusiveMaximum { limit } => ValidationErrorKind::ExclusiveMaximum {
+            limit: limit.clone(),
+        },
+        JK::ExclusiveMinimum { limit } => ValidationErrorKind::ExclusiveMinimum {
+            limit: limit.clone(),
+        },
+        JK::FalseSchema => ValidationErrorKind::FalseSchema,
+        JK::Format { format } => ValidationErrorKind::Format {
+            format: format.clone(),
+        },
+        JK::FromUtf8 { error } => ValidationErrorKind::FromUtf8 {
+            message: error.to_string(),
+        },
+        JK::MaxItems { limit } => ValidationErrorKind::MaxItems { limit: *limit },
+        JK::Maximum { limit } => ValidationErrorKind::Maximum {
+            limit: limit.clone(),
+        },
+        JK::MaxLength { limit } => ValidationErrorKind::MaxLength { limit: *limit },
+        JK::MaxProperties { limit } => ValidationErrorKind::MaxProperties { limit: *limit },
+        JK::MinItems { limit } => ValidationErrorKind::MinItems { limit: *limit },
+        JK::Minimum { limit } => ValidationErrorKind::Minimum {
+            limit: limit.clone(),
+        },
+        JK::MinLength { limit } => ValidationErrorKind::MinLength { limit: *limit },
+        JK::MinProperties { limit } => ValidationErrorKind::MinProperties { limit: *limit },
+        JK::MultipleOf { multiple_of } => ValidationErrorKind::MultipleOf {
+            multiple_of: *multiple_of,
+        },
+        JK::Not { .. } => ValidationErrorKind::Not,
+        JK::OneOfMultipleValid { .. } => ValidationErrorKind::OneOfMultipleValid,
+        JK::OneOfNotValid { .. } => ValidationErrorKind::OneOfNotValid,
+        JK::Pattern { pattern } => ValidationErrorKind::Pattern {
+            pattern: pattern.clone(),
+        },
+        JK::PropertyNames { error } => ValidationErrorKind::PropertyNames {
+            message: error.to_string(),
+        },
+        JK::Required { property } => ValidationErrorKind::Required {
+            property: match property {
+                Value::String(s) => format!("\"{s}\""),
+                other => other.to_string(),
+            },
+        },
+        JK::Type { kind } => {
+            let expected = match kind {
+                TypeKind::Single(t) => t.to_string(),
+                TypeKind::Multiple(ts) => {
+                    let parts: Vec<String> = ts.iter().map(|t| t.to_string()).collect();
+                    parts.join(", ")
+                }
+            };
+            ValidationErrorKind::Type { expected }
+        }
+        JK::UnevaluatedItems { unexpected } => ValidationErrorKind::UnevaluatedItems {
+            unexpected: unexpected.clone(),
+        },
+        JK::UnevaluatedProperties { unexpected } => ValidationErrorKind::UnevaluatedProperties {
+            unexpected: unexpected.clone(),
+        },
+        JK::UniqueItems => ValidationErrorKind::UniqueItems,
+        JK::Referencing(err) => ValidationErrorKind::Referencing {
+            message: err.to_string(),
+        },
+    }
+}
+
+/// Convert a single `jsonschema::ValidationError` into one or more typed
+/// [`ValidationError`]s with pre-computed spans.
+///
+/// `AdditionalProperties` errors are split into one per unexpected property.
+fn convert_error(error: &jsonschema::ValidationError<'_>, content: &str) -> Vec<ValidationError> {
+    use jsonschema::error::ValidationErrorKind as JK;
+
+    let schema_path = error.schema_path().to_string();
+    let base_instance_path = error.instance_path().to_string();
+
+    if let JK::AdditionalProperties { unexpected } = error.kind() {
+        return unexpected
+            .iter()
+            .map(|prop| {
+                let instance_path = format!("{base_instance_path}/{prop}");
+                let span = find_instance_path_span(content, &instance_path);
+                ValidationError {
+                    instance_path,
+                    schema_path: schema_path.clone(),
+                    kind: ValidationErrorKind::AdditionalProperty {
+                        property: prop.clone(),
+                    },
+                    span,
+                }
+            })
+            .collect();
+    }
+
+    let span = find_instance_path_span(content, &base_instance_path);
+    vec![ValidationError {
+        instance_path: base_instance_path,
+        schema_path,
+        kind: convert_kind(error.kind()),
+        span,
+    }]
 }
 
 /// Validate all files in a group against an already-compiled validator and store
@@ -646,8 +770,9 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
     validate_formats: bool,
     cache_status: Option<CacheStatus>,
     group: &[P],
+    schema_value: &Value,
     vcache: &lintel_validation_cache::ValidationCache,
-    errors: &mut Vec<LintError>,
+    errors: &mut Vec<LintelDiagnostic>,
     checked: &mut Vec<CheckedFile>,
     on_check: &mut impl FnMut(&CheckedFile),
 ) {
@@ -655,11 +780,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
         let pf = item.borrow();
         let file_errors: Vec<ValidationError> = validator
             .iter_errors(&pf.instance)
-            .map(|error| ValidationError {
-                instance_path: error.instance_path().to_string(),
-                message: clean_error_message(error.to_string()),
-                schema_path: error.schema_path().to_string(),
-            })
+            .flat_map(|error| convert_error(&error, &pf.content))
             .collect();
 
         vcache
@@ -672,7 +793,7 @@ async fn validate_group<P: alloc::borrow::Borrow<ParsedFile>>(
                 &file_errors,
             )
             .await;
-        push_validation_errors(pf, schema_uri, &file_errors, errors);
+        push_validation_errors(pf, schema_uri, &file_errors, errors, Some(schema_value));
 
         let cf = CheckedFile {
             path: pf.path.clone(),
@@ -769,7 +890,7 @@ pub async fn fetch_compiled_catalogs(
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run(args: &ValidateArgs) -> Result<ValidateResult> {
+pub async fn run(args: &ValidateArgs) -> Result<CheckResult> {
     run_with(args, None, |_| {}).await
 }
 
@@ -783,7 +904,7 @@ pub async fn run_with(
     args: &ValidateArgs,
     cache: Option<SchemaCache>,
     on_check: impl FnMut(&CheckedFile),
-) -> Result<ValidateResult> {
+) -> Result<CheckResult> {
     let files = collect_files(&args.globs, &args.exclude)?;
     run_with_files(args, cache, files, on_check).await
 }
@@ -803,39 +924,97 @@ pub async fn run_with_files(
     cache: Option<SchemaCache>,
     files: Vec<PathBuf>,
     mut on_check: impl FnMut(&CheckedFile),
-) -> Result<ValidateResult> {
-    let retriever = if let Some(c) = cache {
-        c
-    } else {
-        let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
-        if let Some(dir) = &args.cache_dir {
-            let path = PathBuf::from(dir);
-            let _ = fs::create_dir_all(&path);
-            builder = builder.cache_dir(path);
-        }
-        if let Some(ttl) = args.schema_cache_ttl {
-            builder = builder.ttl(ttl);
-        }
-        builder.build()
-    };
-
+) -> Result<CheckResult> {
+    let retriever = build_retriever(args, cache);
     let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
     tracing::info!(file_count = files.len(), "collected files");
 
     let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
 
-    let mut errors: Vec<LintError> = Vec::new();
+    let mut errors: Vec<LintelDiagnostic> = Vec::new();
+    let file_contents = read_files(&files, &mut errors).await;
+
+    run_with_contents_inner(
+        file_contents,
+        args,
+        retriever,
+        config,
+        &config_dir,
+        compiled_catalogs,
+        errors,
+        &mut on_check,
+    )
+    .await
+}
+
+/// Like [`run_with`], but accepts pre-read file contents instead of reading
+/// from disk. Use this when the caller has already read files (e.g. to share
+/// reads between format checking and validation).
+///
+/// # Errors
+///
+/// Returns an error if schema validation encounters an I/O or network error.
+pub async fn run_with_contents(
+    args: &ValidateArgs,
+    file_contents: Vec<(PathBuf, String)>,
+    cache: Option<SchemaCache>,
+    mut on_check: impl FnMut(&CheckedFile),
+) -> Result<CheckResult> {
+    let retriever = build_retriever(args, cache);
+    let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
+    let errors: Vec<LintelDiagnostic> = Vec::new();
+
+    run_with_contents_inner(
+        file_contents,
+        args,
+        retriever,
+        config,
+        &config_dir,
+        compiled_catalogs,
+        errors,
+        &mut on_check,
+    )
+    .await
+}
+
+fn build_retriever(args: &ValidateArgs, cache: Option<SchemaCache>) -> SchemaCache {
+    if let Some(c) = cache {
+        return c;
+    }
+    let mut builder = SchemaCache::builder().force_fetch(args.force_schema_fetch);
+    if let Some(dir) = &args.cache_dir {
+        let path = PathBuf::from(dir);
+        let _ = fs::create_dir_all(&path);
+        builder = builder.cache_dir(path);
+    }
+    if let Some(ttl) = args.schema_cache_ttl {
+        builder = builder.ttl(ttl);
+    }
+    builder.build()
+}
+
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+async fn run_with_contents_inner(
+    file_contents: Vec<(PathBuf, String)>,
+    args: &ValidateArgs,
+    retriever: SchemaCache,
+    config: lintel_config::Config,
+    config_dir: &Path,
+    compiled_catalogs: Vec<CompiledCatalog>,
+    mut errors: Vec<LintelDiagnostic>,
+    on_check: &mut impl FnMut(&CheckedFile),
+) -> Result<CheckResult> {
     let mut checked: Vec<CheckedFile> = Vec::new();
 
     // Phase 1: Parse files and resolve schema URIs
-    let schema_groups = parse_and_group_files(
-        &files,
+    let schema_groups = parse_and_group_contents(
+        file_contents,
         &config,
-        &config_dir,
+        config_dir,
         &compiled_catalogs,
         &mut errors,
-    )
-    .await;
+    );
     tracing::info!(
         schema_count = schema_groups.len(),
         total_files = schema_groups.values().map(Vec::len).sum::<usize>(),
@@ -914,7 +1093,7 @@ pub async fn run_with_files(
             group,
             &mut errors,
             &mut checked,
-            &mut on_check,
+            on_check,
         )
         .await
         else {
@@ -942,7 +1121,13 @@ pub async fn run_with_files(
                 .await;
 
             if let Some(cached_errors) = cached {
-                push_validation_errors(pf, schema_uri, &cached_errors, &mut errors);
+                push_validation_errors(
+                    pf,
+                    schema_uri,
+                    &cached_errors,
+                    &mut errors,
+                    Some(&schema_value),
+                );
                 let cf = CheckedFile {
                     path: pf.path.clone(),
                     schema: schema_uri.clone(),
@@ -1013,13 +1198,13 @@ pub async fn run_with_files(
                             Some(ValidationCacheStatus::Miss),
                             &cache_misses,
                             &mut checked,
-                            &mut on_check,
+                            on_check,
                         );
                         continue;
                     }
                     let msg = format!("failed to compile schema: {e}");
                     report_group_error(
-                        |path| LintError::SchemaCompile {
+                        |path| LintelDiagnostic::SchemaCompile {
                             path: path.to_string(),
                             message: msg.clone(),
                         },
@@ -1028,7 +1213,7 @@ pub async fn run_with_files(
                         &cache_misses,
                         &mut errors,
                         &mut checked,
-                        &mut on_check,
+                        on_check,
                     );
                     continue;
                 }
@@ -1044,10 +1229,11 @@ pub async fn run_with_files(
             validate_formats,
             cache_status,
             &cache_misses,
+            &schema_value,
             &vcache,
             &mut errors,
             &mut checked,
-            &mut on_check,
+            on_check,
         )
         .await;
         validate_time += t.elapsed();
@@ -1072,7 +1258,7 @@ pub async fn run_with_files(
             .then_with(|| a.offset().cmp(&b.offset()))
     });
 
-    Ok(ValidateResult { errors, checked })
+    Ok(CheckResult { errors, checked })
 }
 
 #[cfg(test)]
@@ -2031,50 +2217,6 @@ validate_formats = false
             "expected at least one validation cache hit on second run"
         );
         Ok(())
-    }
-
-    // --- clean_error_message ---
-
-    #[test]
-    fn clean_strips_anyof_value() {
-        let msg =
-            r#"{"type":"bad"} is not valid under any of the schemas listed in the 'anyOf' keyword"#;
-        assert_eq!(
-            clean_error_message(msg.to_string()),
-            "not valid under any of the schemas listed in the 'anyOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_strips_oneof_value() {
-        let msg = r#"{"runs-on":"ubuntu-latest","steps":[]} is not valid under any of the schemas listed in the 'oneOf' keyword"#;
-        assert_eq!(
-            clean_error_message(msg.to_string()),
-            "not valid under any of the schemas listed in the 'oneOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_strips_long_value() {
-        let long_value = "x".repeat(5000);
-        let suffix = " is not valid under any of the schemas listed in the 'anyOf' keyword";
-        let msg = format!("{long_value}{suffix}");
-        assert_eq!(
-            clean_error_message(msg),
-            "not valid under any of the schemas listed in the 'anyOf' keyword"
-        );
-    }
-
-    #[test]
-    fn clean_preserves_type_error() {
-        let msg = r#"12345 is not of types "null", "string""#;
-        assert_eq!(clean_error_message(msg.to_string()), msg);
-    }
-
-    #[test]
-    fn clean_preserves_required_property() {
-        let msg = "\"name\" is a required property";
-        assert_eq!(clean_error_message(msg.to_string()), msg);
     }
 
     /// Schemas whose URI contains a fragment (e.g. `…/draft-07/schema#`)

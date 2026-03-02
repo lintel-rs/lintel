@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "argument-hint": { "type": "string" },
+    "version": { "type": "string" },
+    "enabled": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}
