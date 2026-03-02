@@ -99,6 +99,11 @@ pub(crate) fn variant_summary(variant: &SchemaValue, root: &SchemaValue, f: &Fmt
         return format!("{}{dep}", format_type(&ty, f));
     }
 
+    // Pattern-only variant (e.g. `{"pattern": "^..."}`)
+    if let Some(ref pat) = resolved.pattern {
+        return format!("pattern: {}{pat}{}{dep}", f.magenta, f.reset);
+    }
+
     format!("{}(schema){}{dep}", f.dim, f.reset)
 }
 
