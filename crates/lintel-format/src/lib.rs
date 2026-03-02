@@ -6,7 +6,7 @@ mod toml;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bpaf::{Bpaf, ShellComp};
 use lintel_diagnostics::LintelDiagnostic;
 
@@ -376,71 +376,11 @@ fn make_diagnostic(path_str: String, content: &str, formatted: &str) -> LintelDi
 }
 
 // ---------------------------------------------------------------------------
-// File discovery (lightweight, independent of lintel-validate)
+// File discovery
 // ---------------------------------------------------------------------------
 
-fn discover_files(root: &str, excludes: &[String]) -> Result<Vec<PathBuf>> {
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(false)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .build();
-
-    let mut files = Vec::new();
-    for entry in walker {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if detect_format(path).is_none() {
-            continue;
-        }
-        if is_excluded(path, excludes) {
-            continue;
-        }
-        files.push(path.to_path_buf());
-    }
-
-    files.sort();
-    Ok(files)
-}
-
 fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    if globs.is_empty() {
-        return discover_files(".", exclude);
-    }
-
-    let mut result = Vec::new();
-    for pattern in globs {
-        let path = Path::new(pattern);
-        if path.is_dir() {
-            result.extend(discover_files(pattern, exclude)?);
-        } else {
-            for entry in
-                glob::glob(pattern).with_context(|| format!("invalid glob pattern: {pattern}"))?
-            {
-                let path = entry?;
-                if path.is_file() && !is_excluded(&path, exclude) {
-                    result.push(path);
-                }
-            }
-        }
-    }
-    result.sort();
-    result.dedup();
-    Ok(result)
-}
-
-fn is_excluded(path: &Path, excludes: &[String]) -> bool {
-    let path_str = match path.to_str() {
-        Some(s) => s.strip_prefix("./").unwrap_or(s),
-        None => return false,
-    };
-    excludes
-        .iter()
-        .any(|pattern| glob_match::glob_match(pattern, path_str))
+    lintel_config::discover::collect_files(globs, exclude, |p| detect_format(p).is_some())
 }
 
 // ---------------------------------------------------------------------------
@@ -542,7 +482,7 @@ pub fn check_format_contents(
 
     let mut diagnostics = Vec::new();
     for (file_path, content) in file_contents {
-        if is_excluded(file_path, &loaded.excludes) {
+        if lintel_config::discover::is_excluded(file_path, &loaded.excludes) {
             continue;
         }
         if detect_format(file_path).is_none() {
@@ -666,4 +606,62 @@ pub fn run(args: &FormatArgs) -> Result<FormatResult> {
     }
 
     Ok(result)
+}
+
+/// Check formatting of pre-discovered files, returning diagnostics.
+///
+/// Unlike [`check_format`], this skips file discovery and config loading —
+/// the caller provides both the file list and the format config.
+/// Files with unsupported extensions are silently skipped.
+pub fn check_format_files(files: &[PathBuf], config: &FormatConfig) -> Vec<LintelDiagnostic> {
+    let mut diagnostics = Vec::new();
+    for file_path in files {
+        if detect_format(file_path).is_none() {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(file_path) else {
+            continue;
+        };
+        if let Ok(Some(formatted)) = format_content(file_path, &content, config) {
+            let path_str = file_path.display().to_string();
+            diagnostics.push(make_diagnostic(path_str, &content, &formatted));
+        }
+    }
+    diagnostics
+}
+
+/// Fix formatting of pre-discovered files in place.
+///
+/// Unlike [`fix_format`], this skips file discovery and config loading.
+/// Files with unsupported extensions are silently skipped.
+/// Returns the number of files that were reformatted.
+///
+/// # Errors
+///
+/// Returns an error if a file cannot be written.
+pub fn fix_format_files(files: &[PathBuf], config: &FormatConfig) -> Result<usize> {
+    let mut fixed = 0;
+    for file_path in files {
+        if detect_format(file_path).is_none() {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(file_path) else {
+            continue;
+        };
+        if let Ok(Some(formatted)) = format_content(file_path, &content, config) {
+            fs::write(file_path, formatted)?;
+            fixed += 1;
+        }
+    }
+    Ok(fixed)
+}
+
+/// Build a [`FormatConfig`] from a [`lintel_config::Config`].
+pub fn format_config_from_lintel(config: &lintel_config::Config) -> FormatConfig {
+    config
+        .format
+        .as_ref()
+        .and_then(|f| f.dprint.as_ref())
+        .map(FormatConfig::from_dprint)
+        .unwrap_or_default()
 }

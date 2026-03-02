@@ -96,6 +96,9 @@ pub async fn check(
 
 /// Run all checks: schema validation and formatting.
 ///
+/// Discovers files once and shares the file list between validation and
+/// formatting. Config is loaded once.
+///
 /// Returns `Ok(true)` if any errors were found, `Ok(false)` if clean.
 ///
 /// # Errors

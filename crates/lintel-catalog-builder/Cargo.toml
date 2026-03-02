@@ -17,7 +17,6 @@ workspace = true
 anyhow.workspace = true
 bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"] }
 futures-util = "0.3.32"
-glob-match.workspace = true
 jsonschema.workspace = true
 jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }

@@ -370,7 +370,7 @@ fn classify_schema(
 
 /// Match an organize glob pattern against a fileMatch string (treated as literal text).
 ///
-/// Unlike `glob_match::glob_match`, this treats `**` as matching any characters
+/// Unlike standard glob matching, this treats `**` as matching any characters
 /// including path separators. The literal parts between `**` segments must
 /// appear in order in the text.
 ///
