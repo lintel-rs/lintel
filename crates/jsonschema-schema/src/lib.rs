@@ -1,10 +1,14 @@
-mod ext_lintel;
-mod ext_taplo;
-mod ext_tombi;
+#![doc = include_str!("../README.md")]
+
+extern crate alloc;
+
+pub mod extensions;
 mod schema;
 
-pub use ext_lintel::LintelExt;
-pub use ext_taplo::{ExtDocs, ExtLinks, TaploSchemaExt};
+pub use extensions::{
+    EnumValueMeta, ExtDocs, ExtLinks, IntellijSchemaExt, LintelSchemaExt, TaploInfoSchemaExt,
+    TaploSchemaExt, TombiSchemaExt,
+};
 pub use schema::{
     Schema, SchemaValue, SimpleType, TypeValue, navigate_pointer, ref_name, resolve_ref,
 };

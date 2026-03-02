@@ -49,6 +49,10 @@ pub struct ExplainArgs {
     #[bpaf(long("no-pager"), switch)]
     pub no_pager: bool,
 
+    /// Show extended details like $comment annotations
+    #[bpaf(long("extended"), switch)]
+    pub extended: bool,
+
     /// First positional argument. When no `--file`, `--path`, or `--schema`
     /// flag is given this is treated as a file path (equivalent to `--path`).
     /// Otherwise it is a JSON Pointer or `JSONPath` to a sub-schema.
@@ -205,6 +209,7 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
         syntax_highlight: use_color && !args.no_syntax_highlighting,
         width: lintel_cli_common::terminal_width(),
         validation_errors,
+        extended: args.extended,
     };
 
     let output = match pointer.as_deref() {
@@ -232,6 +237,8 @@ pub struct ExplainDisplayArgs {
     pub no_syntax_highlighting: bool,
     /// Print output directly instead of piping through a pager.
     pub no_pager: bool,
+    /// Show extended details like `$comment` annotations.
+    pub extended: bool,
 }
 
 /// Fetch, migrate, and render schema documentation for an already-resolved
@@ -255,6 +262,7 @@ pub async fn explain_resolved_schema(
                 syntax_highlight: use_color && !display.no_syntax_highlighting,
                 width: lintel_cli_common::terminal_width(),
                 validation_errors: vec![],
+                extended: display.extended,
             };
             let output = jsonschema_explain::explain(&sv, &resolved.display_name, &opts);
             if is_tty && !display.no_pager {
@@ -641,6 +649,7 @@ mod tests {
             },
             no_syntax_highlighting: false,
             no_pager: false,
+            extended: false,
             positional: None,
             pointer: None,
         };

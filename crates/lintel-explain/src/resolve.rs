@@ -326,7 +326,7 @@ fn resolve_schema_path_only<'a>(
         .iter()
         .find(|(pattern, _)| {
             let p = path_str.strip_prefix("./").unwrap_or(path_str);
-            glob_match::glob_match(pattern, p) || glob_match::glob_match(pattern, file_name)
+            glob_matcher::glob_match(pattern, p) || glob_matcher::glob_match(pattern, file_name)
         })
         .map(|(pattern, url)| (pattern.as_str(), url.as_str()))
     {

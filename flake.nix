@@ -25,31 +25,13 @@
         {
           self',
           pkgs,
-          system,
           ...
         }:
         let
           craneLib = inputs.crane.mkLib pkgs;
-          craneLibStatic =
-            if pkgs.stdenv.isLinux then
-              let
-                muslPkgs =
-                  {
-                    "x86_64-linux" = pkgs.pkgsCross.musl64;
-                    "aarch64-linux" = pkgs.pkgsCross.aarch64-multiplatform-musl;
-                  }
-                  .${system};
-              in
-              inputs.crane.mkLib muslPkgs
-            else
-              null;
 
           packages = import ./nix/packages.nix {
-            inherit
-              craneLib
-              craneLibStatic
-              pkgs
-              ;
+            inherit craneLib pkgs;
           };
         in
         {

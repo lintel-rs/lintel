@@ -14,6 +14,7 @@ pub(crate) struct Fmt<'a> {
     pub red: &'a str,     // required field markers
     pub syntax_highlight: bool,
     pub width: usize,
+    pub extended: bool,
 }
 
 impl Fmt<'_> {
@@ -25,6 +26,7 @@ impl Fmt<'_> {
             Self::plain(opts.width)
         };
         f.syntax_highlight = opts.syntax_highlight;
+        f.extended = opts.extended;
         f
     }
 
@@ -40,6 +42,7 @@ impl Fmt<'_> {
             red: RED,
             syntax_highlight: true,
             width,
+            extended: false,
         }
     }
 
@@ -55,6 +58,7 @@ impl Fmt<'_> {
             red: "",
             syntax_highlight: false,
             width,
+            extended: false,
         }
     }
 

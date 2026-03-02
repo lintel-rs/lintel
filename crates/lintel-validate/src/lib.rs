@@ -16,7 +16,6 @@ use lintel_cli_common::CliCacheOptions;
 // -----------------------------------------------------------------------
 
 pub mod catalog;
-pub mod discover;
 pub mod parsers;
 pub mod registry;
 pub(crate) mod suggest;

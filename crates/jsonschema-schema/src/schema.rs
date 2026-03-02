@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use core::fmt;
 
 use indexmap::IndexMap;
@@ -6,8 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
 use url::Url;
 
-use crate::ext_lintel::LintelExt;
-use crate::ext_taplo::TaploSchemaExt;
+use crate::extensions::IntellijSchemaExt;
+use crate::extensions::LintelSchemaExt;
+use crate::extensions::TaploInfoSchemaExt;
+use crate::extensions::TaploSchemaExt;
+use crate::extensions::TombiSchemaExt;
 
 /// A JSON Schema value — either a boolean schema or an object schema.
 ///
@@ -173,6 +177,50 @@ pub struct Schema {
     #[schemars(extend("format" = "uri-reference", "pattern" = "^[^#]*#?$"))]
     pub id: Option<String>,
 
+    /// The `title` keyword — short summary annotation.
+    ///
+    /// The value of this keyword MUST be a string.
+    ///
+    /// Both `"title"` and `"description"` can be used to decorate a
+    /// user interface with information about the data produced by this
+    /// user interface. A title will preferably be short, whereas a
+    /// description will provide explanation about the purpose of the
+    /// instance described by this schema.
+    ///
+    /// See [JSON Schema Validation §9.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+
+    /// The `description` keyword — explanatory annotation.
+    ///
+    /// The value of this keyword MUST be a string.
+    ///
+    /// Both `"title"` and `"description"` can be used to decorate a
+    /// user interface with information about the data produced by this
+    /// user interface. A title will preferably be short, whereas a
+    /// description will provide explanation about the purpose of the
+    /// instance described by this schema.
+    ///
+    /// See [JSON Schema Validation §9.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// The `markdownDescription` keyword — Markdown-formatted
+    /// description (VS Code / non-standard extension).
+    ///
+    /// Not part of the JSON Schema specification. When present, it is
+    /// preferred over [`description`](Self::description) by editors
+    /// that support Markdown rendering.
+    #[serde(
+        rename = "markdownDescription",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub markdown_description: Option<String>,
+
+    /// Lintel provenance metadata (`x-lintel`).
+    #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
+    pub x_lintel: Option<LintelSchemaExt>,
+
     /// The `$ref` keyword — static schema reference.
     ///
     /// The `"$ref"` keyword is an applicator that is used to reference
@@ -302,7 +350,7 @@ pub struct Schema {
     ///
     /// See [JSON Schema Core §8.2.4](https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.4).
     #[serde(rename = "$defs", skip_serializing_if = "Option::is_none")]
-    pub defs: Option<IndexMap<String, SchemaValue>>,
+    pub defs: Option<BTreeMap<String, SchemaValue>>,
 
     /// The `$vocabulary` keyword — meta-schema vocabulary declaration.
     ///
@@ -343,46 +391,6 @@ pub struct Schema {
     // ---------------------------------------------------------------
     // Metadata / annotation vocabulary (JSON Schema Validation §9)
     // ---------------------------------------------------------------
-    /// The `title` keyword — short summary annotation.
-    ///
-    /// The value of this keyword MUST be a string.
-    ///
-    /// Both `"title"` and `"description"` can be used to decorate a
-    /// user interface with information about the data produced by this
-    /// user interface. A title will preferably be short, whereas a
-    /// description will provide explanation about the purpose of the
-    /// instance described by this schema.
-    ///
-    /// See [JSON Schema Validation §9.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-
-    /// The `description` keyword — explanatory annotation.
-    ///
-    /// The value of this keyword MUST be a string.
-    ///
-    /// Both `"title"` and `"description"` can be used to decorate a
-    /// user interface with information about the data produced by this
-    /// user interface. A title will preferably be short, whereas a
-    /// description will provide explanation about the purpose of the
-    /// instance described by this schema.
-    ///
-    /// See [JSON Schema Validation §9.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-9.1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// The `markdownDescription` keyword — Markdown-formatted
-    /// description (VS Code / non-standard extension).
-    ///
-    /// Not part of the JSON Schema specification. When present, it is
-    /// preferred over [`description`](Self::description) by editors
-    /// that support Markdown rendering.
-    #[serde(
-        rename = "markdownDescription",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub markdown_description: Option<String>,
-
     /// The `default` keyword — default value annotation.
     ///
     /// There are no restrictions placed on the value of this keyword.
@@ -530,6 +538,13 @@ pub struct Schema {
     /// See [JSON Schema Validation §6.1.2](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.2).
     #[serde(rename = "enum", skip_serializing_if = "Option::is_none")]
     pub enum_: Option<Vec<Value>>,
+
+    /// Per-enum-value Markdown descriptions (VS Code / non-standard extension).
+    #[serde(
+        rename = "markdownEnumDescriptions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub markdown_enum_descriptions: Option<Vec<Option<String>>>,
 
     /// The `const` keyword — constant value constraint.
     ///
@@ -1287,34 +1302,13 @@ pub struct Schema {
     pub x_taplo: Option<TaploSchemaExt>,
     /// Taplo informational metadata (`x-taplo-info`).
     #[serde(rename = "x-taplo-info", skip_serializing_if = "Option::is_none")]
-    pub x_taplo_info: Option<Value>,
-    /// Lintel linter extension (`x-lintel`).
-    #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
-    pub x_lintel: Option<LintelExt>,
-    /// Tombi TOML version hint (`x-tombi-toml-version`).
-    #[serde(
-        rename = "x-tombi-toml-version",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_toml_version: Option<String>,
-    /// Tombi table key ordering hint (`x-tombi-table-keys-order`).
-    #[serde(
-        rename = "x-tombi-table-keys-order",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_table_keys_order: Option<Value>,
-    /// Tombi additional key label (`x-tombi-additional-key-label`).
-    #[serde(
-        rename = "x-tombi-additional-key-label",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_additional_key_label: Option<String>,
-    /// Tombi array value ordering hint (`x-tombi-array-values-order`).
-    #[serde(
-        rename = "x-tombi-array-values-order",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub x_tombi_array_values_order: Option<Value>,
+    pub x_taplo_info: Option<TaploInfoSchemaExt>,
+    /// Tombi TOML extensions (`x-tombi-*`).
+    #[serde(flatten)]
+    pub x_tombi: TombiSchemaExt,
+    /// `IntelliJ` IDEA extensions (`x-intellij-*`).
+    #[serde(flatten)]
+    pub x_intellij: IntellijSchemaExt,
 
     // ---------------------------------------------------------------
     // Catch-all
@@ -1325,7 +1319,7 @@ pub struct Schema {
     /// or known extension is captured here, preserving round-trip
     /// fidelity.
     #[serde(flatten)]
-    pub extra: IndexMap<String, Value>,
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl SchemaValue {
@@ -1699,7 +1693,11 @@ impl Schema {
                     .as_ref()
                     .and_then(|m| m.get(segment))
             })
-            .or_else(|| self.defs.as_ref().and_then(|m| m.get(segment)))
+            .or_else(|| {
+                self.defs
+                    .as_ref()
+                    .and_then(|m: &BTreeMap<String, SchemaValue>| m.get(segment))
+            })
             .or_else(|| self.dependent_schemas.as_ref().and_then(|m| m.get(segment)))
     }
 }
@@ -1909,6 +1907,117 @@ mod tests {
     }
 
     #[test]
+    fn x_intellij_deserialization() {
+        let json = json!({
+            "type": "string",
+            "enum": ["system", "local"],
+            "x-intellij-html-description": "<b>bold</b> description",
+            "x-intellij-language-injection": "Shell Script",
+            "x-intellij-enum-metadata": {
+                "system": { "description": "Use system nginx" },
+                "local": { "description": "Use local nginx process" }
+            }
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            schema.x_intellij.html_description.as_deref(),
+            Some("<b>bold</b> description")
+        );
+        assert_eq!(
+            schema.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+        let meta = schema.x_intellij.enum_metadata.unwrap();
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+    }
+
+    #[test]
+    fn x_intellij_fixture_huskyrc() {
+        let content = include_str!("../tests/fixtures/huskyrc.json");
+        let value: Value = serde_json::from_str(content).expect("parse huskyrc.json");
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize huskyrc schema");
+
+        // definitions/hook has x-intellij-language-injection
+        let hook = schema.defs.as_ref().expect("defs present")["hook"]
+            .as_schema()
+            .expect("hook is a schema");
+        assert_eq!(
+            hook.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+
+        // hooks/applypatch-msg has x-intellij-html-description
+        let hooks = schema.properties.as_ref().expect("properties present")["hooks"]
+            .as_schema()
+            .expect("hooks is a schema");
+        let applypatch = hooks.properties.as_ref().expect("hooks has properties")["applypatch-msg"]
+            .as_schema()
+            .expect("applypatch-msg is a schema");
+        assert!(
+            applypatch
+                .x_intellij
+                .html_description
+                .as_ref()
+                .expect("html_description present")
+                .starts_with("<p>This hook is invoked by")
+        );
+
+        // Neither should leak into extra
+        assert!(!hook.extra.contains_key("x-intellij-language-injection"));
+        assert!(!applypatch.extra.contains_key("x-intellij-html-description"));
+    }
+
+    #[test]
+    fn x_intellij_fixture_monade() {
+        let content = include_str!("../tests/fixtures/monade-stack-config.json");
+        let value: Value = serde_json::from_str(content).expect("parse monade-stack-config.json");
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize monade schema");
+
+        // properties/nginx has x-intellij-enum-metadata
+        let nginx = schema.properties.as_ref().expect("properties present")["nginx"]
+            .as_schema()
+            .expect("nginx is a schema");
+        let meta = nginx
+            .x_intellij
+            .enum_metadata
+            .as_ref()
+            .expect("enum_metadata present");
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+        assert_eq!(
+            meta["local"].description.as_deref(),
+            Some("Use local nginx process")
+        );
+        assert!(!nginx.extra.contains_key("x-intellij-enum-metadata"));
+    }
+
+    #[test]
+    fn x_intellij_not_in_extra() {
+        let json = json!({
+            "type": "string",
+            "x-intellij-html-description": "hello",
+            "x-custom": "other"
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert!(schema.x_intellij.html_description.is_some());
+        // x-intellij should NOT leak into extra
+        assert!(!schema.extra.contains_key("x-intellij-html-description"));
+        // but other x-* should still be in extra
+        assert!(schema.extra.contains_key("x-custom"));
+    }
+
+    #[test]
     fn x_lintel_deserialization() {
         let json = json!({
             "type": "object",
@@ -1967,7 +2076,7 @@ mod tests {
             ref_: Some("#/$defs/Item".into()),
             ..Default::default()
         }));
-        let mut defs = IndexMap::new();
+        let mut defs = BTreeMap::new();
         defs.insert("Item".into(), item_schema);
         let mut props = IndexMap::new();
         props.insert("item".into(), ref_schema);
@@ -1990,12 +2099,11 @@ mod tests {
 
     #[test]
     fn parse_cargo_fixture() {
-        let content =
-            std::fs::read_to_string("../jsonschema-migrate/tests/fixtures/cargo.json").unwrap();
-        let value: Value = serde_json::from_str(&content).unwrap();
+        let content = include_str!("../../jsonschema-migrate/tests/fixtures/cargo.json");
+        let value: Value = serde_json::from_str(content).expect("parse cargo.json");
         let mut migrated = value;
         jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).unwrap();
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize cargo schema");
         assert!(schema.title.is_some() || schema.type_.is_some());
         // Verify x-taplo is parsed if present
         if schema.x_taplo.is_some() {
