@@ -41,6 +41,8 @@ pub struct ExplainOptions {
     pub width: usize,
     /// Validation errors to show before the schema documentation.
     pub validation_errors: Vec<ExplainError>,
+    /// Show extended details like `$comment` annotations.
+    pub extended: bool,
 }
 
 /// Render a JSON Schema as human-readable terminal documentation.
@@ -102,7 +104,9 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
         out.push('\n');
     }
 
-    if let Some(ref comment) = s.comment {
+    if f.extended
+        && let Some(ref comment) = s.comment
+    {
         write_section(&mut out, "COMMENT", &f);
         write_description(&mut out, comment, &f, "    ");
         out.push('\n');
@@ -199,6 +203,7 @@ mod tests {
             syntax_highlight: false,
             width: 80,
             validation_errors: vec![],
+            extended: false,
         }
     }
 
@@ -208,6 +213,7 @@ mod tests {
             syntax_highlight: true,
             width: 80,
             validation_errors: vec![],
+            extended: false,
         }
     }
 
@@ -807,9 +813,32 @@ mod tests {
             }
         }));
 
-        let output = explain(&schema, "comment-test", &plain());
+        let extended = ExplainOptions {
+            extended: true,
+            ..plain()
+        };
+        let output = explain(&schema, "comment-test", &extended);
         assert!(output.contains("Comment:"));
         assert!(output.contains("See https://example.com for details"));
+    }
+
+    #[test]
+    fn comment_hidden_by_default() {
+        let schema = sv(json!({
+            "type": "object",
+            "$comment": "Hidden comment",
+            "properties": {
+                "x": {
+                    "type": "string",
+                    "$comment": "Also hidden"
+                }
+            }
+        }));
+
+        let output = explain(&schema, "comment-test", &plain());
+        assert!(!output.contains("Comment"));
+        assert!(!output.contains("Hidden comment"));
+        assert!(!output.contains("Also hidden"));
     }
 
     #[test]
@@ -819,7 +848,11 @@ mod tests {
             "type": "object"
         }));
 
-        let output = explain(&schema, "comment-test", &plain());
+        let extended = ExplainOptions {
+            extended: true,
+            ..plain()
+        };
+        let output = explain(&schema, "comment-test", &extended);
         assert!(output.contains("COMMENT"));
         assert!(output.contains("Root level comment"));
         // No double blank lines — only one blank line between sections

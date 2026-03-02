@@ -152,7 +152,9 @@ fn render_property_details(
         write_description(out, desc, f, desc_indent);
     }
 
-    if let Some(ref comment) = prop_schema.comment {
+    if f.extended
+        && let Some(ref comment) = prop_schema.comment
+    {
         let _ = writeln!(out, "{desc_indent}{}Comment:{}", f.dim, f.reset);
         write_description(out, comment, f, &format!("{desc_indent}  "));
     }

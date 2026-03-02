@@ -14,6 +14,7 @@ use lintel_explain::resolve::ResolvedFileSchema;
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(generate(identify_args_inner))]
+#[allow(clippy::struct_excessive_bools)]
 pub struct IdentifyArgs {
     /// Show detailed schema documentation
     #[bpaf(long("explain"), switch)]
@@ -29,6 +30,10 @@ pub struct IdentifyArgs {
     /// Print output directly instead of piping through a pager
     #[bpaf(long("no-pager"), switch)]
     pub no_pager: bool,
+
+    /// Show extended details like $comment annotations
+    #[bpaf(long("extended"), switch)]
+    pub extended: bool,
 
     /// File to identify
     #[bpaf(positional("FILE"), complete_shell(ShellComp::File { mask: None }))]
@@ -75,6 +80,7 @@ pub async fn run(args: IdentifyArgs, global: &CLIGlobalOptions) -> Result<bool> 
             &lintel_explain::ExplainDisplayArgs {
                 no_syntax_highlighting: args.no_syntax_highlighting,
                 no_pager: args.no_pager,
+                extended: args.extended,
             },
         )
         .await?;

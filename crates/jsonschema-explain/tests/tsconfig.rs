@@ -7,6 +7,7 @@ fn plain() -> ExplainOptions {
         syntax_highlight: false,
         width: 80,
         validation_errors: vec![],
+        extended: false,
     }
 }
 
