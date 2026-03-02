@@ -11,6 +11,10 @@ pub use extensions::{
 };
 pub use schema::{
     Schema, SchemaValue, SimpleType, TypeValue, navigate_pointer, ref_name, resolve_ref,
+    vocabularies::{
+        ApplicatorVocabulary, ContentVocabulary, CoreVocabulary, FormatAnnotationVocabulary,
+        MetaDataVocabulary, UnevaluatedVocabulary, ValidationVocabulary,
+    },
 };
 
 /// Generate the JSON Schema for [`SchemaValue`] (a JSON Schema 2020-12

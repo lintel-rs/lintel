@@ -421,6 +421,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "combine-structs"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "console"
 version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1543,6 +1552,7 @@ dependencies = [
 name = "jsonschema-schema"
 version = "0.1.0"
 dependencies = [
+ "combine-structs",
  "indexmap",
  "jsonschema-migrate",
  "schemars",
