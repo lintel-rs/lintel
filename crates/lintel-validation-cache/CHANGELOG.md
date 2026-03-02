@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-validation-cache-v0.0.8...lintel-validation-cache-v0.0.9) - 2026-03-01
+
+### Other
+
+- Replace flat ValidationError with typed enum and pre-computed spans
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-validation-cache-v0.0.7...lintel-validation-cache-v0.0.8) - 2026-02-26
 
 ### Other

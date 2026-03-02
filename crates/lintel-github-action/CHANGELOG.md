@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.16](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.15...lintel-github-action-v0.0.16) - 2026-03-01
+
+### Other
+
+- updated the following local packages: lintel-diagnostics, lintel-check
+
 ## [0.0.15](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.14...lintel-github-action-v0.0.15) - 2026-03-01
 
 ### Other

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.5...jsonschema-explain-v0.2.6) - 2026-03-01
+
+### Other
+
+- Move schema resolution from lintel-identify into lintel-explain
+
 ## [0.2.5](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.4...jsonschema-explain-v0.2.5) - 2026-02-27
 
 ### Other
