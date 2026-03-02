@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-diagnostics-v0.0.2...lintel-diagnostics-v0.0.3) - 2026-03-02
+
+### Added
+
+- use granular validation error codes like lintel::validation::required
+
 ## [0.0.2](https://github.com/lintel-rs/lintel/compare/lintel-diagnostics-v0.0.1...lintel-diagnostics-v0.0.2) - 2026-03-01
 
 ### Other
