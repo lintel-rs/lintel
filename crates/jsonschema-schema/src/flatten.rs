@@ -1,4 +1,4 @@
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 
 use crate::schema::{Schema, SchemaValue, navigate_pointer};
 
@@ -18,7 +18,7 @@ pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> Schema {
 
     let mut new_all_of = Vec::new();
 
-    for (i, entry) in all_of.into_iter().enumerate() {
+    for entry in all_of {
         let is_ref = entry.as_schema().is_some_and(|s| s.ref_.is_some());
 
         // Resolve $ref against the original root (before mutations)
@@ -37,25 +37,8 @@ pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> Schema {
             s.clone()
         };
 
-        // Build the allOf entry: keep existing $ref or create one for inline schemas
-        let ref_entry = if is_ref {
-            entry
-        } else {
-            // Inline schema — move it to $defs and replace with $ref
-            let def_name = resolved
-                .title
-                .clone()
-                .unwrap_or_else(|| format!("allOf-{i}"));
-
-            let defs = merged.defs.get_or_insert_with(BTreeMap::new);
-            defs.entry(def_name.clone()).or_insert(entry);
-
-            SchemaValue::Schema(Box::new(Schema {
-                ref_: Some(format!("#/$defs/{def_name}")),
-                ..Default::default()
-            }))
-        };
-        new_all_of.push(ref_entry);
+        // Keep original entry in allOf for provenance
+        new_all_of.push(entry);
 
         // Merge resolved properties into root (left-bias)
         let mut clean = resolved;
@@ -75,18 +58,147 @@ pub fn flatten_all_of(schema: &Schema, root: &SchemaValue) -> Schema {
     }
 
     merged.all_of = Some(new_all_of);
+
+    // Remove $defs entries that are no longer referenced by any $ref
+    if let Some(defs) = merged.defs.take() {
+        let refs = collect_ref_targets(&merged, &defs);
+        let pruned: BTreeMap<_, _> = defs
+            .into_iter()
+            .filter(|(name, _)| refs.contains(name))
+            .collect();
+        merged.defs = if pruned.is_empty() {
+            None
+        } else {
+            Some(pruned)
+        };
+    }
+
     merged
 }
 
+/// Collect all `$defs` names that are referenced by `$ref` pointers in the schema.
+///
+/// Walks the schema tree (excluding `$defs` itself) and extracts the def name
+/// from any `$ref` matching `#/$defs/<name>`.
+fn collect_ref_targets(schema: &Schema, defs: &BTreeMap<String, SchemaValue>) -> BTreeSet<String> {
+    let mut targets = BTreeSet::new();
+    collect_refs_in_schema(schema, &mut targets, true);
+    // Transitively walk within referenced defs — a def may reference another def
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (name, sv) in defs {
+            if targets.contains(name.as_str()) {
+                let prev_len = targets.len();
+                collect_refs_in_value(sv, &mut targets);
+                changed |= targets.len() > prev_len;
+            }
+        }
+    }
+    targets
+}
+
+fn collect_refs_in_schema(schema: &Schema, targets: &mut BTreeSet<String>, skip_defs: bool) {
+    if let Some(ref r) = schema.ref_
+        && let Some(name) = extract_def_name(r)
+    {
+        targets.insert(name.to_string());
+    }
+
+    // Map fields
+    for map in [
+        schema.properties.as_ref().map(|m| m.values()),
+        schema.pattern_properties.as_ref().map(|m| m.values()),
+        schema.dependent_schemas.as_ref().map(|m| m.values()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for sv in map {
+            collect_refs_in_value(sv, targets);
+        }
+    }
+
+    // $defs — only walk when not skipping (i.e. when called recursively from within a def)
+    if !skip_defs && let Some(ref defs) = schema.defs {
+        for sv in defs.values() {
+            collect_refs_in_value(sv, targets);
+        }
+    }
+
+    // Array fields — skip allOf since those refs are already merged
+    for arr in [
+        schema.any_of.as_ref(),
+        schema.one_of.as_ref(),
+        schema.prefix_items.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for sv in arr {
+            collect_refs_in_value(sv, targets);
+        }
+    }
+
+    // Single fields
+    for sv in [
+        schema.items.as_deref(),
+        schema.contains.as_deref(),
+        schema.additional_properties.as_deref(),
+        schema.property_names.as_deref(),
+        schema.unevaluated_properties.as_deref(),
+        schema.unevaluated_items.as_deref(),
+        schema.not.as_deref(),
+        schema.if_.as_deref(),
+        schema.then_.as_deref(),
+        schema.else_.as_deref(),
+        schema.content_schema.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        collect_refs_in_value(sv, targets);
+    }
+}
+
+/// Extract a `$defs` name from a `$ref` string.
+///
+/// Handles both local (`#/$defs/Foo`) and absolute (`https://…#/$defs/Foo`) refs.
+fn extract_def_name(ref_str: &str) -> Option<&str> {
+    // Local ref
+    if let Some(name) = ref_str.strip_prefix("#/$defs/") {
+        return Some(name);
+    }
+    // Absolute URL with fragment
+    let fragment = ref_str.split_once('#')?.1;
+    fragment.strip_prefix("/$defs/")
+}
+
+fn collect_refs_in_value(sv: &SchemaValue, targets: &mut BTreeSet<String>) {
+    if let Some(schema) = sv.as_schema() {
+        collect_refs_in_schema(schema, targets, false);
+    }
+}
+
 /// Resolve a `$ref` entry against the root schema.
+///
+/// Handles both local (`#/…`) and absolute (`https://…#/…`) refs by
+/// extracting the fragment portion and navigating the root.
 fn resolve_entry_in_root<'a>(entry: &'a SchemaValue, root: &'a SchemaValue) -> &'a SchemaValue {
     let Some(schema) = entry.as_schema() else {
         return entry;
     };
-    if let Some(ref ref_str) = schema.ref_
-        && let Some(path) = ref_str.strip_prefix('#')
-        && let Ok(resolved) = navigate_pointer(root, root, path)
-    {
+    let Some(ref ref_str) = schema.ref_ else {
+        return entry;
+    };
+    let fragment = if let Some(path) = ref_str.strip_prefix('#') {
+        path
+    } else if let Some(pos) = ref_str.find('#') {
+        &ref_str[pos + 1..]
+    } else {
+        return entry;
+    };
+    if let Ok(resolved) = navigate_pointer(root, root, fragment) {
         return resolved;
     }
     entry
@@ -140,15 +252,11 @@ mod tests {
         assert!(props.contains_key("a"));
         assert!(props.contains_key("b"));
 
-        // allOf kept with $ref entry
+        // allOf kept with original inline entry
         let all_of = result.all_of.unwrap();
         assert_eq!(all_of.len(), 1);
-        let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
-        assert_eq!(ref_str, Some("#/$defs/Extra"));
-
-        // Inline schema moved to $defs
-        let defs = result.defs.unwrap();
-        assert!(defs.contains_key("Extra"));
+        let entry = all_of[0].as_schema().unwrap();
+        assert_eq!(entry.title.as_deref(), Some("Extra"));
     }
 
     #[test]
@@ -179,6 +287,9 @@ mod tests {
         let all_of = result.all_of.unwrap();
         let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
         assert_eq!(ref_str, Some("#/$defs/Base"));
+
+        // Def pruned — only referenced from allOf (already merged)
+        assert!(result.defs.is_none());
     }
 
     #[test]
@@ -228,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn inline_without_title_uses_index_name() {
+    fn inline_without_title_kept_as_is() {
         let val = json!({
             "allOf": [
                 { "properties": { "x": { "type": "string" } } }
@@ -238,11 +349,10 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
+        // Inline entry kept in allOf, properties merged
         let all_of = result.all_of.unwrap();
-        let ref_str = all_of[0].as_schema().unwrap().ref_.as_deref();
-        assert_eq!(ref_str, Some("#/$defs/allOf-0"));
-
-        let defs = result.defs.unwrap();
-        assert!(defs.contains_key("allOf-0"));
+        assert_eq!(all_of.len(), 1);
+        assert!(result.properties.unwrap().contains_key("x"));
+        assert!(result.defs.is_none());
     }
 }

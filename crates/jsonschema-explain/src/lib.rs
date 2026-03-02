@@ -65,12 +65,17 @@ pub fn explain(schema: &SchemaValue, name: &str, opts: &ExplainOptions) -> Strin
 
 /// Render a `Schema` as human-readable terminal documentation.
 fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOptions) -> String {
-    // Flatten allOf: merge properties into root, move inline entries to $defs
-    let s = s.flatten(root);
-    let render_root = SchemaValue::Schema(Box::new(s.clone()));
-
     let mut out = String::new();
     let f = Fmt::from_opts(opts);
+
+    // In extended mode, show raw schema structure; otherwise flatten allOf.
+    // absolute() rewrites local $refs to absolute URLs using the schema's $id.
+    let s = if f.extended {
+        s.clone()
+    } else {
+        s.absolute().flatten(root)
+    };
+    let render_root = SchemaValue::Schema(Box::new(s.clone()));
 
     let title = s.title.as_deref();
     let description = get_description(&s);
@@ -163,7 +168,9 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
     }
 
     render_examples_section(&mut out, &s, &f);
-    render_variants_section(&mut out, &s, &render_root, &f);
+    // Resolve allOf/oneOf/anyOf $refs against the original root — the flattened
+    // schema may have pruned merged $defs entries.
+    render_variants_section(&mut out, &s, root, &f);
     render_definitions_section(&mut out, &s, &render_root, &f);
 
     out

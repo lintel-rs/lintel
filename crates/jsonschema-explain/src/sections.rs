@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use jsonschema_schema::{Schema, SchemaValue};
+use jsonschema_schema::{Schema, SchemaValue, ref_name};
 use serde_json::Value;
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type_suffix, format_value};
@@ -42,6 +42,7 @@ pub(crate) fn render_variants_section(
             _ => None,
         };
         if let Some(variants) = variants {
+            let is_all_of = *keyword == "allOf";
             let label = match *keyword {
                 "oneOf" => "ONE OF",
                 "anyOf" => "ANY OF",
@@ -52,11 +53,54 @@ pub(crate) fn render_variants_section(
             for (i, variant) in variants.iter().enumerate() {
                 let resolved_sv = resolve_ref(variant, root);
                 if let Some(resolved) = resolved_sv.as_schema() {
-                    render_variant_block(out, resolved, variant, root, f, i + 1);
+                    if is_all_of {
+                        render_allof_summary(out, resolved, variant, f, i + 1);
+                    } else {
+                        render_variant_block(out, resolved, variant, root, f, i + 1);
+                    }
                 }
             }
             out.push('\n');
         }
+    }
+}
+
+/// Render a compact summary line for an allOf entry.
+///
+/// Since allOf content is merged into PROPERTIES, we only show provenance:
+/// the entry name/title and type.
+#[allow(clippy::too_many_arguments)]
+fn render_allof_summary(
+    out: &mut String,
+    resolved: &Schema,
+    original: &SchemaValue,
+    f: &Fmt<'_>,
+    index: usize,
+) {
+    let label = if let Some(ref title) = resolved.title {
+        title.clone()
+    } else if let Some(orig_schema) = original.as_schema()
+        && let Some(ref r) = orig_schema.ref_
+    {
+        ref_name(r).to_string()
+    } else if let Some(ty) = schema_type_str(resolved) {
+        ty
+    } else {
+        format!("variant {index}")
+    };
+
+    let ty = schema_type_str(resolved).unwrap_or_default();
+    let suffix = format_type_suffix(&ty, f);
+    let _ = writeln!(
+        out,
+        "    {}({index}){} {}{label}{}{suffix}",
+        f.dim, f.reset, f.green, f.reset
+    );
+    // Show the $ref URL so users can navigate to the original definition
+    if let Some(orig_schema) = original.as_schema()
+        && let Some(ref r) = orig_schema.ref_
+    {
+        let _ = writeln!(out, "        {}{r}{}", f.dim, f.reset);
     }
 }
 

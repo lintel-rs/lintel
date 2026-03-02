@@ -248,11 +248,18 @@ impl Schema {
         crate::validate::validate(self)
     }
 
+    /// Rewrite all local `$ref` pointers (`#/…`) to absolute URLs using the
+    /// schema's `$id` as base.  Returns the schema unchanged if `$id` is absent.
+    #[must_use]
+    pub fn absolute(&self) -> Schema {
+        crate::absolute::make_absolute(self)
+    }
+
     /// Flatten composition keywords (currently `allOf`) into a single merged schema.
     ///
-    /// Properties from `allOf` entries are merged into the root. Inline entries
-    /// are moved to `$defs` and replaced with `$ref` pointers. The `allOf` array
-    /// is preserved (now all `$ref` entries) so provenance remains visible.
+    /// Properties from `allOf` entries are merged into the root, and unreferenced
+    /// `$defs` entries are pruned. The `allOf` array is preserved so provenance
+    /// remains visible.
     #[must_use]
     pub fn flatten(&self, root: &SchemaValue) -> Schema {
         crate::flatten::flatten_all_of(self, root)

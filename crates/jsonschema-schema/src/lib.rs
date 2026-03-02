@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+pub(crate) mod absolute;
 pub mod extensions;
 pub(crate) mod flatten;
 mod schema;

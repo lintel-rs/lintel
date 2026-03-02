@@ -3,14 +3,24 @@ use jsonschema_schema::{Schema, SchemaValue, ref_name};
 use crate::fmt::{Fmt, format_type};
 
 /// Resolve a `$ref` within the same schema document.
+///
+/// Handles both local refs (`#/…`) and absolute URLs with fragments
+/// (`https://…#/…`) by extracting the fragment and navigating the root.
 pub fn resolve_ref<'a>(sv: &'a SchemaValue, root: &'a SchemaValue) -> &'a SchemaValue {
     let Some(schema) = sv.as_schema() else {
         return sv;
     };
-    if let Some(ref ref_str) = schema.ref_
-        && let Some(path) = ref_str.strip_prefix('#')
-        && let Ok(resolved) = jsonschema_schema::navigate_pointer(root, root, path)
-    {
+    let Some(ref ref_str) = schema.ref_ else {
+        return sv;
+    };
+    let fragment = if let Some(path) = ref_str.strip_prefix('#') {
+        path
+    } else if let Some(pos) = ref_str.find('#') {
+        &ref_str[pos + 1..]
+    } else {
+        return sv;
+    };
+    if let Ok(resolved) = jsonschema_schema::navigate_pointer(root, root, fragment) {
         return resolved;
     }
     sv
