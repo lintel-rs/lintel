@@ -4,10 +4,11 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::extensions::LintelExt;
-use crate::extensions::TaploInfo;
+use crate::extensions::IntellijSchemaExt;
+use crate::extensions::LintelSchemaExt;
+use crate::extensions::TaploInfoSchemaExt;
 use crate::extensions::TaploSchemaExt;
-use crate::extensions::TombiExt;
+use crate::extensions::TombiSchemaExt;
 
 /// A JSON Schema value — either a boolean schema or an object schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +45,7 @@ pub struct Schema {
     )]
     pub markdown_description: Option<String>,
     #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
-    pub x_lintel: Option<LintelExt>,
+    pub x_lintel: Option<LintelSchemaExt>,
 
     #[serde(rename = "$ref", skip_serializing_if = "Option::is_none")]
     pub ref_: Option<String>,
@@ -180,9 +181,11 @@ pub struct Schema {
     #[serde(rename = "x-taplo", skip_serializing_if = "Option::is_none")]
     pub x_taplo: Option<TaploSchemaExt>,
     #[serde(rename = "x-taplo-info", skip_serializing_if = "Option::is_none")]
-    pub x_taplo_info: Option<TaploInfo>,
+    pub x_taplo_info: Option<TaploInfoSchemaExt>,
     #[serde(flatten)]
-    pub x_tombi: TombiExt,
+    pub x_tombi: TombiSchemaExt,
+    #[serde(flatten)]
+    pub x_intellij: IntellijSchemaExt,
 
     // --- Catch-all for unknown properties ---
     #[serde(flatten)]
@@ -735,6 +738,118 @@ mod tests {
         let taplo = schema.x_taplo.unwrap();
         assert_eq!(taplo.hidden, Some(true));
         assert_eq!(taplo.docs.unwrap().main.as_deref(), Some("Main docs"));
+    }
+
+    #[test]
+    fn x_intellij_deserialization() {
+        let json = json!({
+            "type": "string",
+            "enum": ["system", "local"],
+            "x-intellij-html-description": "<b>bold</b> description",
+            "x-intellij-language-injection": "Shell Script",
+            "x-intellij-enum-metadata": {
+                "system": { "description": "Use system nginx" },
+                "local": { "description": "Use local nginx process" }
+            }
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            schema.x_intellij.html_description.as_deref(),
+            Some("<b>bold</b> description")
+        );
+        assert_eq!(
+            schema.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+        let meta = schema.x_intellij.enum_metadata.unwrap();
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+    }
+
+    #[test]
+    fn x_intellij_fixture_huskyrc() {
+        let path = "../../e2e-tests/cases/schemastore/schemastore/src/schemas/json/huskyrc.json";
+        let Ok(content) = std::fs::read_to_string(path) else {
+            // e2e-tests submodule not checked out (e.g. CI)
+            return;
+        };
+        let value: Value = serde_json::from_str(&content).unwrap();
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).unwrap();
+
+        // definitions/hook has x-intellij-language-injection
+        let hook = schema.defs.as_ref().unwrap()["hook"].as_schema().unwrap();
+        assert_eq!(
+            hook.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+
+        // hooks/applypatch-msg has x-intellij-html-description
+        let hooks = schema.properties.as_ref().unwrap()["hooks"]
+            .as_schema()
+            .unwrap();
+        let applypatch = hooks.properties.as_ref().unwrap()["applypatch-msg"]
+            .as_schema()
+            .unwrap();
+        assert!(
+            applypatch
+                .x_intellij
+                .html_description
+                .as_ref()
+                .unwrap()
+                .starts_with("<p>This hook is invoked by")
+        );
+
+        // Neither should leak into extra
+        assert!(!hook.extra.contains_key("x-intellij-language-injection"));
+        assert!(!applypatch.extra.contains_key("x-intellij-html-description"));
+    }
+
+    #[test]
+    fn x_intellij_fixture_monade() {
+        let path = "../../e2e-tests/cases/schemastore/schemastore/src/schemas/json/monade-stack-config.json";
+        let Ok(content) = std::fs::read_to_string(path) else {
+            return;
+        };
+        let value: Value = serde_json::from_str(&content).unwrap();
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).unwrap();
+
+        // properties/nginx has x-intellij-enum-metadata
+        let nginx = schema.properties.as_ref().unwrap()["nginx"]
+            .as_schema()
+            .unwrap();
+        let meta = nginx.x_intellij.enum_metadata.as_ref().unwrap();
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+        assert_eq!(
+            meta["local"].description.as_deref(),
+            Some("Use local nginx process")
+        );
+        assert!(!nginx.extra.contains_key("x-intellij-enum-metadata"));
+    }
+
+    #[test]
+    fn x_intellij_not_in_extra() {
+        let json = json!({
+            "type": "string",
+            "x-intellij-html-description": "hello",
+            "x-custom": "other"
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert!(schema.x_intellij.html_description.is_some());
+        // x-intellij should NOT leak into extra
+        assert!(!schema.extra.contains_key("x-intellij-html-description"));
+        // but other x-* should still be in extra
+        assert!(schema.extra.contains_key("x-custom"));
     }
 
     #[test]
