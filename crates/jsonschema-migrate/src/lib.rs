@@ -96,6 +96,21 @@ fn migrate_object_keywords(
 
     // --- Cleanup/normalization fixes (always applied) ---
 
+    // Infer `type: "object"` when `properties` is present but `type` is missing.
+    // Many schemas omit `type` for allOf/anyOf variants that contribute properties;
+    // making the type explicit helps downstream tools.
+    // Guard: only when `properties` is an actual object (not a string in extension data).
+    if map
+        .get("properties")
+        .is_some_and(serde_json::Value::is_object)
+        && !map.contains_key("type")
+    {
+        map.insert(
+            "type".to_string(),
+            serde_json::Value::String("object".to_string()),
+        );
+    }
+
     // Strip fragment from $schema (e.g. "…/draft-07/schema#" → "…/draft-07/schema").
     // Fragments in base URIs cause compilation failures in jsonschema 0.42.2+.
     if let Some(serde_json::Value::String(s)) = map.get("$schema")
@@ -395,6 +410,52 @@ mod tests {
         let mut schema = original.clone();
         migrate_to_2020_12(&mut schema);
         assert!(schema["properties"].get("dependencies").is_some());
+    }
+
+    #[test]
+    fn properties_without_type_gets_type_object() {
+        let mut schema = json!({
+            "allOf": [
+                {
+                    "properties": {
+                        "name": { "type": "string" }
+                    },
+                    "required": ["name"]
+                }
+            ]
+        });
+        migrate_to_2020_12(&mut schema);
+        assert_eq!(schema["allOf"][0]["type"], "object");
+    }
+
+    #[test]
+    fn properties_with_type_unchanged() {
+        let mut schema = json!({
+            "type": "object",
+            "properties": {
+                "x": { "type": "string" }
+            }
+        });
+        let original = schema.clone();
+        migrate_to_2020_12(&mut schema);
+        // type was already present, should not be duplicated or changed
+        assert_eq!(schema["type"], original["type"]);
+    }
+
+    #[test]
+    fn non_object_properties_not_inferred() {
+        // Extension data where "properties" is a string, not a schema keyword
+        let mut schema = json!({
+            "x-custom": {
+                "properties": "some-string-value",
+                "additionalProperties": "version-sort"
+            }
+        });
+        migrate_to_2020_12(&mut schema);
+        assert!(
+            schema["x-custom"].get("type").is_none(),
+            "should not add type when properties is not an object"
+        );
     }
 
     #[test]
