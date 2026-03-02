@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 
+extern crate alloc;
+
+mod inline;
 mod path;
 pub mod resolve;
 
@@ -84,6 +87,38 @@ fn is_url(s: &str) -> bool {
     s.starts_with("http://") || s.starts_with("https://")
 }
 
+/// Split a schema URI into the base URL and an optional fragment pointer.
+///
+/// Uses the `url` crate for proper URL parsing when the input is a URL.
+/// For local file paths, falls back to simple `#` splitting.
+///
+/// e.g. `"https://example.com/s.json#/$defs/Foo"` → `("https://example.com/s.json", Some("/$defs/Foo"))`
+fn split_schema_fragment(schema: &str) -> (String, Option<String>) {
+    if is_url(schema)
+        && let Ok(parsed) = url::Url::parse(schema)
+    {
+        let fragment = parsed
+            .fragment()
+            .map(String::from)
+            .filter(|f| !f.is_empty());
+        let mut base = parsed;
+        base.set_fragment(None);
+        return (base.to_string(), fragment);
+    }
+    // Local file path: simple split on '#'
+    if let Some(pos) = schema.find('#') {
+        let frag = &schema[pos + 1..];
+        let base = schema[..pos].to_string();
+        if frag.is_empty() {
+            (base, None)
+        } else {
+            (base, Some(frag.to_string()))
+        }
+    } else {
+        (schema.to_string(), None)
+    }
+}
+
 /// Extract the last path segment from a URL, e.g. "package.json".
 fn url_filename(url: &str) -> String {
     url.rsplit('/')
@@ -157,12 +192,24 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
     // is a file path (equivalent to --path) and the second is the pointer.
     let has_flag = args.file.is_some() || args.resolve_path.is_some() || args.schema.is_some();
     let mut args = args;
+
+    // Extract fragment from --schema if present (e.g., URL#/$defs/Foo).
+    // The fragment is used as the pointer to navigate into the schema.
+    let schema_fragment = if let Some(schema) = args.schema.take() {
+        let (base, frag) = split_schema_fragment(&schema);
+        args.schema = Some(base);
+        frag
+    } else {
+        None
+    };
+
     let pointer_str = if has_flag {
         // Flags present: first positional is the pointer, second is invalid.
         if args.pointer.is_some() {
             anyhow::bail!("unexpected extra positional argument");
         }
-        args.positional.take()
+        // Explicit positional pointer takes precedence over schema fragment.
+        args.positional.take().or(schema_fragment)
     } else if args.positional.is_some() {
         // No flags: first positional is the file path.
         args.resolve_path = args.positional.take();
@@ -210,6 +257,18 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
         width: lintel_cli_common::terminal_width(),
         validation_errors,
         extended: args.extended,
+    };
+
+    // When navigating via pointer, use the last path segment as the display
+    // name (e.g. "compilerOptionsDefinition" instead of the full URL).
+    let display_name = if let Some(ref ptr) = pointer {
+        ptr.rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&display_name)
+            .to_string()
+    } else {
+        display_name
     };
 
     let output = match pointer.as_deref() {
@@ -402,8 +461,8 @@ async fn fetch_schema(
     is_remote: bool,
     cache: &CliCacheOptions,
 ) -> Result<jsonschema_schema::SchemaValue> {
+    let retriever = resolve::build_retriever(cache);
     let mut value: serde_json::Value = if is_remote {
-        let retriever = resolve::build_retriever(cache);
         let (val, _) = retriever
             .fetch(schema_uri)
             .await
@@ -416,6 +475,7 @@ async fn fetch_schema(
             .with_context(|| format!("failed to parse schema: {schema_uri}"))?
     };
 
+    inline::inline_external_refs(&mut value, schema_uri, &retriever).await?;
     jsonschema_migrate::migrate_to_2020_12(&mut value);
     serde_json::from_value(value)
         .with_context(|| format!("failed to deserialize schema: {schema_uri}"))
@@ -777,5 +837,35 @@ mod tests {
         assert!(!is_url("./schema.json"));
         assert!(!is_url("/tmp/schema.json"));
         assert!(!is_url("schema.json"));
+    }
+
+    // --- split_schema_fragment ---
+
+    #[test]
+    fn fragment_extracted_from_url() {
+        let (base, frag) = split_schema_fragment("https://example.com/s.json#/$defs/Foo");
+        assert_eq!(base, "https://example.com/s.json");
+        assert_eq!(frag.as_deref(), Some("/$defs/Foo"));
+    }
+
+    #[test]
+    fn no_fragment_returns_none() {
+        let (base, frag) = split_schema_fragment("https://example.com/s.json");
+        assert_eq!(base, "https://example.com/s.json");
+        assert_eq!(frag, None);
+    }
+
+    #[test]
+    fn empty_fragment_returns_none() {
+        let (base, frag) = split_schema_fragment("https://example.com/s.json#");
+        assert_eq!(base, "https://example.com/s.json");
+        assert_eq!(frag, None);
+    }
+
+    #[test]
+    fn local_file_with_fragment() {
+        let (base, frag) = split_schema_fragment("./schema.json#/$defs/Bar");
+        assert_eq!(base, "./schema.json");
+        assert_eq!(frag.as_deref(), Some("/$defs/Bar"));
     }
 }

@@ -12,8 +12,9 @@ pub(crate) const MAX_DEPTH: usize = 3;
 
 /// Render a variant block for `oneOf`/`anyOf`/`allOf`.
 ///
-/// If the resolved variant has properties or a description, expand
-/// them inline. Otherwise, render a single summary line.
+/// - **`$ref` entries**: show label, type, description, and URL — but do NOT
+///   expand properties inline (the definition is in the DEFINITIONS section).
+/// - **Inline entries**: expand normally with properties and description.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_variant_block(
     out: &mut String,
@@ -21,8 +22,9 @@ pub(crate) fn render_variant_block(
     original: &SchemaValue,
     root: &SchemaValue,
     f: &Fmt<'_>,
-    index: usize,
 ) {
+    let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
+
     let label = if let Some(ref title) = resolved.title {
         title.clone()
     } else if let Some(orig_schema) = original.as_schema()
@@ -32,41 +34,110 @@ pub(crate) fn render_variant_block(
     } else if let Some(ty) = schema_type_str(resolved) {
         ty
     } else {
-        format!("variant {index}")
+        "(schema)".to_string()
     };
 
-    let has_properties = !resolved.properties.is_empty();
-    let desc = get_description(resolved);
-
     let dep_tag = deprecated_tag(resolved, f);
+    let ty = schema_type_str(resolved).unwrap_or_default();
+    let suffix = format_type_suffix(&ty, f);
 
-    if has_properties || desc.is_some() {
-        // Expanded block
-        let ty = schema_type_str(resolved).unwrap_or_default();
-        let suffix = format_type_suffix(&ty, f);
-        let _ = writeln!(
-            out,
-            "    {}({index}){} {}{label}{}{dep_tag}{suffix}",
-            f.dim, f.reset, f.green, f.reset
-        );
-        if let Some(desc) = desc {
+    if is_ref {
+        // $ref entry: show label, type, description, URL — do NOT expand inline
+        let _ = writeln!(out, "    {}{label}{}{dep_tag}{suffix}", f.green, f.reset);
+        if let Some(desc) = get_description(resolved) {
             write_description(out, desc, f, "        ");
         }
-        if !resolved.properties.is_empty() {
-            let req = required_set(resolved);
-            render_properties(out, &resolved.properties, &req, root, f, 2);
-        }
-    } else if resolved.enum_.is_some() {
-        if resolved.markdown_enum_descriptions.is_some() {
-            render_enum_with_descriptions(out, resolved, f, "        ");
-        } else if let Some(ref values) = resolved.enum_ {
-            let prefix = format!("    {}({index}){} ", f.dim, f.reset);
-            render_enum_values(out, values, f, &prefix);
+        if let Some(orig_schema) = original.as_schema()
+            && let Some(ref r) = orig_schema.ref_
+        {
+            let _ = writeln!(out, "        {}{r}{}", f.dim, f.reset);
         }
     } else {
-        // Single-line summary
-        let summary = variant_summary(original, root, f);
-        let _ = writeln!(out, "    {}({index}){} {summary}", f.dim, f.reset);
+        // Inline entry: expand normally
+        let has_properties = !resolved.properties.is_empty();
+        let desc = get_description(resolved);
+
+        if has_properties || desc.is_some() {
+            let _ = writeln!(out, "    {}{label}{}{dep_tag}{suffix}", f.green, f.reset);
+            if let Some(desc) = desc {
+                write_description(out, desc, f, "        ");
+            }
+            if !resolved.properties.is_empty() {
+                let req = required_set(resolved);
+                render_properties(out, &resolved.properties, &req, root, f, 2);
+            }
+        } else if resolved.enum_.is_some() {
+            if resolved.markdown_enum_descriptions.is_some() {
+                render_enum_with_descriptions(out, resolved, f, "        ");
+            } else if let Some(ref values) = resolved.enum_ {
+                render_enum_values(out, values, f, "    ");
+            }
+        } else if has_inline_composition(resolved) {
+            render_inline_composition(out, resolved, root, f);
+        } else {
+            let summary = variant_summary(original, root, f);
+            let _ = writeln!(out, "    {summary}");
+        }
+    }
+}
+
+/// Check if a schema has composition keywords (anyOf/oneOf/allOf).
+fn has_inline_composition(schema: &Schema) -> bool {
+    schema.any_of.is_some() || schema.one_of.is_some() || schema.all_of.is_some()
+}
+
+/// Render composition sub-entries within a variant block.
+///
+/// Used when an inline entry (no `$ref`) is a bare composition wrapper,
+/// e.g. `{ "anyOf": [{ "$ref": "..." }, ...] }` inside an allOf.
+fn render_inline_composition(out: &mut String, schema: &Schema, root: &SchemaValue, f: &Fmt<'_>) {
+    for keyword in COMPOSITION_KEYWORDS {
+        let variants = match *keyword {
+            "oneOf" => schema.one_of.as_ref(),
+            "anyOf" => schema.any_of.as_ref(),
+            "allOf" => schema.all_of.as_ref(),
+            _ => None,
+        };
+        let Some(variants) = variants else {
+            continue;
+        };
+        let label = match *keyword {
+            "oneOf" => "One of",
+            "anyOf" => "Any of",
+            "allOf" => "All of",
+            _ => keyword,
+        };
+        let _ = writeln!(out, "    {}{label}:{}", f.dim, f.reset);
+        for variant in variants {
+            let resolved_sv = resolve_ref(variant, root);
+            let Some(resolved) = resolved_sv.as_schema() else {
+                continue;
+            };
+            let is_ref = variant.as_schema().is_some_and(|s| s.ref_.is_some());
+            let entry_label = if let Some(ref title) = resolved.title {
+                title.clone()
+            } else if let Some(orig) = variant.as_schema()
+                && let Some(ref r) = orig.ref_
+            {
+                ref_name(r).to_string()
+            } else if let Some(ty) = schema_type_str(resolved) {
+                ty
+            } else {
+                "(schema)".to_string()
+            };
+            let ty = schema_type_str(resolved).unwrap_or_default();
+            let suffix = format_type_suffix(&ty, f);
+            let _ = writeln!(out, "        {}{entry_label}{}{suffix}", f.green, f.reset);
+            if let Some(desc) = get_description(resolved) {
+                write_description(out, desc, f, "            ");
+            }
+            if is_ref
+                && let Some(orig) = variant.as_schema()
+                && let Some(ref r) = orig.ref_
+            {
+                let _ = writeln!(out, "            {}{r}{}", f.dim, f.reset);
+            }
+        }
     }
 }
 
@@ -241,7 +312,6 @@ fn render_inline_variant(
     f: &Fmt<'_>,
     depth: usize,
     desc_indent: &str,
-    index: usize,
 ) {
     let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
     let has_properties = !resolved.properties.is_empty();
@@ -253,7 +323,7 @@ fn render_inline_variant(
         } else if let Some(ty) = schema_type_str(resolved) {
             (ty, true)
         } else {
-            (format!("variant {index}"), false)
+            ("(schema)".to_string(), false)
         };
         let suffix = if label_is_type {
             String::new()
@@ -263,8 +333,8 @@ fn render_inline_variant(
         };
         let _ = writeln!(
             out,
-            "{desc_indent}  {}({index}){} {}{label}{}{deprecated_tag}{suffix}",
-            f.dim, f.reset, f.green, f.reset
+            "{desc_indent}  - {}{label}{}{deprecated_tag}{suffix}",
+            f.green, f.reset
         );
         if let Some(desc) = get_description(resolved) {
             let nested_indent = format!("{desc_indent}      ");
@@ -489,20 +559,11 @@ fn render_composition(
                 _ => keyword,
             };
             let _ = writeln!(out, "{desc_indent}{}{label}:{}", f.dim, f.reset);
-            for (i, variant) in variants.iter().enumerate() {
+            for variant in variants {
                 let resolved_sv = resolve_ref(variant, root);
                 let resolved = resolved_sv.as_schema();
                 if let Some(resolved) = resolved {
-                    render_inline_variant(
-                        out,
-                        resolved,
-                        variant,
-                        root,
-                        f,
-                        depth,
-                        desc_indent,
-                        i + 1,
-                    );
+                    render_inline_variant(out, resolved, variant, root, f, depth, desc_indent);
                 } else {
                     let summary = variant_summary(variant, root, f);
                     let _ = writeln!(out, "{desc_indent}  - {summary}");

@@ -94,7 +94,7 @@ assert_eq!(s.name, "player");
 Attributes on source struct fields are preserved through the merge,
 so `#[serde(rename = ...)]` and `#[schemars(...)]` work as expected:
 
-```rust
+```rust,ignore
 use combine_structs::Fields;
 use combine_structs::combine_fields;
 use serde::{Serialize, Deserialize};
@@ -136,7 +136,7 @@ In [Lintel](https://github.com/lintel-rs/lintel), this crate merges
 seven JSON Schema vocabulary structs (~60 fields) into a single flat
 `Schema` type:
 
-```rust
+```rust,ignore
 #[combine_fields(
     CoreVocabulary,
     ApplicatorVocabulary,

@@ -2,8 +2,11 @@
 
 extern crate alloc;
 
+pub(crate) mod absolute;
 pub mod extensions;
+pub(crate) mod flatten;
 mod schema;
+pub(crate) mod validate;
 
 pub use extensions::{
     EnumValueMeta, ExtDocs, ExtLinks, IntellijSchemaExt, LintelSchemaExt, TaploInfoSchemaExt,
@@ -16,6 +19,7 @@ pub use schema::{
         MetaDataVocabulary, UnevaluatedVocabulary, ValidationVocabulary,
     },
 };
+pub use validate::SchemaError;
 
 /// Generate the JSON Schema for [`SchemaValue`] (a JSON Schema 2020-12
 /// document).
