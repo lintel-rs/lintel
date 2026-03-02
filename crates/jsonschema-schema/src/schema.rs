@@ -670,6 +670,7 @@ impl Add for Schema {
     /// - **All other `Option<T>` fields**: `self.field.or(rhs.field)` — left wins.
     ///
     /// Composition keywords (`all_of`, `any_of`, `one_of`) are NOT merged.
+    #[allow(clippy::too_many_lines)]
     fn add(self, rhs: Self) -> Self {
         let extra = {
             let mut merged = self.extra;
