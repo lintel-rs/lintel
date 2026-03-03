@@ -5,7 +5,7 @@ use thiserror::Error;
 /// is available. Checked by reporters to decide whether to show the path suffix.
 pub const DEFAULT_LABEL: &str = "here";
 
-/// A validation diagnostic with a granular error code (e.g. `lintel::validation::required`).
+/// A validation diagnostic with a granular error code (e.g. `validation(required)`).
 ///
 /// Implements [`Diagnostic`] manually so the code can be computed at runtime
 /// from the [`ValidationErrorKind`](lintel_validation_cache::ValidationErrorKind).
@@ -24,7 +24,7 @@ pub struct ValidationDiagnostic {
     pub schema_url: String,
     /// JSON Schema path that triggered the error (e.g. `/properties/jobs/oneOf`).
     pub schema_path: String,
-    /// Granular diagnostic code (e.g. `lintel::validation::required`).
+    /// Granular diagnostic code (e.g. `validation(required)`).
     pub validation_code: String,
 }
 
@@ -71,7 +71,7 @@ impl Diagnostic for ValidationDiagnostic {
 #[derive(Debug, Error, Diagnostic)]
 pub enum LintelDiagnostic {
     #[error("{message}")]
-    #[diagnostic(code(lintel::parse))]
+    #[diagnostic(code(parse))]
     Parse {
         #[source_code]
         src: NamedSource<String>,
@@ -85,7 +85,7 @@ pub enum LintelDiagnostic {
     Validation(ValidationDiagnostic),
 
     #[error("{path}: mismatched $schema on line {line_number}: {message}")]
-    #[diagnostic(code(lintel::jsonl::schema_mismatch))]
+    #[diagnostic(code(jsonl::schema_mismatch))]
     SchemaMismatch {
         path: String,
         line_number: usize,
@@ -93,20 +93,20 @@ pub enum LintelDiagnostic {
     },
 
     #[error("{path}: {message}")]
-    #[diagnostic(code(lintel::io))]
+    #[diagnostic(code(io))]
     Io { path: String, message: String },
 
     #[error("{path}: {message}")]
-    #[diagnostic(code(lintel::schema::fetch))]
+    #[diagnostic(code(schema::fetch))]
     SchemaFetch { path: String, message: String },
 
     #[error("{path}: {message}")]
-    #[diagnostic(code(lintel::schema::compile))]
+    #[diagnostic(code(schema::compile))]
     SchemaCompile { path: String, message: String },
 
     #[error("Formatter would have printed the following content:\n\n{styled_path}\n\n{diff}")]
     #[diagnostic(
-        code(lintel::format),
+        code(format),
         help("run `lintel check --fix` or `lintel format` to fix formatting")
     )]
     Format {
@@ -365,7 +365,7 @@ mod tests {
                     span: 0.into(),
                     message: String::new(),
                 },
-                "lintel::parse",
+                "parse",
             ),
             (
                 LintelDiagnostic::Validation(ValidationDiagnostic {
@@ -378,9 +378,9 @@ mod tests {
                     message: String::new(),
                     schema_url: String::new(),
                     schema_path: String::new(),
-                    validation_code: "lintel::validation::required".to_string(),
+                    validation_code: "validation(required)".to_string(),
                 }),
-                "lintel::validation::required",
+                "validation(required)",
             ),
             (
                 LintelDiagnostic::SchemaMismatch {
@@ -388,28 +388,28 @@ mod tests {
                     line_number: 0,
                     message: String::new(),
                 },
-                "lintel::jsonl::schema_mismatch",
+                "jsonl::schema_mismatch",
             ),
             (
                 LintelDiagnostic::Io {
                     path: String::new(),
                     message: String::new(),
                 },
-                "lintel::io",
+                "io",
             ),
             (
                 LintelDiagnostic::SchemaFetch {
                     path: String::new(),
                     message: String::new(),
                 },
-                "lintel::schema::fetch",
+                "schema::fetch",
             ),
             (
                 LintelDiagnostic::SchemaCompile {
                     path: String::new(),
                     message: String::new(),
                 },
-                "lintel::schema::compile",
+                "schema::compile",
             ),
             (
                 LintelDiagnostic::Format {
@@ -417,7 +417,7 @@ mod tests {
                     styled_path: String::new(),
                     diff: String::new(),
                 },
-                "lintel::format",
+                "format",
             ),
         ];
 
