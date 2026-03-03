@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 mod config;
+pub mod context;
 pub mod discover;
 
 use std::collections::HashMap;
@@ -9,7 +10,8 @@ use std::path::{Path, PathBuf};
 use schemars::schema_for;
 use serde_json::Value;
 
-pub use config::{Config, Format, Override};
+pub use config::{Config, FilesConfig, Format, Override};
+pub use context::ConfigContext;
 
 const CONFIG_FILENAME: &str = "lintel.toml";
 
@@ -129,11 +131,12 @@ mod tests {
         let tmp = tempfile::tempdir()?;
         fs::write(
             tmp.path().join("lintel.toml"),
-            r#"exclude = ["testdata/**"]"#,
+            "[files]\nignore-patterns = [\"vendor/**\", \"testdata/**\"]\n",
         )?;
 
         let config = find_and_load(tmp.path())?.expect("config should exist");
-        assert_eq!(config.exclude, vec!["testdata/**"]);
+        let patterns = &config.files.expect("files section").ignore_patterns;
+        assert_eq!(patterns, &["vendor/**", "testdata/**"]);
         Ok(())
     }
 
@@ -142,10 +145,14 @@ mod tests {
         let tmp = tempfile::tempdir()?;
         let sub = tmp.path().join("a/b/c");
         fs::create_dir_all(&sub)?;
-        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["vendor/**"]"#)?;
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            "[files]\nignore-patterns = [\"vendor/**\"]\n",
+        )?;
 
         let config = find_and_load(&sub)?.expect("config should exist");
-        assert_eq!(config.exclude, vec!["vendor/**"]);
+        let patterns = &config.files.expect("files section").ignore_patterns;
+        assert_eq!(patterns, &["vendor/**"]);
         Ok(())
     }
 
@@ -163,7 +170,7 @@ mod tests {
         fs::write(tmp.path().join("lintel.toml"), "")?;
 
         let config = find_and_load(tmp.path())?.expect("config should exist");
-        assert!(config.exclude.is_empty());
+        assert!(config.files.is_none());
         assert!(config.rewrite.is_empty());
         Ok(())
     }
@@ -206,16 +213,20 @@ mod tests {
         fs::create_dir_all(&sub)?;
 
         // Parent config
-        fs::write(tmp.path().join("lintel.toml"), r#"exclude = ["parent/**"]"#)?;
+        fs::write(
+            tmp.path().join("lintel.toml"),
+            "[files]\nignore-patterns = [\"parent/**\"]\n",
+        )?;
 
         // Child config with root = true
         fs::write(
             sub.join("lintel.toml"),
-            "root = true\nexclude = [\"child/**\"]",
+            "root = true\n\n[files]\nignore-patterns = [\"child/**\"]\n",
         )?;
 
         let config = find_and_load(&sub)?.expect("config should exist");
-        assert_eq!(config.exclude, vec!["child/**"]);
+        let patterns = &config.files.expect("files section").ignore_patterns;
+        assert_eq!(patterns, &["child/**"]);
         // Parent's "parent/**" should NOT be included
         Ok(())
     }
@@ -229,28 +240,19 @@ mod tests {
         // Parent config
         fs::write(
             tmp.path().join("lintel.toml"),
-            r#"
-exclude = ["parent/**"]
-
-[rewrite]
-"http://parent/" = "//parent/"
-"#,
+            "[files]\nignore-patterns = [\"parent/**\"]\n\n[rewrite]\n\"http://parent/\" = \"//parent/\"\n",
         )?;
 
         // Child config (no root = true)
         fs::write(
             sub.join("lintel.toml"),
-            r#"
-exclude = ["child/**"]
-
-[rewrite]
-"http://child/" = "//child/"
-"#,
+            "[files]\nignore-patterns = [\"child/**\"]\n\n[rewrite]\n\"http://child/\" = \"//child/\"\n",
         )?;
 
         let config = find_and_load(&sub)?.expect("config should exist");
-        // Child excludes come first, then parent
-        assert_eq!(config.exclude, vec!["child/**", "parent/**"]);
+        // Child patterns come first, then parent
+        let patterns = &config.files.expect("files section").ignore_patterns;
+        assert_eq!(patterns, &["child/**", "parent/**"]);
         // Both rewrite rules present
         assert_eq!(
             config.rewrite.get("http://child/"),
@@ -632,7 +634,10 @@ lineWidth = 80
         )?;
 
         // Child has no format section
-        fs::write(sub.join("lintel.toml"), "exclude = [\"test/**\"]\n")?;
+        fs::write(
+            sub.join("lintel.toml"),
+            "[files]\nignore-patterns = [\"test/**\"]\n",
+        )?;
 
         let config = find_and_load(&sub)?.expect("config should exist");
         let dprint = config.format.expect("format").dprint.expect("dprint");

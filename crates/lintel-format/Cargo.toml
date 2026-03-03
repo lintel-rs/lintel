@@ -18,6 +18,7 @@ ansi-term-styles = "0.1.0"
 anyhow.workspace = true
 bpaf.workspace = true
 dprint-config = { version = "0.0.2", path = "../dprint-config" }
+glob-set = { version = "0.1.0", path = "../glob-set" }
 dprint-core = "0.67.4"
 dprint-plugin-json = "0.21.1"
 dprint-plugin-markdown = "0.21.1"

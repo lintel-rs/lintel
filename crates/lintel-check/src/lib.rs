@@ -5,6 +5,7 @@ use std::time::Instant;
 use anyhow::Result;
 use bpaf::Bpaf;
 
+use lintel_config::ConfigContext;
 use lintel_diagnostics::reporter::{CheckResult, CheckedFile, Reporter};
 
 // -----------------------------------------------------------------------
@@ -36,30 +37,26 @@ pub fn check_args() -> impl bpaf::Parser<CheckArgs> {
 ///
 /// Returns an error if schema validation fails to run (e.g. network or I/O issues).
 pub async fn check(
-    args: &mut CheckArgs,
+    args: &CheckArgs,
+    ctx: &ConfigContext,
     on_file_checked: impl FnMut(&CheckedFile),
 ) -> Result<CheckResult> {
-    // Save original args before validate's merge_config modifies them.
-    let original_globs = args.validate.globs.clone();
-    let original_exclude = args.validate.exclude.clone();
-
-    lintel_validate::merge_config(&mut args.validate);
-
-    let lib_args = lintel_validate::validate::ValidateArgs::from(&args.validate);
+    let lib_args = args.validate.to_lib_args(ctx);
 
     // Collect and read files once.
-    let files = lintel_validate::validate::collect_files(&lib_args.globs, &lib_args.exclude)?;
+    let files = lintel_validate::validate::collect_files(&lib_args.globs, &ctx.ignore_set)?;
     let mut read_errors = Vec::new();
     let file_contents = lintel_validate::validate::read_files(&files, &mut read_errors).await;
 
     if args.fix {
-        let fixed = lintel_format::fix_format(&original_globs, &original_exclude)?;
+        let fixed = lintel_format::fix_format(&args.validate.globs, ctx)?;
         if fixed > 0 {
             eprintln!("Fixed formatting in {fixed} file(s).");
         }
 
         let mut result = lintel_validate::validate::run_with_contents(
             &lib_args,
+            ctx,
             file_contents,
             None,
             on_file_checked,
@@ -70,15 +67,12 @@ pub async fn check(
         Ok(result)
     } else {
         // Check formatting using pre-read contents (borrows, no extra I/O).
-        let format_errors = lintel_format::check_format_contents(
-            &file_contents,
-            &original_globs,
-            &original_exclude,
-        );
+        let format_errors = lintel_format::check_format_contents(&file_contents, ctx);
 
         // Run validation (takes ownership of file contents).
         let mut result = lintel_validate::validate::run_with_contents(
             &lib_args,
+            ctx,
             file_contents,
             None,
             on_file_checked,
@@ -104,9 +98,13 @@ pub async fn check(
 /// # Errors
 ///
 /// Returns an error if schema validation fails to run (e.g. network or I/O issues).
-pub async fn run(args: &mut CheckArgs, reporter: &mut dyn Reporter) -> Result<bool> {
+pub async fn run(
+    args: &CheckArgs,
+    ctx: &ConfigContext,
+    reporter: &mut dyn Reporter,
+) -> Result<bool> {
     let start = Instant::now();
-    let result = check(args, |file| reporter.on_file_checked(file)).await?;
+    let result = check(args, ctx, |file| reporter.on_file_checked(file)).await?;
     let had_errors = result.has_errors();
     let elapsed = start.elapsed();
     reporter.report(result, elapsed);

@@ -161,11 +161,7 @@ fn process_file(
 /// Panics if `--schema-cache-ttl` is provided with an unparseable duration.
 #[tracing::instrument(skip_all, name = "annotate")]
 pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
-    let config_dir = args
-        .globs
-        .iter()
-        .find(|g| Path::new(g).is_dir())
-        .map(PathBuf::from);
+    let ctx = lintel_config::ConfigContext::load(&args.globs, &args.exclude);
 
     let mut builder = SchemaCache::builder();
     if let Some(dir) = &args.cache.cache_dir {
@@ -176,14 +172,11 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     }
     let retriever = builder.build();
 
-    let (mut config, _, _) = validate::load_config(config_dir.as_deref());
-    config.exclude.extend(args.exclude.clone());
-
-    let files = validate::collect_files(&args.globs, &config.exclude)?;
+    let files = validate::collect_files(&args.globs, &ctx.ignore_set)?;
     tracing::info!(file_count = files.len(), "collected files");
 
     let catalogs =
-        validate::fetch_compiled_catalogs(&retriever, &config, args.cache.no_catalog).await;
+        validate::fetch_compiled_catalogs(&retriever, &ctx.config, args.cache.no_catalog).await;
 
     let mut result = AnnotateResult {
         annotated: Vec::new(),
@@ -193,7 +186,7 @@ pub async fn run(args: &AnnotateArgs) -> Result<AnnotateResult> {
     };
 
     for file_path in &files {
-        match process_file(file_path, &config, &catalogs, args.update) {
+        match process_file(file_path, &ctx.config, &catalogs, args.update) {
             FileOutcome::Annotated(f) => result.annotated.push(f),
             FileOutcome::Updated(f) => result.updated.push(f),
             FileOutcome::Skipped => result.skipped += 1,

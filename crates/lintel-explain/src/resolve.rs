@@ -151,13 +151,11 @@ pub async fn resolve_schema_for_content(
 
     let retriever = build_retriever(cache);
 
-    let search_dir = config_search_dir
-        .map(Path::to_path_buf)
-        .or_else(|| file_path.parent().map(Path::to_path_buf));
-    let (cfg, config_dir, _config_path) = validate::load_config(search_dir.as_deref());
+    let search_dir = config_search_dir.or_else(|| file_path.parent());
+    let ctx = lintel_config::ConfigContext::load_from_dir(search_dir, &[]);
 
     let compiled_catalogs =
-        validate::fetch_compiled_catalogs(&retriever, &cfg, cache.no_catalog).await;
+        validate::fetch_compiled_catalogs(&retriever, &ctx.config, cache.no_catalog).await;
 
     let detected_format = parsers::detect_format(file_path);
     let (parser, instance) = parse_file(detected_format, content, &path_str);
@@ -168,7 +166,7 @@ pub async fn resolve_schema_for_content(
         &instance,
         &path_str,
         file_name,
-        &cfg,
+        &ctx.config,
         &compiled_catalogs,
     ) else {
         return Ok(None);
@@ -176,8 +174,8 @@ pub async fn resolve_schema_for_content(
 
     Ok(Some(build_resolved_file_schema(
         resolved,
-        &cfg,
-        &config_dir,
+        &ctx.config,
+        &ctx.config_dir,
         file_path,
         &compiled_catalogs,
     )))
@@ -206,21 +204,21 @@ pub async fn resolve_schema_for_path(
 
     let retriever = build_retriever(cache);
 
-    let config_search_dir = file_path.parent().map(Path::to_path_buf);
-    let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
+    let ctx = lintel_config::ConfigContext::load_from_dir(file_path.parent(), &[]);
 
     let compiled_catalogs =
-        validate::fetch_compiled_catalogs(&retriever, &cfg, cache.no_catalog).await;
+        validate::fetch_compiled_catalogs(&retriever, &ctx.config, cache.no_catalog).await;
 
-    let Some(resolved) = resolve_schema_path_only(&path_str, file_name, &cfg, &compiled_catalogs)
+    let Some(resolved) =
+        resolve_schema_path_only(&path_str, file_name, &ctx.config, &compiled_catalogs)
     else {
         return Ok(None);
     };
 
     Ok(Some(build_resolved_file_schema(
         resolved,
-        &cfg,
-        &config_dir,
+        &ctx.config,
+        &ctx.config_dir,
         file_path,
         &compiled_catalogs,
     )))

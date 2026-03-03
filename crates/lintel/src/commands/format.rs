@@ -3,11 +3,12 @@ use std::time::Instant;
 
 use ansi_term_styles::{BOLD, DIM, RESET};
 use anyhow::Result;
+use lintel_config::ConfigContext;
 
 /// Run the `format` command: format files in place, or check with `--check`.
-pub fn run(args: &lintel_format::FormatArgs, verbose: bool) -> Result<bool> {
+pub fn run(args: &lintel_format::FormatArgs, ctx: &ConfigContext, verbose: bool) -> Result<bool> {
     let start = Instant::now();
-    let result = lintel_format::run(args)?;
+    let result = lintel_format::run(args, ctx)?;
     let had_errors = !result.errors.is_empty();
 
     if verbose {

@@ -44,10 +44,10 @@ const CATALOG_SORT: TomlSortConfig = TomlSortConfig {
 /// Sort config for `lintel.toml`.
 ///
 /// Top-level keys: scalars and arrays first (`root`, `no-default-catalog`,
-/// `exclude`, `registries`), then table sections (`schemas`, `rewrite`,
+/// `registries`), then table sections (`files`, `schemas`, `rewrite`,
 /// `override`, `format`).
 const LINTEL_SORT: TomlSortConfig = TomlSortConfig {
-    section_order: &["schemas", "rewrite", "override", "format"],
+    section_order: &["files", "schemas", "rewrite", "override", "format"],
     sort_children: &["schemas", "rewrite", "format.dprint"],
     key_order: &[
         (
@@ -55,14 +55,15 @@ const LINTEL_SORT: TomlSortConfig = TomlSortConfig {
             &[
                 "root",
                 "no-default-catalog",
-                "exclude",
                 "registries",
+                "files",
                 "schemas",
                 "rewrite",
                 "override",
                 "format",
             ],
         ),
+        ("files", &["ignore-patterns"]),
         ("override", &["files", "schemas", "validate_formats"]),
     ],
     semver_sort: &[],
@@ -845,9 +846,10 @@ description = "Z"
     fn lintel_root_key_ordering() {
         let input = "\
 registries = [\"https://example.com/catalog.json\"]\n\
-exclude = [\"**/testdata/**\"]\n\
 root = true\n\
 no-default-catalog = true\n\n\
+[files]\n\
+ignore-patterns = [\"**/testdata/**\"]\n\n\
 [rewrite]\n\
 \"http://localhost/\" = \"//schemas/\"\n\n\
 [schemas]\n\
@@ -861,8 +863,8 @@ no-default-catalog = true\n\n\
             vec![
                 "root",
                 "no-default-catalog",
-                "exclude",
                 "registries",
+                "files",
                 "schemas",
                 "rewrite"
             ]
@@ -981,8 +983,9 @@ line-width = 100\n";
     fn lintel_full_sort_idempotent() {
         let input = "\
 # :schema ./schemas/lintel/lintel-toml.json\n\n\
-root = true\n\
-exclude = [\"**/testdata/**\"]\n\n\
+root = true\n\n\
+[files]\n\
+ignore-patterns = [\"**/testdata/**\"]\n\n\
 [schemas]\n\
 \"*.json\" = \"https://example.com/schema.json\"\n\n\
 [rewrite]\n\
@@ -1019,7 +1022,7 @@ root = true\n";
     /// no further changes.
     #[test]
     fn lintel_no_sections_idempotent() {
-        let input = "exclude = [\"**/testdata/**\", \"e2e-tests/**\"]\n";
+        let input = "registries = [\"https://example.com/catalog.json\"]\n";
         let path = Path::new("lintel.toml");
         let config = dprint_plugin_toml::configuration::ConfigurationBuilder::new().build();
         // First format: should return None (already formatted) or Some(same).

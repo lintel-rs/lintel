@@ -132,11 +132,10 @@ async fn trace(args: TraceArgs) -> Result<()> {
     let retriever = builder.build();
 
     // Load config
-    let config_search_dir = file_path.parent().map(Path::to_path_buf);
-    let (cfg, config_dir, _config_path) = validate::load_config(config_search_dir.as_deref());
+    let ctx = lintel_config::ConfigContext::load_from_dir(file_path.parent(), &[]);
 
     let compiled_catalogs =
-        trace_catalog(&retriever, &cfg, args.no_catalog, &schema_cache_dir).await;
+        trace_catalog(&retriever, &ctx.config, args.no_catalog, &schema_cache_dir).await;
 
     // Parse file and resolve schema
     let detected_format = parsers::detect_format(file_path);
@@ -146,8 +145,8 @@ async fn trace(args: TraceArgs) -> Result<()> {
         parser.as_ref(),
         &content,
         &instance,
-        &cfg,
-        &config_dir,
+        &ctx.config,
+        &ctx.config_dir,
         &compiled_catalogs,
         &path_str,
         file_name,
@@ -161,7 +160,7 @@ async fn trace(args: TraceArgs) -> Result<()> {
         &retriever,
         &schema_uri,
         is_remote,
-        &cfg,
+        &ctx.config,
         &path_str,
         &content,
     )

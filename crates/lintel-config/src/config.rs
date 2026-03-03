@@ -24,16 +24,31 @@ fn example_schema_glob() -> Vec<String> {
     vec!["https://json.schemastore.org/*.json".into()]
 }
 
-fn example_exclude() -> Vec<String> {
-    vec![
-        "vendor/**".into(),
-        "testdata/**".into(),
-        "*.generated.json".into(),
-    ]
+fn example_ignore_patterns() -> Vec<String> {
+    vec!["vendor/**".into(), "testdata/**".into()]
 }
 
 fn example_registry() -> Vec<String> {
     vec!["https://example.com/custom-catalog.json".into()]
+}
+
+/// File selection configuration.
+///
+/// Controls which files Lintel processes. Patterns in `ignore-patterns`
+/// exclude matching files (like `.gitignore`). Files matching any pattern
+/// are skipped. When the list is empty, all files pass through.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(title = "Files")]
+pub struct FilesConfig {
+    /// Glob patterns for files to exclude from processing.
+    ///
+    /// Each pattern works like a `.gitignore` entry — files matching any
+    /// pattern are skipped. For example, `vendor/**` excludes everything
+    /// under the `vendor` directory.
+    #[schemars(title = "Ignore Patterns", example = example_ignore_patterns())]
+    #[serde(default, rename = "ignore-patterns")]
+    pub ignore_patterns: Vec<String>,
 }
 
 /// Formatting configuration.
@@ -129,14 +144,12 @@ pub struct Config {
     #[serde(default)]
     pub root: bool,
 
-    /// Glob patterns for files to exclude from validation.
+    /// File selection configuration.
     ///
-    /// Matched against file paths relative to the working directory. Standard
-    /// glob syntax is supported: `*` matches within a single directory, `**`
-    /// matches across directory boundaries.
-    #[schemars(title = "Exclude Patterns", example = example_exclude())]
+    /// Controls which files Lintel processes via include/exclude glob patterns.
+    #[schemars(title = "Files")]
     #[serde(default)]
-    pub exclude: Vec<String>,
+    pub files: Option<FilesConfig>,
 
     /// Custom schema-to-file mappings.
     ///
@@ -210,13 +223,22 @@ pub struct Config {
 
 impl Config {
     /// Merge a parent config into this one.  Child values take priority:
-    /// - `exclude`: parent entries are appended (child entries come first)
+    /// - `files.ignore_patterns`: parent entries are appended (child entries come first)
     /// - `schemas`: parent entries are added only if the key is not already present
     /// - `registries`: parent entries are appended (deduped)
     /// - `rewrite`: parent entries are added only if the key is not already present
     /// - `root` is not inherited
     pub(crate) fn merge_parent(&mut self, parent: Config) {
-        self.exclude.extend(parent.exclude);
+        // Merge files.ignore_patterns: child first, parent appended.
+        match (&mut self.files, parent.files) {
+            (Some(child), Some(parent_files)) => {
+                child.ignore_patterns.extend(parent_files.ignore_patterns);
+            }
+            (None, some_parent) => {
+                self.files = some_parent;
+            }
+            (Some(_), None) => {}
+        }
         for (k, v) in parent.schemas {
             self.schemas.entry(k).or_insert(v);
         }
@@ -283,7 +305,7 @@ impl Config {
         true
     }
 
-    /// Collect files matching the given globs, merging config excludes with CLI excludes.
+    /// Collect files matching the given globs, filtering with the provided ignore set.
     ///
     /// The `filter` predicate controls which files are included during directory walks
     /// (e.g. filtering by file extension). When `globs` is empty, auto-discovers from `"."`.
@@ -294,11 +316,9 @@ impl Config {
     pub fn collect_files(
         &self,
         globs: &[String],
-        cli_excludes: &[String],
+        ignore_set: &glob_set::GlobSet,
         filter: impl Fn(&Path) -> bool,
     ) -> anyhow::Result<Vec<PathBuf>> {
-        let mut excludes = self.exclude.clone();
-        excludes.extend(cli_excludes.iter().cloned());
-        crate::discover::collect_files(globs, &excludes, filter)
+        crate::discover::collect_files(globs, ignore_set, filter)
     }
 }

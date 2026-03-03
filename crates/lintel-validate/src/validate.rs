@@ -14,6 +14,8 @@ use lintel_schema_cache::{CacheStatus, SchemaCache};
 use lintel_validation_cache::{ValidationCacheStatus, ValidationError, ValidationErrorKind};
 use schema_catalog::{CompiledCatalog, FileFormat};
 
+use lintel_config::ConfigContext;
+
 use crate::catalog;
 use crate::parsers::{self, Parser};
 use crate::registry;
@@ -51,9 +53,6 @@ pub struct ValidateArgs {
     /// Glob patterns to find files (empty = auto-discover)
     pub globs: Vec<String>,
 
-    /// Exclude files matching these globs (repeatable)
-    pub exclude: Vec<String>,
-
     /// Cache directory for remote schemas
     pub cache_dir: Option<String>,
 
@@ -65,9 +64,6 @@ pub struct ValidateArgs {
 
     /// Disable `SchemaStore` catalog matching
     pub no_catalog: bool,
-
-    /// Directory to search for `lintel.toml` (defaults to cwd)
-    pub config_dir: Option<PathBuf>,
 
     /// TTL for cached schemas. `None` means no expiry.
     pub schema_cache_ttl: Option<core::time::Duration>,
@@ -87,46 +83,19 @@ struct ParsedFile {
 }
 
 // ---------------------------------------------------------------------------
-// Config loading
-// ---------------------------------------------------------------------------
-
-/// Locate `lintel.toml`, load the full config, and return the config directory.
-/// Returns `(config, config_dir, config_path)`.  When no config is found or
-/// cwd is unavailable the config is default and `config_path` is `None`.
-#[tracing::instrument(skip_all)]
-pub fn load_config(search_dir: Option<&Path>) -> (lintel_config::Config, PathBuf, Option<PathBuf>) {
-    let start_dir = match search_dir {
-        Some(d) => d.to_path_buf(),
-        None => match std::env::current_dir() {
-            Ok(d) => d,
-            Err(_) => return (lintel_config::Config::default(), PathBuf::from("."), None),
-        },
-    };
-
-    let Some(config_path) = lintel_config::find_config_path(&start_dir) else {
-        return (lintel_config::Config::default(), start_dir, None);
-    };
-
-    let dir = config_path.parent().unwrap_or(&start_dir).to_path_buf();
-    let cfg = lintel_config::find_and_load(&start_dir)
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-    (cfg, dir, Some(config_path))
-}
-
-// ---------------------------------------------------------------------------
 // File collection
 // ---------------------------------------------------------------------------
 
-/// Collect input files from globs/directories, applying exclude filters.
+/// Collect input files from globs/directories, applying ignore-pattern exclusions.
 ///
 /// # Errors
 ///
 /// Returns an error if a glob pattern is invalid or a directory cannot be walked.
-#[tracing::instrument(skip_all, fields(glob_count = globs.len(), exclude_count = exclude.len()))]
-pub fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    lintel_config::discover::collect_files(globs, exclude, |p| parsers::detect_format(p).is_some())
+#[tracing::instrument(skip_all, fields(glob_count = globs.len()))]
+pub fn collect_files(globs: &[String], ignore_set: &glob_set::GlobSet) -> Result<Vec<PathBuf>> {
+    lintel_config::discover::collect_files(globs, ignore_set, |p| {
+        parsers::detect_format(p).is_some()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -890,8 +859,8 @@ pub async fn fetch_compiled_catalogs(
 /// # Errors
 ///
 /// Returns an error if file collection or schema validation encounters an I/O error.
-pub async fn run(args: &ValidateArgs) -> Result<CheckResult> {
-    run_with(args, None, |_| {}).await
+pub async fn run(args: &ValidateArgs, ctx: &ConfigContext) -> Result<CheckResult> {
+    run_with(args, ctx, None, |_| {}).await
 }
 
 /// Like [`run`], but calls `on_check` each time a file is checked, allowing
@@ -902,11 +871,12 @@ pub async fn run(args: &ValidateArgs) -> Result<CheckResult> {
 /// Returns an error if file collection or schema validation encounters an I/O error.
 pub async fn run_with(
     args: &ValidateArgs,
+    ctx: &ConfigContext,
     cache: Option<SchemaCache>,
     on_check: impl FnMut(&CheckedFile),
 ) -> Result<CheckResult> {
-    let files = collect_files(&args.globs, &args.exclude)?;
-    run_with_files(args, cache, files, on_check).await
+    let files = collect_files(&args.globs, &ctx.ignore_set)?;
+    run_with_files(args, ctx, cache, files, on_check).await
 }
 
 /// Like [`run_with`] but operates on a pre-discovered file list.
@@ -918,18 +888,18 @@ pub async fn run_with(
 ///
 /// Returns an error if schema validation encounters an I/O error.
 #[tracing::instrument(skip_all, name = "validate")]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn run_with_files(
     args: &ValidateArgs,
+    ctx: &ConfigContext,
     cache: Option<SchemaCache>,
     files: Vec<PathBuf>,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<CheckResult> {
     let retriever = build_retriever(args, cache);
-    let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
     tracing::info!(file_count = files.len(), "collected files");
 
-    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &ctx.config, args.no_catalog).await;
 
     let mut errors: Vec<LintelDiagnostic> = Vec::new();
     let file_contents = read_files(&files, &mut errors).await;
@@ -938,8 +908,8 @@ pub async fn run_with_files(
         file_contents,
         args,
         retriever,
-        config,
-        &config_dir,
+        &ctx.config,
+        &ctx.config_dir,
         compiled_catalogs,
         errors,
         &mut on_check,
@@ -954,23 +924,24 @@ pub async fn run_with_files(
 /// # Errors
 ///
 /// Returns an error if schema validation encounters an I/O or network error.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_with_contents(
     args: &ValidateArgs,
+    ctx: &ConfigContext,
     file_contents: Vec<(PathBuf, String)>,
     cache: Option<SchemaCache>,
     mut on_check: impl FnMut(&CheckedFile),
 ) -> Result<CheckResult> {
     let retriever = build_retriever(args, cache);
-    let (config, config_dir, _config_path) = load_config(args.config_dir.as_deref());
-    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &config, args.no_catalog).await;
+    let compiled_catalogs = fetch_compiled_catalogs(&retriever, &ctx.config, args.no_catalog).await;
     let errors: Vec<LintelDiagnostic> = Vec::new();
 
     run_with_contents_inner(
         file_contents,
         args,
         retriever,
-        config,
-        &config_dir,
+        &ctx.config,
+        &ctx.config_dir,
         compiled_catalogs,
         errors,
         &mut on_check,
@@ -999,7 +970,7 @@ async fn run_with_contents_inner(
     file_contents: Vec<(PathBuf, String)>,
     args: &ValidateArgs,
     retriever: SchemaCache,
-    config: lintel_config::Config,
+    config: &lintel_config::Config,
     config_dir: &Path,
     compiled_catalogs: Vec<CompiledCatalog>,
     mut errors: Vec<LintelDiagnostic>,
@@ -1010,7 +981,7 @@ async fn run_with_contents_inner(
     // Phase 1: Parse files and resolve schema URIs
     let schema_groups = parse_and_group_contents(
         file_contents,
-        &config,
+        config,
         config_dir,
         &compiled_catalogs,
         &mut errors,
@@ -1299,15 +1270,28 @@ mod tests {
             .collect()
     }
 
+    fn default_ctx() -> ConfigContext {
+        ConfigContext {
+            config: lintel_config::Config::default(),
+            config_dir: PathBuf::from("."),
+            config_path: None,
+            ignore_patterns: vec![],
+            ignore_set: glob_set::GlobSet::default(),
+        }
+    }
+
+    fn ctx_for_dir(dir: &Path) -> ConfigContext {
+        ConfigContext::load_from_dir(Some(dir), &[])
+    }
+
     fn args_for_dirs(dirs: &[&str]) -> ValidateArgs {
         ValidateArgs {
             globs: scenario_globs(dirs),
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         }
     }
@@ -1327,15 +1311,14 @@ mod tests {
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1343,7 +1326,7 @@ mod tests {
     #[tokio::test]
     async fn dir_all_valid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests"]);
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1351,7 +1334,7 @@ mod tests {
     #[tokio::test]
     async fn dir_all_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["negative_tests"]);
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1359,7 +1342,7 @@ mod tests {
     #[tokio::test]
     async fn dir_mixed_valid_and_invalid() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "negative_tests"]);
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1367,7 +1350,7 @@ mod tests {
     #[tokio::test]
     async fn dir_no_schemas_skipped() -> anyhow::Result<()> {
         let c = args_for_dirs(&["no_schema"]);
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1375,7 +1358,7 @@ mod tests {
     #[tokio::test]
     async fn dir_valid_with_no_schema_files() -> anyhow::Result<()> {
         let c = args_for_dirs(&["positive_tests", "no_schema"]);
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1387,15 +1370,14 @@ mod tests {
         let dir = testdata().join("positive_tests");
         let c = ValidateArgs {
             globs: vec![dir.to_string_lossy().to_string()],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         assert!(result.files_checked() > 0);
         Ok(())
@@ -1410,15 +1392,14 @@ mod tests {
                 pos_dir.to_string_lossy().to_string(),
                 no_schema_dir.to_string_lossy().to_string(),
             ],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1433,15 +1414,14 @@ mod tests {
             .to_string();
         let c = ValidateArgs {
             globs: vec![dir.to_string_lossy().to_string(), glob_pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1451,15 +1431,14 @@ mod tests {
         let base = testdata().join("malformed");
         let c = ValidateArgs {
             globs: vec![base.join("*.json").to_string_lossy().to_string()],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1469,39 +1448,57 @@ mod tests {
         let base = testdata().join("malformed");
         let c = ValidateArgs {
             globs: vec![base.join("*.yaml").to_string_lossy().to_string()],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
 
-    // --- Exclude filter ---
+    // --- Ignore-pattern filter ---
 
     #[tokio::test]
-    async fn exclude_filters_files_in_dir() -> anyhow::Result<()> {
+    async fn ignore_patterns_filter_files_in_dir() -> anyhow::Result<()> {
         let base = testdata().join("negative_tests");
         let c = ValidateArgs {
             globs: scenario_globs(&["positive_tests", "negative_tests"]),
-            exclude: vec![
-                base.join("missing_name.json").to_string_lossy().to_string(),
-                base.join("missing_name.toml").to_string_lossy().to_string(),
-                base.join("missing_name.yaml").to_string_lossy().to_string(),
-            ],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let patterns: Vec<String> = vec![
+            base.join("missing_name.json")
+                .to_string_lossy()
+                .into_owned(),
+            base.join("missing_name.toml")
+                .to_string_lossy()
+                .into_owned(),
+            base.join("missing_name.yaml")
+                .to_string_lossy()
+                .into_owned(),
+        ];
+        let mut builder = glob_set::GlobSetBuilder::new();
+        for p in &patterns {
+            if let Ok(g) = glob_set::Glob::new(p) {
+                builder.add(g);
+            }
+        }
+        let ignore_set = builder.build().unwrap_or_default();
+        let ctx = ConfigContext {
+            config: lintel_config::Config::default(),
+            config_dir: PathBuf::from("."),
+            config_path: None,
+            ignore_patterns: patterns,
+            ignore_set,
+        };
+        let result = run_with(&c, &ctx, Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1512,15 +1509,14 @@ mod tests {
     async fn custom_cache_dir() -> anyhow::Result<()> {
         let c = ValidateArgs {
             globs: scenario_globs(&["positive_tests"]),
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(schema_mock()), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(schema_mock()), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1545,15 +1541,14 @@ mod tests {
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1576,15 +1571,14 @@ mod tests {
         let pattern = tmp.path().join("*.yaml").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1598,15 +1592,14 @@ mod tests {
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1635,15 +1628,14 @@ mod tests {
         let pattern = tmp.path().join("*.json5").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1670,15 +1662,14 @@ mod tests {
         let pattern = tmp.path().join("*.jsonc").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1732,15 +1723,14 @@ mod tests {
         ]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1766,15 +1756,14 @@ mod tests {
         ]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(result.has_errors());
         Ok(())
     }
@@ -1802,18 +1791,17 @@ mod tests {
         ]);
         let c = ValidateArgs {
             globs: vec![],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
 
         let orig_dir = std::env::current_dir()?;
         std::env::set_current_dir(tmp.path())?;
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         std::env::set_current_dir(orig_dir)?;
 
         assert!(!result.has_errors());
@@ -1840,15 +1828,14 @@ mod tests {
         let pattern = tmp.path().join("*.toml").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1880,16 +1867,15 @@ mod tests {
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
 
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &ctx_for_dir(tmp.path()), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 1);
         Ok(())
@@ -1913,16 +1899,15 @@ mod tests {
         let pattern = sub.join("*.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
 
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &ctx_for_dir(tmp.path()), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         Ok(())
     }
@@ -1954,15 +1939,14 @@ mod tests {
         let pattern = tmp.path().join("data.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(
             result.has_errors(),
             "expected format error without override"
@@ -1998,15 +1982,14 @@ validate_formats = false
         let pattern = tmp.path().join("data.json").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &ctx_for_dir(tmp.path()), Some(mock(&[])), |_| {}).await?;
         assert!(
             !result.has_errors(),
             "expected no errors with validate_formats = false override"
@@ -2024,15 +2007,14 @@ validate_formats = false
         let pattern = tmp.path().join("config.nix").to_string_lossy().to_string();
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 0);
         Ok(())
@@ -2067,15 +2049,14 @@ validate_formats = false
         ]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 1);
         Ok(())
@@ -2105,15 +2086,14 @@ validate_formats = false
         )]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(!result.has_errors());
         assert_eq!(result.files_checked(), 0);
         Ok(())
@@ -2145,15 +2125,14 @@ validate_formats = false
         ]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: Some(cache_tmp.path().to_string_lossy().to_string()),
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: false,
-            config_dir: Some(tmp.path().to_path_buf()),
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(result.has_errors());
         assert_eq!(result.files_checked(), 1);
         Ok(())
@@ -2181,16 +2160,15 @@ validate_formats = false
         // First run: force_validation = false so results get cached
         let c = ValidateArgs {
             globs: vec![pattern.clone()],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: false,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
         let mut first_statuses = Vec::new();
-        let result = run_with(&c, Some(mock(&[])), |cf| {
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |cf| {
             first_statuses.push(cf.validation_cache_status);
         })
         .await?;
@@ -2205,7 +2183,7 @@ validate_formats = false
 
         // Second run: same file, same schema — should hit validation cache
         let mut second_statuses = Vec::new();
-        let result = run_with(&c, Some(mock(&[])), |cf| {
+        let result = run_with(&c, &default_ctx(), Some(mock(&[])), |cf| {
             second_statuses.push(cf.validation_cache_status);
         })
         .await?;
@@ -2250,15 +2228,14 @@ validate_formats = false
         )]);
         let c = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&c, Some(client), |_| {}).await?;
+        let result = run_with(&c, &default_ctx(), Some(client), |_| {}).await?;
         assert!(
             !result.has_errors(),
             "schema URI with fragment should not cause compilation error"
@@ -2303,15 +2280,14 @@ validate_formats = false
         let pattern = tmp.path().join("*.json").to_string_lossy().to_string();
         let args = ValidateArgs {
             globs: vec![pattern],
-            exclude: vec![],
             cache_dir: None,
             force_schema_fetch: true,
             force_validation: true,
             no_catalog: true,
-            config_dir: None,
+
             schema_cache_ttl: None,
         };
-        let result = run_with(&args, Some(mock(&[])), |_| {}).await?;
+        let result = run_with(&args, &default_ctx(), Some(mock(&[])), |_| {}).await?;
 
         // The invalid file should produce an error (name is 42, not a string)
         assert!(result.has_errors());

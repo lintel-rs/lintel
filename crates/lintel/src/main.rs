@@ -8,6 +8,7 @@ use tracing_subscriber::prelude::*;
 
 use lintel_annotate::annotate_args;
 use lintel_check::{CheckArgs, check_args};
+use lintel_config::ConfigContext;
 use lintel_explain::explain_args;
 use lintel_format::{FormatArgs, format_args};
 use lintel_github_action::github_action_args;
@@ -226,19 +227,22 @@ async fn main() -> ExitCode {
     let opts = cli().run();
 
     let result = match opts.command {
-        Commands::Check(global, reporter_kind, mut args) => {
+        Commands::Check(global, reporter_kind, args) => {
             setup_tracing(&global);
             setup_miette(&global);
+            let ctx = ConfigContext::load(&args.validate.globs, &args.validate.exclude);
             let mut reporter = make_reporter(reporter_kind, global.verbose);
-            lintel_check::run(&mut args, reporter.as_mut()).await
+            lintel_check::run(&args, &ctx, reporter.as_mut()).await
         }
-        Commands::CI(global, reporter_kind, mut args)
-        | Commands::Validate(global, reporter_kind, mut args) => {
+        Commands::CI(global, reporter_kind, args)
+        | Commands::Validate(global, reporter_kind, args) => {
             setup_tracing(&global);
             setup_miette(&global);
+            let ctx = ConfigContext::load(&args.globs, &args.exclude);
             let mut reporter = make_reporter(reporter_kind, global.verbose);
-            lintel_validate::run(&mut args, reporter.as_mut()).await
+            lintel_validate::run(&args, &ctx, reporter.as_mut()).await
         }
+
         Commands::Identify(global, args) => {
             setup_tracing(&global);
             setup_miette(&global);
@@ -255,8 +259,10 @@ async fn main() -> ExitCode {
         }
         Commands::Format(global, args) => {
             setup_tracing(&global);
-            commands::format::run(&args, global.verbose)
+            let ctx = ConfigContext::load(&args.globs, &args.exclude);
+            commands::format::run(&args, &ctx, global.verbose)
         }
+
         Commands::Init(_global) => match commands::init::run() {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
@@ -265,9 +271,9 @@ async fn main() -> ExitCode {
             Ok(()) => return ExitCode::SUCCESS,
             Err(e) => Err(e),
         },
-        Commands::GithubAction(global, mut args) => {
+        Commands::GithubAction(global, args) => {
             setup_tracing(&global);
-            commands::github_action::run(&mut args).await
+            commands::github_action::run(&args).await
         }
         Commands::Cache(global, cmd) => {
             setup_tracing(&global);
@@ -371,8 +377,9 @@ mod tests {
             Commands::Check(_, _, args) => {
                 assert!(args.validate.cache.force);
                 // The individual flags should be false in the CLI struct --
-                // the combination happens in the From impl.
-                let lib_args = lintel_validate::validate::ValidateArgs::from(&args.validate);
+                // the combination happens in to_lib_args().
+                let ctx = ConfigContext::load(&args.validate.globs, &args.validate.exclude);
+                let lib_args = args.validate.to_lib_args(&ctx);
                 assert!(lib_args.force_schema_fetch);
                 assert!(lib_args.force_validation);
             }

@@ -237,7 +237,7 @@ async fn patch_remaining_annotations(
 ///
 /// Returns an error if environment variables are missing, validation
 /// fails to run, or the GitHub Checks API request fails.
-pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
+pub async fn run(args: &GithubActionArgs) -> Result<bool> {
     // Read required environment variables
     let token =
         std::env::var("GITHUB_TOKEN").context("GITHUB_TOKEN environment variable is required")?;
@@ -248,8 +248,13 @@ pub async fn run(args: &mut GithubActionArgs) -> Result<bool> {
         std::env::var("GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
 
     // Run checks via lintel-check.
+    let ctx = lintel_config::ConfigContext::load(
+        &args.check.validate.globs,
+        &args.check.validate.exclude,
+    );
+
     let start = Instant::now();
-    let result = lintel_check::check(&mut args.check, |_| {}).await?;
+    let result = lintel_check::check(&args.check, &ctx, |_| {}).await?;
     let elapsed = start.elapsed();
 
     let files_checked = result.files_checked();

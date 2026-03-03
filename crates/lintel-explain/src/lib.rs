@@ -445,18 +445,17 @@ async fn collect_validation_errors(
     instance_prefix: &str,
     config_dir: Option<PathBuf>,
 ) -> Vec<jsonschema_explain::ExplainError> {
+    let ctx = lintel_config::ConfigContext::load_from_dir(config_dir.as_deref(), &[]);
     let validate_args = lintel_validate::validate::ValidateArgs {
         globs: vec![file_path.to_string()],
-        exclude: vec![],
         cache_dir: cache.cache_dir.clone(),
         force_schema_fetch: cache.force_schema_fetch || cache.force,
         force_validation: false,
         no_catalog: cache.no_catalog,
-        config_dir,
         schema_cache_ttl: cache.schema_cache_ttl,
     };
 
-    let result = match lintel_validate::validate::run(&validate_args).await {
+    let result = match lintel_validate::validate::run(&validate_args, &ctx).await {
         Ok(r) => r,
         Err(e) => {
             tracing::debug!("validation failed: {e}");

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use bpaf::{Bpaf, ShellComp};
+use lintel_config::ConfigContext;
 use lintel_diagnostics::LintelDiagnostic;
 
 // ---------------------------------------------------------------------------
@@ -379,52 +380,8 @@ fn make_diagnostic(path_str: String, content: &str, formatted: &str) -> LintelDi
 // File discovery
 // ---------------------------------------------------------------------------
 
-fn collect_files(globs: &[String], exclude: &[String]) -> Result<Vec<PathBuf>> {
-    lintel_config::discover::collect_files(globs, exclude, |p| detect_format(p).is_some())
-}
-
-// ---------------------------------------------------------------------------
-// Config loading
-// ---------------------------------------------------------------------------
-
-struct LoadedConfig {
-    excludes: Vec<String>,
-    format: FormatConfig,
-}
-
-fn load_config(globs: &[String], user_excludes: &[String]) -> LoadedConfig {
-    let search_dir = globs
-        .iter()
-        .find(|g| Path::new(g).is_dir())
-        .map(PathBuf::from);
-
-    let cfg_result = match &search_dir {
-        Some(dir) => lintel_config::find_and_load(dir).map(Option::unwrap_or_default),
-        None => lintel_config::load(),
-    };
-
-    match cfg_result {
-        Ok(cfg) => {
-            let format = cfg
-                .format
-                .as_ref()
-                .and_then(|f| f.dprint.as_ref())
-                .map(FormatConfig::from_dprint)
-                .unwrap_or_default();
-
-            let mut excludes = cfg.exclude;
-            excludes.extend(user_excludes.iter().cloned());
-
-            LoadedConfig { excludes, format }
-        }
-        Err(e) => {
-            eprintln!("warning: failed to load lintel.toml: {e}");
-            LoadedConfig {
-                excludes: user_excludes.to_vec(),
-                format: FormatConfig::default(),
-            }
-        }
-    }
+fn collect_files(globs: &[String], ignore_set: &glob_set::GlobSet) -> Result<Vec<PathBuf>> {
+    lintel_config::discover::collect_files(globs, ignore_set, |p| detect_format(p).is_some())
 }
 
 // ---------------------------------------------------------------------------
@@ -471,24 +428,23 @@ pub struct FormatResult {
 
 /// Check formatting of pre-read file contents, returning diagnostics for unformatted files.
 ///
-/// Loads `lintel.toml` for dprint configuration. Files with unrecognized formats
-/// or parse failures are silently skipped.
+/// Uses the pre-loaded [`ConfigContext`] for dprint configuration and excludes.
+/// Files with unrecognized formats or parse failures are silently skipped.
 pub fn check_format_contents(
     file_contents: &[(PathBuf, String)],
-    globs: &[String],
-    user_excludes: &[String],
+    ctx: &ConfigContext,
 ) -> Vec<LintelDiagnostic> {
-    let loaded = load_config(globs, user_excludes);
+    let format = format_config_from_lintel(&ctx.config);
 
     let mut diagnostics = Vec::new();
     for (file_path, content) in file_contents {
-        if lintel_config::discover::is_excluded(file_path, &loaded.excludes) {
+        if lintel_config::discover::is_excluded(file_path, &ctx.ignore_set) {
             continue;
         }
         if detect_format(file_path).is_none() {
             continue;
         }
-        if let Ok(Some(formatted)) = format_content(file_path, content, &loaded.format) {
+        if let Ok(Some(formatted)) = format_content(file_path, content, &format) {
             let path_str = file_path.display().to_string();
             diagnostics.push(make_diagnostic(path_str, content, &formatted));
         }
@@ -499,15 +455,15 @@ pub fn check_format_contents(
 
 /// Check formatting of files, returning diagnostics for unformatted files.
 ///
-/// Loads `lintel.toml` and merges exclude patterns. Files that fail to parse
-/// are silently skipped (they will be caught by schema validation).
+/// Uses the pre-loaded [`ConfigContext`] for dprint configuration and excludes.
+/// Files that fail to parse are silently skipped (they will be caught by schema validation).
 ///
 /// # Errors
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
-pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<LintelDiagnostic>> {
-    let loaded = load_config(globs, user_excludes);
-    let files = collect_files(globs, &loaded.excludes)?;
+pub fn check_format(globs: &[String], ctx: &ConfigContext) -> Result<Vec<LintelDiagnostic>> {
+    let format = format_config_from_lintel(&ctx.config);
+    let files = collect_files(globs, &ctx.ignore_set)?;
 
     let mut diagnostics = Vec::new();
     for file_path in &files {
@@ -515,7 +471,7 @@ pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<Li
             continue;
         };
 
-        if let Ok(Some(formatted)) = format_content(file_path, &content, &loaded.format) {
+        if let Ok(Some(formatted)) = format_content(file_path, &content, &format) {
             let path_str = file_path.display().to_string();
             diagnostics.push(make_diagnostic(path_str, &content, &formatted));
         }
@@ -526,15 +482,15 @@ pub fn check_format(globs: &[String], user_excludes: &[String]) -> Result<Vec<Li
 
 /// Fix formatting of files in place.
 ///
-/// Loads `lintel.toml` and merges exclude patterns. Returns the number of
-/// files that were reformatted.
+/// Uses the pre-loaded [`ConfigContext`] for dprint configuration and excludes.
+/// Returns the number of files that were reformatted.
 ///
 /// # Errors
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
-pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
-    let loaded = load_config(globs, user_excludes);
-    let files = collect_files(globs, &loaded.excludes)?;
+pub fn fix_format(globs: &[String], ctx: &ConfigContext) -> Result<usize> {
+    let format = format_config_from_lintel(&ctx.config);
+    let files = collect_files(globs, &ctx.ignore_set)?;
 
     let mut fixed = 0;
     for file_path in &files {
@@ -542,7 +498,7 @@ pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
             continue;
         };
 
-        if let Ok(Some(formatted)) = format_content(file_path, &content, &loaded.format) {
+        if let Ok(Some(formatted)) = format_content(file_path, &content, &format) {
             fs::write(file_path, formatted)?;
             fixed += 1;
         }
@@ -553,15 +509,17 @@ pub fn fix_format(globs: &[String], user_excludes: &[String]) -> Result<usize> {
 
 /// Run the format command: format files in place, or check with `--check`.
 ///
+/// Uses the pre-loaded [`ConfigContext`] for dprint configuration and excludes.
+///
 /// Returns `Ok(FormatResult)` on success. In `--check` mode, unformatted
 /// files are reported as errors (diffs printed to stderr by the caller).
 ///
 /// # Errors
 ///
 /// Returns an error if file discovery fails (e.g. invalid glob pattern or I/O error).
-pub fn run(args: &FormatArgs) -> Result<FormatResult> {
-    let loaded = load_config(&args.globs, &args.exclude);
-    let files = collect_files(&args.globs, &loaded.excludes)?;
+pub fn run(args: &FormatArgs, ctx: &ConfigContext) -> Result<FormatResult> {
+    let format = format_config_from_lintel(&ctx.config);
+    let files = collect_files(&args.globs, &ctx.ignore_set)?;
 
     let mut result = FormatResult {
         formatted: Vec::new(),
@@ -583,7 +541,7 @@ pub fn run(args: &FormatArgs) -> Result<FormatResult> {
             }
         };
 
-        match format_content(file_path, &content, &loaded.format) {
+        match format_content(file_path, &content, &format) {
             Ok(Some(formatted)) => {
                 if args.check {
                     let diag = make_diagnostic(path_str.clone(), &content, &formatted);
