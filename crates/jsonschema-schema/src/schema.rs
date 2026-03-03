@@ -12,11 +12,17 @@ use crate::extensions::TaploSchemaExt;
 use crate::extensions::TombiSchemaExt;
 
 /// A JSON Schema value — either a boolean schema or an object schema.
+///
+/// The `Other` variant catches values that are neither booleans nor valid
+/// schema objects (e.g. bare strings injected by buggy generators).  It
+/// is treated identically to `Bool(false)` by [`as_schema`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SchemaValue {
     Bool(bool),
     Schema(Box<Schema>),
+    /// Catch-all for invalid schema values (strings, numbers, etc.).
+    Other(Value),
 }
 
 /// JSON Schema `type` keyword — single type string or union array.
@@ -199,11 +205,12 @@ pub struct Schema {
 }
 
 impl SchemaValue {
-    /// Get the inner `Schema` if this is an object schema, `None` for bool schemas.
+    /// Get the inner `Schema` if this is an object schema, `None` for bool
+    /// schemas and invalid (`Other`) values.
     pub fn as_schema(&self) -> Option<&Schema> {
         match self {
             Self::Schema(s) => Some(s),
-            Self::Bool(_) => None,
+            Self::Bool(_) | Self::Other(_) => None,
         }
     }
 }
@@ -346,7 +353,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
                 SchemaValue::Schema(s) => {
                     schema_type_str(s).or_else(|| s.ref_.as_ref().map(|r| ref_name(r).to_string()))
                 }
-                SchemaValue::Bool(_) => None,
+                SchemaValue::Bool(_) | SchemaValue::Other(_) => None,
             })
             .collect();
         types.dedup();
@@ -1183,6 +1190,18 @@ mod tests {
         if schema.x_taplo.is_some() {
             // Just verify it parsed without error
         }
+    }
+
+    #[test]
+    fn parse_declaration_block() {
+        // Stylelintrc's `declarationBlock` $def has a property named "properties"
+        // inside a nested `properties` map, which previously caused migration to
+        // inject `"type": "object"` into the property map (not a schema position).
+        let content = include_str!("../tests/fixtures/declarationBlock.json");
+        let mut value: Value = serde_json::from_str(content).unwrap();
+        jsonschema_migrate::migrate_to_2020_12(&mut value);
+        let schema: Schema = serde_json::from_value(value).expect("deserialize declarationBlock");
+        assert!(schema.properties.is_some());
     }
 
     // --- impl Add ---

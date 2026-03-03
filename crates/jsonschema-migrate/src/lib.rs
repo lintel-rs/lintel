@@ -37,6 +37,40 @@ pub fn migrate_to_2020_12(schema: &mut serde_json::Value) {
     }
 }
 
+/// Schema keywords (excluding `type` and `properties`) that indicate an object
+/// is a schema rather than a property map.
+const SCHEMA_INDICATOR_KEYWORDS: &[&str] = &[
+    "$ref",
+    "$id",
+    "$schema",
+    "$defs",
+    "definitions",
+    "allOf",
+    "oneOf",
+    "anyOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "required",
+    "additionalProperties",
+    "patternProperties",
+    "items",
+    "prefixItems",
+    "enum",
+    "const",
+    "dependentSchemas",
+    "dependentRequired",
+    "dependencies",
+];
+
+/// Check whether a JSON object has schema keywords besides `properties` and `type`.
+fn has_schema_keyword_besides_properties(map: &serde_json::Map<String, serde_json::Value>) -> bool {
+    SCHEMA_INDICATOR_KEYWORDS
+        .iter()
+        .any(|kw| map.contains_key(*kw))
+}
+
 /// Recursively apply keyword transformations.
 fn migrate_keywords(value: &mut serde_json::Value, draft: Option<Draft>) {
     match value {
@@ -99,11 +133,15 @@ fn migrate_object_keywords(
     // Infer `type: "object"` when `properties` is present but `type` is missing.
     // Many schemas omit `type` for allOf/anyOf variants that contribute properties;
     // making the type explicit helps downstream tools.
-    // Guard: only when `properties` is an actual object (not a string in extension data).
+    // Guard: only when `properties` is an actual object (not a string in extension data),
+    // AND the object has at least one other schema keyword — this prevents
+    // accidentally inserting `"type": "object"` into a `properties` map that
+    // happens to contain a property named "properties".
     if map
         .get("properties")
         .is_some_and(serde_json::Value::is_object)
         && !map.contains_key("type")
+        && has_schema_keyword_besides_properties(map)
     {
         map.insert(
             "type".to_string(),
@@ -165,6 +203,7 @@ fn migrate_object_keywords(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use serde_json::json;
 
@@ -440,6 +479,32 @@ mod tests {
         migrate_to_2020_12(&mut schema);
         // type was already present, should not be duplicated or changed
         assert_eq!(schema["type"], original["type"]);
+    }
+
+    #[test]
+    fn properties_map_with_property_named_properties_not_inferred() {
+        // A schema whose `properties` map contains a property named "properties".
+        // The `properties` map itself is NOT a schema, so type inference must not
+        // inject `"type": "object"` into it.
+        let mut schema = json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "order": { "type": "string" },
+                "properties": { "$ref": "#/definitions/arrayRule" }
+            },
+            "dependencies": {
+                "order": ["properties"],
+                "properties": ["order"]
+            }
+        });
+        migrate_to_2020_12(&mut schema);
+
+        let props = schema["properties"].as_object().unwrap();
+        assert!(
+            !props.contains_key("type"),
+            "type should not be injected into the properties map: {props:?}"
+        );
     }
 
     #[test]

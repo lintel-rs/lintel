@@ -1,0 +1,153 @@
+{
+  "properties": {
+    "declaration-block-no-duplicate-properties": {
+      "description": "Disallow duplicate properties within declaration blocks",
+      "type": ["null", "boolean", "array"],
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean", "enum": [true, []] },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": ["boolean", "object"],
+            "anyOf": [
+              { "type": "boolean", "enum": [true, {}] },
+              {
+                "type": "object",
+                "allOf": [{ "$ref": "#/definitions/coreRule" }],
+                "properties": {
+                  "ignore": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "consecutive-duplicates",
+                        "consecutive-duplicates-with-different-values",
+                        "consecutive-duplicates-with-different-syntaxes",
+                        "consecutive-duplicates-with-same-prefixless-values"
+                      ]
+                    }
+                  },
+                  "ignoreProperties": {
+                    "$ref": "#/definitions/simpleArrayStringRule"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "declaration-block-no-ignored-properties": {
+      "$ref": "#/definitions/booleanRule",
+      "description": "Disallow property values that are ignored due to another property value in the same rule"
+    },
+    "declaration-block-no-redundant-longhand-properties": {
+      "description": "Disallow longhand properties that can be combined into one shorthand property",
+      "type": ["null", "boolean", "array"],
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean", "enum": [true, []] },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": ["boolean", "object"],
+            "anyOf": [
+              { "type": "boolean", "enum": [true, {}] },
+              {
+                "type": "object",
+                "allOf": [{ "$ref": "#/definitions/coreRule" }],
+                "properties": {
+                  "ignoreShorthands": {
+                    "$ref": "#/definitions/simpleArrayStringRule"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "declaration-block-no-shorthand-property-overrides": {
+      "$ref": "#/definitions/booleanRule",
+      "description": "Disallow shorthand properties that override related longhand properties"
+    },
+    "declaration-block-properties-order": {
+      "description": "Specify the order of properties within declaration blocks",
+      "type": ["null", "string", "array"],
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "enum": ["alphabetical", []] },
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": ["string", "array", "object"],
+            "anyOf": [
+              { "type": "string", "enum": ["alphabetical", [], {}] },
+              { "type": "string" },
+              { "$ref": "#/definitions/simpleArrayStringRule" },
+              {
+                "type": "object",
+                "allOf": [{ "$ref": "#/definitions/coreRule" }],
+                "dependencies": {
+                  "order": ["properties"],
+                  "properties": ["order"]
+                },
+                "properties": {
+                  "unspecified": {
+                    "description": "These options only apply if you've defined your own array of properties",
+                    "type": "string",
+                    "enum": ["top", "bottom", "bottomAlphabetical", "ignore"]
+                  },
+                  "order": { "type": "string", "enum": ["strict", "flexible"] },
+                  "properties": {
+                    "$ref": "#/definitions/simpleArrayStringRule"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "declaration-block-semicolon-newline-after": {
+      "$ref": "#/definitions/newlineRule",
+      "description": "Require a newline or disallow whitespace after the semicolons of declaration blocks",
+      "deprecated": true
+    },
+    "declaration-block-semicolon-newline-before": {
+      "$ref": "#/definitions/newlineRule",
+      "description": "Require a newline or disallow whitespace before the semicolons of declaration blocks",
+      "deprecated": true
+    },
+    "declaration-block-semicolon-space-after": {
+      "$ref": "#/definitions/spaceRule",
+      "description": "Require a single space or disallow whitespace after the semicolons of declaration blocks",
+      "deprecated": true
+    },
+    "declaration-block-semicolon-space-before": {
+      "$ref": "#/definitions/spaceRule",
+      "description": "Require a single space or disallow whitespace before the semicolons of declaration blocks",
+      "deprecated": true
+    },
+    "declaration-block-single-line-max-declarations": {
+      "$ref": "#/definitions/integerRule",
+      "description": "Limit the number of declaration within a single line declaration block"
+    },
+    "declaration-block-trailing-semicolon": {
+      "$ref": "#/definitions/alwaysNeverRule",
+      "description": "Require or disallow a trailing semicolon within declaration blocks",
+      "deprecated": true
+    }
+  }
+}

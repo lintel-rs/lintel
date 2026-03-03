@@ -28,6 +28,7 @@ lintel-validate = { version = "0.0.11", path = "../lintel-validate" }
 reqwest.workspace = true
 schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
 serde_json.workspace = true
+serde_path_to_error.workspace = true
 tempfile.workspace = true
 tracing.workspace = true
 url = "2"
