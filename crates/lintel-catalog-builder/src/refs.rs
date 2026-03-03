@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
 use lintel_schema_cache::SchemaCache;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::download::ProcessedSchemas;
 
@@ -291,6 +291,9 @@ pub async fn resolve_and_rewrite_value(
         );
 
     jsonschema_migrate::migrate_to_2020_12(value);
+    if let Err(e) = serde_json::from_value::<jsonschema_migrate::Schema>(value.clone()) {
+        error!(url = %schema_url, error = %e, "schema failed to deserialize after migration");
+    }
 
     let external_refs = find_external_refs(value);
     let relative_refs = find_relative_refs(value);
@@ -549,6 +552,10 @@ async fn write_dep_schemas(
             obj.insert("$id".to_string(), serde_json::Value::String(dep_local_url));
         }
         jsonschema_migrate::migrate_to_2020_12(&mut dep_value);
+        if let Err(e) = serde_json::from_value::<jsonschema_migrate::Schema>(dep_value.clone()) {
+            let dep_url = source_url.as_deref().unwrap_or(&filename);
+            error!(url = %dep_url, error = %e, "dependency schema failed to deserialize after migration");
+        }
         rewrite_refs(&mut dep_value, &dep_url_map);
         crate::postprocess::postprocess_schema(
             &crate::postprocess::PostprocessContext {

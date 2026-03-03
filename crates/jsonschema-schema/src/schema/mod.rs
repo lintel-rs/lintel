@@ -37,6 +37,10 @@ pub(crate) fn is_false(v: &bool) -> bool {
 /// - `true` — always validates successfully (equivalent to `{}`).
 /// - `false` — never validates successfully (equivalent to `{"not": {}}`).
 ///
+/// The `Other` variant catches values that are neither booleans nor valid
+/// schema objects (e.g. bare strings injected by buggy generators).  It
+/// is treated identically to `Bool(false)` by [`as_schema`](Self::as_schema).
+///
 /// See [JSON Schema Core §4.3.2](https://json-schema.org/draft/2020-12/json-schema-core#section-4.3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
@@ -45,6 +49,8 @@ pub enum SchemaValue {
     Bool(bool),
     /// An object schema with keyword-based constraints.
     Schema(Box<Schema>),
+    /// Catch-all for invalid schema values (strings, numbers, etc.).
+    Other(Value),
 }
 
 /// Primitive type names defined by JSON Schema (`simpleTypes`).
@@ -187,11 +193,12 @@ pub struct Schema {
 // ---------------------------------------------------------------------------
 
 impl SchemaValue {
-    /// Get the inner `Schema` if this is an object schema, `None` for bool schemas.
+    /// Get the inner `Schema` if this is an object schema, `None` for bool
+    /// schemas and invalid (`Other`) values.
     pub fn as_schema(&self) -> Option<&Schema> {
         match self {
             Self::Schema(s) => Some(s),
-            Self::Bool(_) => None,
+            Self::Bool(_) | Self::Other(_) => None,
         }
     }
 }
@@ -353,7 +360,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
                 SchemaValue::Schema(s) => {
                     schema_type_str(s).or_else(|| s.ref_.as_ref().map(|r| ref_name(r).to_string()))
                 }
-                SchemaValue::Bool(_) => None,
+                SchemaValue::Bool(_) | SchemaValue::Other(_) => None,
             })
             .collect();
         types.dedup();

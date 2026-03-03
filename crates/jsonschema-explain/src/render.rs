@@ -832,7 +832,7 @@ pub(crate) fn render_additional_properties(
                 f.dim, f.reset
             );
         }
-        SchemaValue::Bool(true) => {} // default behavior, skip
+        SchemaValue::Bool(true) | SchemaValue::Other(_) => {} // default or invalid, skip
         SchemaValue::Schema(s) => {
             let ty = schema_type_str(s).unwrap_or_default();
             let type_display = format_type(&ty, f);

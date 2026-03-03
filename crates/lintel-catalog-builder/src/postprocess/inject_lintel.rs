@@ -2,7 +2,7 @@ use alloc::collections::BTreeSet;
 
 use lintel_schema_cache::SchemaCache;
 use schema_catalog::FileFormat;
-use tracing::warn;
+use tracing::error;
 
 use super::PostprocessContext;
 use crate::download::{LintelExtra, parse_lintel_extra};
@@ -49,11 +49,11 @@ pub(super) fn inject_lintel(ctx: &PostprocessContext<'_>, value: &mut serde_json
 ///
 /// Validates the schema and sets `invalid: true` if it fails compilation.
 fn inject_lintel_extra(value: &mut serde_json::Value, mut extra: LintelExtra) {
-    let invalid = is_schema_invalid(value);
-    if invalid {
-        warn!(source = %extra.source, "schema is invalid after transformation");
+    let compile_err = try_compile_schema(value);
+    if let Some(ref e) = compile_err {
+        error!(source = %extra.source, error = %e, "schema is invalid after transformation");
     }
-    extra.invalid = invalid;
+    extra.invalid = compile_err.is_some();
     // Preserve catalogDescription from existing x-lintel if not already set.
     if extra.catalog_description.is_none()
         && let Some(existing) = parse_lintel_extra(value)
@@ -101,15 +101,44 @@ impl jsonschema::Retrieve for NoopRetriever {
     }
 }
 
-/// Check whether a JSON Schema value is invalid by attempting to compile it.
+/// Try to compile a JSON Schema value, returning the error if it fails.
 ///
-/// Returns `true` if the schema fails compilation. Uses a no-op retriever
-/// so external `$ref`s resolve to permissive schemas without network I/O.
-fn is_schema_invalid(value: &serde_json::Value) -> bool {
-    jsonschema::options()
+/// Uses a no-op retriever so external `$ref`s resolve to permissive schemas
+/// without network I/O. Errors from external ref resolution (pointer/anchor
+/// "does not exist") are ignored since the `NoopRetriever` cannot provide
+/// the actual document structure for fragment navigation.
+fn try_compile_schema(value: &serde_json::Value) -> Option<jsonschema::ValidationError<'static>> {
+    let err = jsonschema::options()
         .with_retriever(NoopRetriever)
         .build(value)
-        .is_err()
+        .err()?;
+
+    // Filter out false-positive errors caused by limitations of schema
+    // compilation without full external reference resolution:
+    //
+    // - "does not exist": JSON Pointer or $anchor lookups against the
+    //   NoopRetriever's boolean `true` schema (has no navigable structure).
+    //
+    // - "is not of type": Meta-schema self-validation issues (e.g. draft
+    //   2019-09 `$vocabulary` has boolean values that fail type checks when
+    //   compiled under 2020-12).
+    //
+    // - "is not valid under any of the schemas listed in the 'anyOf'":
+    //   Non-standard type values in source schemas (e.g. `"float"`,
+    //   `"ConnectorMetric"`) that the jsonschema crate rejects.
+    //
+    // - "does not match": Pattern validation failures on $ref URI values
+    //   (e.g. nested definition paths that don't match `^[^#]*#?$`).
+    let msg = err.to_string();
+    if msg.contains("does not exist")
+        || msg.contains("is not of type")
+        || msg.contains("is not valid under any of the schemas listed in the")
+        || msg.contains("does not match")
+    {
+        return None;
+    }
+
+    Some(err)
 }
 
 /// Derive file formats from `fileMatch` glob patterns by inspecting extensions.

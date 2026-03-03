@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.11...lintel-explain-v0.0.12) - 2026-03-02
+
+### Added
+
+- unify composition rendering and add schema fragment navigation
+- flatten allOf into root schema and show provenance in INCLUDES section
+- add --extended flag to gate $comment rendering
+- use granular validation error codes like lintel::validation::required
+
+### Other
+
+- Merge pull request #146 from lintel-rs/more-rendering-explain
+
 ## [0.0.11](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.10...lintel-explain-v0.0.11) - 2026-03-01
 
 ### Other

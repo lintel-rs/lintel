@@ -13,9 +13,9 @@ fn plain() -> ExplainOptions {
 
 fn load_fixture() -> SchemaValue {
     let json = include_str!("fixtures/tsconfig.json");
-    let mut val: serde_json::Value = serde_json::from_str(json).expect("fixture should parse");
-    jsonschema_migrate::migrate_to_2020_12(&mut val);
-    serde_json::from_value(val).expect("fixture should deserialize into SchemaValue")
+    let val: serde_json::Value = serde_json::from_str(json).expect("fixture should parse");
+    let schema = jsonschema_migrate::migrate(val).expect("fixture should migrate");
+    SchemaValue::Schema(Box::new(schema))
 }
 
 /// Properties with both `description` and `markdownDescription` should use
