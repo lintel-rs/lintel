@@ -1,4 +1,7 @@
+use alloc::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// [Taplo] JSON Schema extension (`x-taplo`).
 ///
@@ -44,6 +47,8 @@ pub struct TaploSchemaExt {
     /// Taplo plugin names to activate when this schema is in use.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plugins: Vec<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 /// Documentation text overrides for [Taplo](TaploSchemaExt) hover and
