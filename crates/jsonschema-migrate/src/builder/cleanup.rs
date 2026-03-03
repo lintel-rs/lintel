@@ -103,8 +103,8 @@ pub fn migrate_required(obj: &mut Map<String, Value>) {
     }
 }
 
-/// Remove `type` when it is not a string or array (e.g. `"type": {}`).
-pub fn sanitize_type(obj: &mut Map<String, Value>) {
+/// Normalize `type` by removing invalid values (not a string or array, e.g. `"type": {}`).
+pub fn normalize_type(obj: &mut Map<String, Value>) {
     match obj.get("type") {
         Some(Value::String(_) | Value::Array(_)) | None => {}
         Some(_) => {
@@ -113,14 +113,14 @@ pub fn sanitize_type(obj: &mut Map<String, Value>) {
     }
 }
 
-/// Migrate non-array `enum` values.
+/// Normalize non-array `enum` values.
 ///
 /// When `enum` is an object with a `$ref` key (e.g. `"enum": {"$ref": "#/$defs/Foo"}`),
 /// the author intended the enum values to come from a referenced definition.
 /// We promote the `$ref` to the parent schema level (wrapping the current schema
 /// in an `allOf` if it has other keywords) and remove the invalid `enum`.
 /// Other non-array `enum` values are simply removed.
-pub fn sanitize_enum(obj: &mut Map<String, Value>) {
+pub fn normalize_enum(obj: &mut Map<String, Value>) {
     let Some(val) = obj.get("enum") else { return };
     if val.is_array() {
         return;
@@ -328,55 +328,55 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_type_removes_empty_object() {
+    fn normalize_type_removes_empty_object() {
         let mut m = obj(json!({"type": {}}));
-        sanitize_type(&mut m);
+        normalize_type(&mut m);
         assert!(!m.contains_key("type"));
     }
 
     #[test]
-    fn sanitize_type_keeps_string() {
+    fn normalize_type_keeps_string() {
         let mut m = obj(json!({"type": "object"}));
-        sanitize_type(&mut m);
+        normalize_type(&mut m);
         assert_eq!(m["type"], "object");
     }
 
     #[test]
-    fn sanitize_type_keeps_array() {
+    fn normalize_type_keeps_array() {
         let mut m = obj(json!({"type": ["string", "null"]}));
-        sanitize_type(&mut m);
+        normalize_type(&mut m);
         assert_eq!(m["type"], json!(["string", "null"]));
     }
 
     #[test]
-    fn sanitize_enum_promotes_ref() {
+    fn normalize_enum_promotes_ref() {
         let mut m = obj(json!({"enum": {"$ref": "#/$defs/Foo"}}));
-        sanitize_enum(&mut m);
+        normalize_enum(&mut m);
         assert!(!m.contains_key("enum"));
         assert_eq!(m["$ref"], "#/$defs/Foo");
     }
 
     #[test]
-    fn sanitize_enum_ref_no_overwrite() {
+    fn normalize_enum_ref_no_overwrite() {
         let mut m = obj(json!({"$ref": "#/$defs/Bar", "enum": {"$ref": "#/$defs/Foo"}}));
-        sanitize_enum(&mut m);
+        normalize_enum(&mut m);
         assert!(!m.contains_key("enum"));
         // Existing $ref is preserved, not overwritten
         assert_eq!(m["$ref"], "#/$defs/Bar");
     }
 
     #[test]
-    fn sanitize_enum_removes_non_ref_object() {
+    fn normalize_enum_removes_non_ref_object() {
         let mut m = obj(json!({"enum": {"foo": "bar"}}));
-        sanitize_enum(&mut m);
+        normalize_enum(&mut m);
         assert!(!m.contains_key("enum"));
         assert!(!m.contains_key("$ref"));
     }
 
     #[test]
-    fn sanitize_enum_keeps_array() {
+    fn normalize_enum_keeps_array() {
         let mut m = obj(json!({"enum": ["a", "b"]}));
-        sanitize_enum(&mut m);
+        normalize_enum(&mut m);
         assert_eq!(m["enum"], json!(["a", "b"]));
     }
 

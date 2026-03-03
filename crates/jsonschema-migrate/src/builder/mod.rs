@@ -83,8 +83,8 @@ pub fn migrate_in_place(obj: &mut Map<String, Value>, draft: Option<Draft>) {
     cleanup::normalize_pattern_property_keys(obj);
     cleanup::infer_type(obj);
     cleanup::migrate_required(obj);
-    cleanup::sanitize_type(obj);
-    cleanup::sanitize_enum(obj);
+    cleanup::normalize_type(obj);
+    cleanup::normalize_enum(obj);
     cleanup::deduplicate_arrays(obj);
     cleanup::migrate_examples(obj);
     cleanup::flatten_defs(obj);

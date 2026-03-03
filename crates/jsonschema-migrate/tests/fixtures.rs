@@ -1,8 +1,8 @@
-//! Integration tests for schema sanitization during migration.
+//! Integration tests for schema migration using real-world fixtures.
 //!
 //! Each fixture is a real-world schema that previously failed `migrate()`
 //! due to non-standard values. The tests verify that migration succeeds
-//! and that the sanitization transforms are correctly applied.
+//! and that cleanup transforms are correctly applied.
 
 macro_rules! fixture {
     ($name:ident, $file:expr) => {
