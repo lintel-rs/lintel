@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/compile_fail/fields_on_tuple_struct.rs:3:10
+  |
+3 | #[derive(Fields)]
+  |          ^^^^^^
+  |
+  = help: message: Fields derive only supports structs with named fields

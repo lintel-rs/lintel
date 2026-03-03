@@ -35,16 +35,15 @@ time.
 
 ## How it works
 
-Two proc macros work together:
+Two proc macros work together via a shared in-memory cache within the
+compiler process:
 
-1. **`#[derive(Fields)]`** on a source struct generates a hidden
-   `macro_rules!` callback macro (`__combine_fields_{Name}!`) that can
-   replay its field definitions — including all attributes, doc comments,
-   and visibility.
+1. **`#[derive(Fields)]`** on a source struct stores its field definitions
+   (including all attributes, doc comments, and visibility) in the cache.
 
-2. **`#[combine_fields(A, B, C)]`** on the target struct generates a
-   nested chain of those callbacks that accumulates all fields, then emits
-   the final struct definition with all fields merged in.
+2. **`#[combine_fields(A, B, C)]`** on the target struct reads those
+   cached field definitions and emits the target struct with all fields
+   merged in.
 
 The target struct's own fields (defined in its body) are preserved and
 appear alongside the merged fields.
@@ -94,9 +93,8 @@ assert_eq!(s.name, "player");
 Attributes on source struct fields are preserved through the merge,
 so `#[serde(rename = ...)]` and `#[schemars(...)]` work as expected:
 
-```rust,ignore
-use combine_structs::Fields;
-use combine_structs::combine_fields;
+```rust
+use combine_structs::{Fields, combine_fields};
 use serde::{Serialize, Deserialize};
 
 #[derive(Fields, Debug, Default, Serialize, Deserialize)]
@@ -128,6 +126,35 @@ let s = Schema {
 let json = serde_json::to_value(&s).unwrap();
 assert_eq!(json["$schema"], "https://json-schema.org/draft/2020-12/schema");
 assert_eq!(json["description"], "A test");
+```
+
+### Cross-module usage
+
+Source structs can live in any module with no special annotations:
+
+```rust
+use combine_structs::{Fields, combine_fields};
+
+mod vocabularies {
+    use combine_structs::Fields;
+
+    #[derive(Fields, Debug, Default)]
+    pub struct Position { pub x: f64, pub y: f64 }
+
+    #[derive(Fields, Debug, Default)]
+    pub struct Appearance { pub color: String, pub visible: bool }
+}
+
+#[combine_fields(Position, Appearance)]
+#[derive(Debug, Default)]
+pub struct Sprite {
+    pub name: String,
+}
+
+let s = Sprite { name: "player".into(), x: 10.0, y: 20.0,
+                 color: "red".into(), visible: true };
+assert_eq!(s.x, 10.0);
+assert_eq!(s.name, "player");
 ```
 
 ### Real-world usage

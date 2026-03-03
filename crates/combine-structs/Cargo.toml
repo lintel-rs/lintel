@@ -3,7 +3,7 @@ name = "combine-structs"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-description = "Proc macros for compile-time struct field merging. #[derive(Fields)] captures a struct's fields into a callback macro, and #[combine_fields(A, B, C)] merges fields from multiple source structs into a single target struct at compile time."
+description = "Proc macros for compile-time struct field merging."
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -17,6 +17,11 @@ proc-macro = true
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trybuild = "1"
 
 [lints]
 workspace = true

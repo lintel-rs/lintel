@@ -1,24 +1,17 @@
 //! JSON Schema 2020-12 vocabulary structs.
 //!
 //! Each vocabulary is defined in its own file and derives
-//! [`combine_structs::Fields`], which generates a companion callback macro.
-//! These macros are used by [`merge_vocabularies!`](super) to merge all
-//! vocabulary fields into the flat [`Schema`](crate::Schema) struct.
+//! [`combine_structs::Fields`], which caches its field definitions for
+//! merging into the flat [`Schema`](crate::Schema) struct via
+//! [`combine_fields`](combine_structs::combine_fields).
 
-#[macro_use]
-mod core;
-#[macro_use]
 mod applicator;
-#[macro_use]
-mod unevaluated;
-#[macro_use]
-mod validation;
-#[macro_use]
-mod meta_data;
-#[macro_use]
-mod format_annotation;
-#[macro_use]
 mod content;
+mod core;
+mod format_annotation;
+mod meta_data;
+mod unevaluated;
+mod validation;
 
 pub use self::applicator::ApplicatorVocabulary;
 pub use self::content::ContentVocabulary;
