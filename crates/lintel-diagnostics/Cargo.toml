@@ -1,6 +1,6 @@
 [package]
 name = "lintel-diagnostics"
-version = "0.0.2"
+version = "0.0.3"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -15,6 +15,6 @@ workspace = true
 
 [dependencies]
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
-lintel-validation-cache = { version = "0.0.9", path = "../lintel-validation-cache" }
+lintel-validation-cache = { version = "0.0.10", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }
 thiserror.workspace = true

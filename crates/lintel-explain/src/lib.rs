@@ -228,7 +228,8 @@ pub async fn run(args: ExplainArgs, global: &CLIGlobalOptions) -> Result<bool> {
     let (schema_uri, display_name, is_remote) =
         resolve_schema_info(&args, data_source_str, is_file_flag, fetched.as_ref()).await?;
 
-    let schema_value = fetch_schema(&schema_uri, is_remote, &args.cache).await?;
+    let schema = fetch_schema(&schema_uri, is_remote, &args.cache).await?;
+    let schema_value = jsonschema_schema::SchemaValue::Schema(Box::new(schema));
 
     let pointer = pointer_str
         .as_deref()
@@ -313,7 +314,8 @@ pub async fn explain_resolved_schema(
     display: &ExplainDisplayArgs,
 ) -> Result<()> {
     match fetch_schema(&resolved.schema_uri, resolved.is_remote, cache).await {
-        Ok(sv) => {
+        Ok(schema) => {
+            let sv = jsonschema_schema::SchemaValue::Schema(Box::new(schema));
             let is_tty = std::io::stdout().is_terminal();
             let use_color = global.use_color(is_tty);
             let opts = jsonschema_explain::ExplainOptions {
@@ -460,7 +462,7 @@ async fn fetch_schema(
     schema_uri: &str,
     is_remote: bool,
     cache: &CliCacheOptions,
-) -> Result<jsonschema_schema::SchemaValue> {
+) -> Result<jsonschema_schema::Schema> {
     let retriever = resolve::build_retriever(cache);
     let mut value: serde_json::Value = if is_remote {
         let (val, _) = retriever

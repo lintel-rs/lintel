@@ -1,0 +1,23 @@
+[package]
+name = "lintel-schema"
+version = "0.0.1"
+authors.workspace = true
+categories = ["development-tools"]
+edition.workspace = true
+homepage.workspace = true
+keywords = ["json-schema"]
+license.workspace = true
+repository.workspace = true
+description = "JSON Schema utilities for Lintel"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bpaf.workspace = true
+jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }
+reqwest.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+url = "2.5.8"

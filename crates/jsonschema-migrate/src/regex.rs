@@ -1,6 +1,6 @@
 /// Normalize an ECMA 262 regex pattern for compatibility with Rust's `regex_syntax`.
 ///
-/// Two incompatibilities are fixed:
+/// Several ECMA 262 / PCRE incompatibilities are fixed:
 ///
 /// 1. **Bare braces**: Unescaped `{` and `}` that do not form valid quantifiers
 ///    (`{n}`, `{n,}`, `{n,m}`) are escaped. ECMA 262 treats unmatched braces as
@@ -10,6 +10,15 @@
 ///    This prevents `regex_syntax` from rejecting patterns where `\d` appears as
 ///    a range endpoint (e.g. `[\d-\.]`), and ensures ASCII-only digit matching
 ///    consistent with ECMA 262 semantics.
+///
+/// 3. **PCRE anchors**: `\A` → `^` and `\Z` → `$`.
+///
+/// 4. **Shorthand-class ranges**: Inside character classes, a `-` after a
+///    shorthand class like `\w` is escaped to `\-` because `regex_syntax`
+///    doesn't allow class shorthands as range endpoints.
+///
+/// 5. **Bare `[` in character classes**: Escaped to `\[`. ECMA 262 treats `[`
+///    as a literal inside `[…]`, but `regex_syntax` tries to parse nested classes.
 #[allow(clippy::missing_panics_doc)] // from_utf8 cannot panic on our output
 pub fn normalize_ecma_regex(pattern: &str) -> String {
     let b = pattern.as_bytes();
@@ -26,6 +35,27 @@ pub fn normalize_ecma_regex(pattern: &str) -> String {
             // Expand \d → 0-9 inside character classes
             if in_class && next == b'd' {
                 out.extend_from_slice(b"0-9");
+                i += 2;
+                continue;
+            }
+
+            // Inside character classes: shorthand classes (\w, \s, \W, \D, \S)
+            // can't be range endpoints. If followed by `-`, escape the `-`.
+            if in_class && matches!(next, b'w' | b's' | b'W' | b'D' | b'S') {
+                out.push(b'\\');
+                out.push(next);
+                i += 2;
+                // Escape a following `-` that would form an invalid range
+                if i < b.len() && b[i] == b'-' && i + 1 < b.len() && b[i + 1] != b']' {
+                    out.extend_from_slice(b"\\-");
+                    i += 1;
+                }
+                continue;
+            }
+
+            // Convert PCRE anchors: \A → ^, \Z → $
+            if !in_class && (next == b'A' || next == b'Z') {
+                out.push(if next == b'A' { b'^' } else { b'$' });
                 i += 2;
                 continue;
             }
@@ -71,9 +101,14 @@ pub fn normalize_ecma_regex(pattern: &str) -> String {
             continue;
         }
 
-        // Inside character class, everything is literal (no brace escaping needed)
+        // Inside character class: escape bare `[` (ECMA 262 treats as literal,
+        // but regex_syntax attempts to parse nested character classes)
         if in_class {
-            out.push(b[i]);
+            if b[i] == b'[' {
+                out.extend_from_slice(b"\\[");
+            } else {
+                out.push(b[i]);
+            }
             i += 1;
             continue;
         }
@@ -251,6 +286,43 @@ mod tests {
     }
 
     #[test]
+    fn pcre_anchors_converted() {
+        assert_eq!(
+            normalize_ecma_regex(r"\A[0-9a-zA-Z-_]+\Z"),
+            r"^[0-9a-zA-Z-_]+$"
+        );
+        assert_eq!(
+            normalize_ecma_regex(r"^arn:[\w-]+:kafka:[\w-]+:\d+:cluster.*\Z"),
+            r"^arn:[\w-]+:kafka:[\w-]+:\d+:cluster.*$"
+        );
+    }
+
+    #[test]
+    fn pcre_anchors_preserved_in_class() {
+        // \A and \Z inside character classes should NOT be converted
+        assert_eq!(normalize_ecma_regex(r"[\A\Z]"), r"[\A\Z]");
+    }
+
+    #[test]
+    fn shorthand_class_range_escaped() {
+        // \w-$ inside a character class: `-` should be escaped
+        assert_eq!(normalize_ecma_regex(r"[\w-$]"), r"[\w\-$]");
+        assert_eq!(normalize_ecma_regex(r"[\s-z]"), r"[\s\-z]");
+    }
+
+    #[test]
+    fn shorthand_class_range_at_end_preserved() {
+        // \w-] — the `-` is at the end of the class, treated as literal, no escaping needed
+        assert_eq!(normalize_ecma_regex(r"[\w-]"), r"[\w-]");
+    }
+
+    #[test]
+    fn bare_bracket_in_class_escaped() {
+        // [ inside a character class should be escaped
+        assert_eq!(normalize_ecma_regex(r"[a[b]"), r"[a\[b]");
+    }
+
+    #[test]
     fn normalized_patterns_parse_with_regex_syntax() {
         use regex_syntax::ast::parse::Parser;
 
@@ -261,7 +333,12 @@ mod tests {
             r"\$\{\{\s*(.*?)\s*\}\}|(?:\d{1,3}\.){3}\d{1,3}(?:\/\d\d?)?,?",
             r#"\"?\{\{(\$)?([a-z0-9\-]+)\}\}\"?"#,
             r"^(\p{L}|_)(\p{L}|\p{N}|[.\-_])*$",
+            // PCRE anchors
+            r"\A[0-9a-zA-Z-_]+\Z",
         ];
+        // Note: patterns with look-ahead (?!...) or (?=...) are not tested here
+        // because regex_syntax doesn't support look-around. The jsonschema crate
+        // uses fancy_regex which does.
         for pat in patterns {
             let norm = normalize_ecma_regex(pat);
             let result = Parser::new().parse(&norm);

@@ -1182,9 +1182,7 @@ mod tests {
     fn parse_cargo_fixture() {
         let content = include_str!("../../jsonschema-migrate/tests/fixtures/cargo.json");
         let value: Value = serde_json::from_str(content).expect("parse cargo.json");
-        let mut migrated = value;
-        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).expect("deserialize cargo schema");
+        let schema = jsonschema_migrate::migrate(value).expect("migrate cargo schema");
         assert!(schema.title.is_some() || schema.type_.is_some());
         // Verify x-taplo is parsed if present
         if schema.x_taplo.is_some() {
