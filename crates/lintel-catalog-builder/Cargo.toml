@@ -19,7 +19,7 @@ bpaf = { workspace = true, features = ["autocomplete", "bright-color", "docgen"]
 futures-util = "0.3.32"
 jsonschema.workspace = true
 jsonschema-migrate = { version = "0.1.3", path = "../jsonschema-migrate" }
-lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.13", path = "../lintel-schema-cache" }
 minijinja = { version = "2.16.0", features = ["builtins"] }
 percent-encoding = "2.3.2"
 pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }

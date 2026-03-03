@@ -23,7 +23,7 @@ jsonschema-schema = { version = "0.2.0", path = "../jsonschema-schema" }
 lintel-cli-common = { version = "0.0.7", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.9", path = "../lintel-config" }
 lintel-diagnostics = { version = "0.0.3", path = "../lintel-diagnostics" }
-lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.13", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.12", path = "../lintel-validate" }
 reqwest.workspace = true
 schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
