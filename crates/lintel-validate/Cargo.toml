@@ -23,7 +23,7 @@ jsonschema = { workspace = true, features = ["resolve-async"] }
 lintel-cli-common = { version = "0.0.7", path = "../lintel-cli-common" }
 lintel-config = { version = "0.0.9", path = "../lintel-config" }
 lintel-diagnostics = { version = "0.0.3", path = "../lintel-diagnostics" }
-lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.13", path = "../lintel-schema-cache" }
 lintel-validation-cache = { version = "0.0.10", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }
 percent-encoding = "2.3.2"

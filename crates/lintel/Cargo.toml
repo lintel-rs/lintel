@@ -29,7 +29,7 @@ lintel-github-action = { version = "0.0.17", path = "../lintel-github-action" }
 lintel-identify = { version = "0.0.15", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.17", path = "../lintel-reporters" }
 lintel-schema = { version = "0.0.1", path = "../lintel-schema" }
-lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.13", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.12", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.10", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy", "syntect-highlighter"] }
