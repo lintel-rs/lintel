@@ -50,9 +50,46 @@ pub fn normalize_pattern_property_keys(obj: &mut Map<String, Value>) {
     }
 }
 
+/// Schema keywords (excluding `type` and `properties`) that indicate an object
+/// is a schema rather than a plain property map.
+const SCHEMA_INDICATOR_KEYWORDS: &[&str] = &[
+    "$ref",
+    "$id",
+    "$schema",
+    "$defs",
+    "definitions",
+    "allOf",
+    "oneOf",
+    "anyOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "required",
+    "additionalProperties",
+    "patternProperties",
+    "items",
+    "prefixItems",
+    "enum",
+    "const",
+    "dependentSchemas",
+    "dependentRequired",
+    "dependencies",
+];
+
 /// Infer `type: "object"` when `properties` is present but `type` is missing.
+///
+/// Guard: only when `properties` is an actual object (not a string in extension
+/// data), AND the object has at least one other schema keyword — this prevents
+/// accidentally inserting `"type": "object"` into a `properties` map that
+/// happens to contain a property named "properties".
 pub fn infer_type(obj: &mut Map<String, Value>) {
-    if !obj.contains_key("type") && matches!(obj.get("properties"), Some(Value::Object(_))) {
+    if !obj.contains_key("type")
+        && matches!(obj.get("properties"), Some(Value::Object(_)))
+        && SCHEMA_INDICATOR_KEYWORDS
+            .iter()
+            .any(|kw| obj.contains_key(*kw))
+    {
         obj.insert("type".to_string(), Value::String("object".to_string()));
     }
 }
@@ -270,7 +307,7 @@ mod tests {
 
     #[test]
     fn infer_type_adds_object() {
-        let mut m = obj(json!({"properties": {"x": {"type": "string"}}}));
+        let mut m = obj(json!({"properties": {"x": {"type": "string"}}, "required": ["x"]}));
         infer_type(&mut m);
         assert_eq!(m["type"], "object");
     }

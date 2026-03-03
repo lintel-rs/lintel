@@ -578,6 +578,32 @@ mod tests {
     }
 
     #[test]
+    fn properties_map_with_property_named_properties_not_inferred() {
+        // A schema whose `properties` map contains a property named "properties".
+        // The `properties` map itself is NOT a schema, so type inference must not
+        // inject `"type": "object"` into it.
+        let mut schema = json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "order": { "type": "string" },
+                "properties": { "$ref": "#/definitions/arrayRule" }
+            },
+            "dependencies": {
+                "order": ["properties"],
+                "properties": ["order"]
+            }
+        });
+        migrate_to_2020_12(&mut schema);
+
+        let props = schema["properties"].as_object().unwrap();
+        assert!(
+            !props.contains_key("type"),
+            "type should not be injected into the properties map: {props:?}"
+        );
+    }
+
+    #[test]
     fn non_object_properties_not_inferred() {
         // Extension data where "properties" is a string, not a schema keyword.
         // x-custom is not a known schema position, so it is not recursed into.

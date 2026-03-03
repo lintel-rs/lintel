@@ -478,7 +478,11 @@ async fn fetch_schema(
     };
 
     inline::inline_external_refs(&mut value, schema_uri, &retriever).await?;
-    jsonschema_migrate::migrate(value)
+    jsonschema_migrate::migrate_to_2020_12(&mut value);
+    let json_string = serde_json::to_string(&value)
+        .with_context(|| format!("failed to serialize schema: {schema_uri}"))?;
+    let mut jd = serde_json::Deserializer::from_str(&json_string);
+    serde_path_to_error::deserialize(&mut jd)
         .with_context(|| format!("failed to deserialize schema: {schema_uri}"))
 }
 
