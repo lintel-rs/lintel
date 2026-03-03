@@ -4,8 +4,7 @@ use indexmap::IndexMap;
 use jsonschema_schema::{Schema, SchemaValue, ref_name};
 
 use crate::fmt::{COMPOSITION_KEYWORDS, Fmt, format_type, format_type_suffix, format_value};
-use crate::man::write_description;
-use crate::man::write_label;
+use crate::man::{write_description, write_label, write_label_wrapped};
 use crate::schema::{get_description, required_set, resolve_ref, schema_type_str, variant_summary};
 
 /// Maximum nesting depth for recursive property rendering.
@@ -13,8 +12,9 @@ pub(crate) const MAX_DEPTH: usize = 3;
 
 /// Render a variant block for `oneOf`/`anyOf`/`allOf`.
 ///
-/// If the resolved variant has properties or a description, expand
-/// them inline. Otherwise, render a single summary line.
+/// - **`$ref` entries**: show label, type, description, and URL — but do NOT
+///   expand properties inline (the definition is in the DEFINITIONS section).
+/// - **Inline entries**: expand normally with properties and description.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_variant_block(
     out: &mut String,
@@ -22,8 +22,9 @@ pub(crate) fn render_variant_block(
     original: &SchemaValue,
     root: &SchemaValue,
     f: &Fmt<'_>,
-    index: usize,
 ) {
+    let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
+
     let label = if let Some(ref title) = resolved.title {
         title.clone()
     } else if let Some(orig_schema) = original.as_schema()
@@ -33,37 +34,110 @@ pub(crate) fn render_variant_block(
     } else if let Some(ty) = schema_type_str(resolved) {
         ty
     } else {
-        format!("variant {index}")
+        "(schema)".to_string()
     };
 
-    let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
-    let desc = get_description(resolved);
-
     let dep_tag = deprecated_tag(resolved, f);
+    let ty = schema_type_str(resolved).unwrap_or_default();
+    let suffix = format_type_suffix(&ty, f);
 
-    if has_properties || desc.is_some() {
-        // Expanded block
-        let ty = schema_type_str(resolved).unwrap_or_default();
-        let suffix = format_type_suffix(&ty, f);
-        let _ = writeln!(
-            out,
-            "    {}({index}){} {}{label}{}{dep_tag}{suffix}",
-            f.dim, f.reset, f.green, f.reset
-        );
-        if let Some(desc) = desc {
+    if is_ref {
+        // $ref entry: show label, type, description, URL — do NOT expand inline
+        let _ = writeln!(out, "    {}{label}{}{dep_tag}{suffix}", f.green, f.reset);
+        if let Some(desc) = get_description(resolved) {
             write_description(out, desc, f, "        ");
         }
-        if let Some(ref props) = resolved.properties {
-            let req = required_set(resolved);
-            render_properties(out, props, &req, root, f, 2);
+        if let Some(orig_schema) = original.as_schema()
+            && let Some(ref r) = orig_schema.ref_
+        {
+            let _ = writeln!(out, "        {}{r}{}", f.dim, f.reset);
         }
-    } else if let Some(ref values) = resolved.enum_ {
-        let prefix = format!("    {}({index}){} ", f.dim, f.reset);
-        render_enum_values(out, values, f, &prefix);
     } else {
-        // Single-line summary
-        let summary = variant_summary(original, root, f);
-        let _ = writeln!(out, "    {}({index}){} {summary}", f.dim, f.reset);
+        // Inline entry: expand normally
+        let has_properties = !resolved.properties.is_empty();
+        let desc = get_description(resolved);
+
+        if has_properties || desc.is_some() {
+            let _ = writeln!(out, "    {}{label}{}{dep_tag}{suffix}", f.green, f.reset);
+            if let Some(desc) = desc {
+                write_description(out, desc, f, "        ");
+            }
+            if !resolved.properties.is_empty() {
+                let req = required_set(resolved);
+                render_properties(out, &resolved.properties, &req, root, f, 2);
+            }
+        } else if resolved.enum_.is_some() {
+            if resolved.markdown_enum_descriptions.is_some() {
+                render_enum_with_descriptions(out, resolved, f, "        ");
+            } else if let Some(ref values) = resolved.enum_ {
+                render_enum_values(out, values, f, "    ");
+            }
+        } else if has_inline_composition(resolved) {
+            render_inline_composition(out, resolved, root, f);
+        } else {
+            let summary = variant_summary(original, root, f);
+            let _ = writeln!(out, "    {summary}");
+        }
+    }
+}
+
+/// Check if a schema has composition keywords (anyOf/oneOf/allOf).
+fn has_inline_composition(schema: &Schema) -> bool {
+    schema.any_of.is_some() || schema.one_of.is_some() || schema.all_of.is_some()
+}
+
+/// Render composition sub-entries within a variant block.
+///
+/// Used when an inline entry (no `$ref`) is a bare composition wrapper,
+/// e.g. `{ "anyOf": [{ "$ref": "..." }, ...] }` inside an allOf.
+fn render_inline_composition(out: &mut String, schema: &Schema, root: &SchemaValue, f: &Fmt<'_>) {
+    for keyword in COMPOSITION_KEYWORDS {
+        let variants = match *keyword {
+            "oneOf" => schema.one_of.as_ref(),
+            "anyOf" => schema.any_of.as_ref(),
+            "allOf" => schema.all_of.as_ref(),
+            _ => None,
+        };
+        let Some(variants) = variants else {
+            continue;
+        };
+        let label = match *keyword {
+            "oneOf" => "One of",
+            "anyOf" => "Any of",
+            "allOf" => "All of",
+            _ => keyword,
+        };
+        let _ = writeln!(out, "    {}{label}:{}", f.dim, f.reset);
+        for variant in variants {
+            let resolved_sv = resolve_ref(variant, root);
+            let Some(resolved) = resolved_sv.as_schema() else {
+                continue;
+            };
+            let is_ref = variant.as_schema().is_some_and(|s| s.ref_.is_some());
+            let entry_label = if let Some(ref title) = resolved.title {
+                title.clone()
+            } else if let Some(orig) = variant.as_schema()
+                && let Some(ref r) = orig.ref_
+            {
+                ref_name(r).to_string()
+            } else if let Some(ty) = schema_type_str(resolved) {
+                ty
+            } else {
+                "(schema)".to_string()
+            };
+            let ty = schema_type_str(resolved).unwrap_or_default();
+            let suffix = format_type_suffix(&ty, f);
+            let _ = writeln!(out, "        {}{entry_label}{}{suffix}", f.green, f.reset);
+            if let Some(desc) = get_description(resolved) {
+                write_description(out, desc, f, "            ");
+            }
+            if is_ref
+                && let Some(orig) = variant.as_schema()
+                && let Some(ref r) = orig.ref_
+            {
+                let _ = writeln!(out, "            {}{r}{}", f.dim, f.reset);
+            }
+        }
     }
 }
 
@@ -112,10 +186,20 @@ pub(crate) fn render_properties(
         } else {
             String::new()
         };
+        let readonly_tag = if prop_schema.read_only {
+            format!(" {}[READ-ONLY]{}", f.dim, f.reset)
+        } else {
+            String::new()
+        };
+        let writeonly_tag = if prop_schema.write_only {
+            format!(" {}[WRITE-ONLY]{}", f.dim, f.reset)
+        } else {
+            String::new()
+        };
 
         let _ = writeln!(
             out,
-            "{indent}{}{prop_name}{}{deprecated_tag} ({type_display}{req_tag})",
+            "{indent}{}{prop_name}{}{deprecated_tag}{readonly_tag}{writeonly_tag} ({type_display}{req_tag})",
             f.green, f.reset
         );
 
@@ -139,34 +223,21 @@ fn render_property_details(
         write_description(out, desc, f, desc_indent);
     }
 
-    if let Some(ref default) = prop_schema.default {
-        write_label(
-            out,
-            desc_indent,
-            "Default",
-            &format!("{}{}{}", f.magenta, format_value(default), f.reset),
-        );
+    if f.extended
+        && let Some(ref comment) = prop_schema.comment
+    {
+        let _ = writeln!(out, "{desc_indent}{}Comment:{}", f.dim, f.reset);
+        write_description(out, comment, f, &format!("{desc_indent}  "));
     }
 
-    if let Some(ref values) = prop_schema.enum_ {
-        let joined: String = values
-            .iter()
-            .map(|v| {
-                let display = v.as_str().map_or_else(|| v.to_string(), str::to_string);
-                format!("{}{display}{}", f.magenta, f.reset)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        write_label(out, desc_indent, "Values", &joined);
+    if let Some(ref default) = prop_schema.default {
+        write_label_wrapped(out, desc_indent, "Default", &format_value(default), f);
     }
+
+    render_enum_with_descriptions(out, prop_schema, f, desc_indent);
 
     if let Some(ref c) = prop_schema.const_ {
-        write_label(
-            out,
-            desc_indent,
-            "Constant",
-            &format!("{}{c}{}", f.magenta, f.reset),
-        );
+        write_label_wrapped(out, desc_indent, "Constant", &c.to_string(), f);
     }
 
     if let Some(ref examples) = prop_schema.examples
@@ -174,61 +245,61 @@ fn render_property_details(
     {
         let joined: String = examples
             .iter()
-            .map(|v| {
-                let display = format_value(v);
-                format!("{}{display}{}", f.magenta, f.reset)
-            })
+            .map(format_value)
             .collect::<Vec<_>>()
             .join(", ");
-        write_label(out, desc_indent, "Examples", &joined);
+        write_label_wrapped(out, desc_indent, "Examples", &joined, f);
     }
 
     render_constraints(out, prop_schema, f, desc_indent);
 
-    for keyword in COMPOSITION_KEYWORDS {
-        let variants = match *keyword {
-            "oneOf" => prop_schema.one_of.as_ref(),
-            "anyOf" => prop_schema.any_of.as_ref(),
-            "allOf" => prop_schema.all_of.as_ref(),
-            _ => None,
-        };
-        if let Some(variants) = variants {
-            let label = match *keyword {
-                "oneOf" => "One of",
-                "anyOf" => "Any of",
-                "allOf" => "All of",
-                _ => keyword,
-            };
-            let _ = writeln!(out, "{desc_indent}{}{label}:{}", f.dim, f.reset);
-            for (i, variant) in variants.iter().enumerate() {
-                let resolved_sv = resolve_ref(variant, root);
-                let resolved = resolved_sv.as_schema();
-                if let Some(resolved) = resolved {
-                    render_inline_variant(
-                        out,
-                        resolved,
-                        variant,
-                        root,
-                        f,
-                        depth,
-                        desc_indent,
-                        i + 1,
-                    );
-                } else {
-                    let summary = variant_summary(variant, root, f);
-                    let _ = writeln!(out, "{desc_indent}  - {summary}");
-                }
-            }
-        }
+    // Content type/encoding
+    render_content_info(out, prop_schema, f, desc_indent);
+
+    // Composition keywords (oneOf/anyOf/allOf)
+    render_composition(out, prop_schema, root, f, depth, desc_indent);
+
+    // not
+    if let Some(ref not_sv) = prop_schema.not {
+        let summary = variant_summary(not_sv, root, f);
+        write_label(out, desc_indent, "Not", &summary);
     }
 
-    if depth < MAX_DEPTH
-        && let Some(ref nested_props) = prop_schema.properties
-    {
+    // if/then/else
+    render_conditional(out, prop_schema, root, f, depth, desc_indent);
+
+    // dependentRequired
+    render_dependent_required(out, prop_schema, f, desc_indent);
+
+    // dependentSchemas
+    render_dependent_schemas(out, prop_schema, root, f, depth, desc_indent);
+
+    // Nested properties
+    if depth < MAX_DEPTH && !prop_schema.properties.is_empty() {
         let nested_required = required_set(prop_schema);
         out.push('\n');
-        render_properties(out, nested_props, &nested_required, root, f, depth + 1);
+        render_properties(
+            out,
+            &prop_schema.properties,
+            &nested_required,
+            root,
+            f,
+            depth + 1,
+        );
     }
+
+    // patternProperties
+    render_pattern_properties(out, prop_schema, root, f, depth, desc_indent);
+
+    // propertyNames
+    render_property_names(out, prop_schema, f, desc_indent);
+
+    // prefixItems / contains
+    render_prefix_items(out, prop_schema, root, f, desc_indent);
+    render_contains(out, prop_schema, root, f, desc_indent);
+
+    // additionalProperties
+    render_additional_properties(out, prop_schema, root, f, depth, desc_indent);
 }
 
 /// Render a variant inline within a property's composition list.
@@ -241,10 +312,9 @@ fn render_inline_variant(
     f: &Fmt<'_>,
     depth: usize,
     desc_indent: &str,
-    index: usize,
 ) {
     let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
-    let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
+    let has_properties = !resolved.properties.is_empty();
 
     if !is_ref && has_properties && depth < MAX_DEPTH {
         let deprecated_tag = deprecated_tag(resolved, f);
@@ -253,7 +323,7 @@ fn render_inline_variant(
         } else if let Some(ty) = schema_type_str(resolved) {
             (ty, true)
         } else {
-            (format!("variant {index}"), false)
+            ("(schema)".to_string(), false)
         };
         let suffix = if label_is_type {
             String::new()
@@ -263,20 +333,25 @@ fn render_inline_variant(
         };
         let _ = writeln!(
             out,
-            "{desc_indent}  {}({index}){} {}{label}{}{deprecated_tag}{suffix}",
-            f.dim, f.reset, f.green, f.reset
+            "{desc_indent}  - {}{label}{}{deprecated_tag}{suffix}",
+            f.green, f.reset
         );
         if let Some(desc) = get_description(resolved) {
             let nested_indent = format!("{desc_indent}      ");
             write_description(out, desc, f, &nested_indent);
         }
-        if let Some(ref props) = resolved.properties {
+        if !resolved.properties.is_empty() {
             let req = required_set(resolved);
-            render_properties(out, props, &req, root, f, depth + 2);
+            render_properties(out, &resolved.properties, &req, root, f, depth + 2);
         }
-    } else if let Some(ref values) = resolved.enum_ {
-        let prefix = format!("{desc_indent}  - ");
-        render_enum_values(out, values, f, &prefix);
+    } else if resolved.enum_.is_some() {
+        if resolved.markdown_enum_descriptions.is_some() {
+            let nested_indent = format!("{desc_indent}  ");
+            render_enum_with_descriptions(out, resolved, f, &nested_indent);
+        } else if let Some(ref values) = resolved.enum_ {
+            let prefix = format!("{desc_indent}  - ");
+            render_enum_values(out, values, f, &prefix);
+        }
     } else {
         let summary = variant_summary(original, root, f);
         let _ = writeln!(out, "{desc_indent}  - {summary}");
@@ -383,8 +458,14 @@ fn render_constraints(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &s
     if let Some(v) = schema.max_items {
         parts.push(format!("maxItems={}{v}{}", f.magenta, f.reset));
     }
-    if schema.unique_items.unwrap_or(false) {
+    if schema.unique_items {
         parts.push(format!("{}unique{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.min_contains {
+        parts.push(format!("minContains={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.max_contains {
+        parts.push(format!("maxContains={}{v}{}", f.magenta, f.reset));
     }
     if let Some(v) = schema.min_properties {
         parts.push(format!("minProperties={}{v}{}", f.magenta, f.reset));
@@ -401,6 +482,382 @@ fn render_constraints(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &s
             f.reset,
             parts.join(", ")
         );
+    }
+}
+
+/// Render enum values, optionally with `markdownEnumDescriptions`.
+fn render_enum_with_descriptions(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &str) {
+    let Some(ref values) = schema.enum_ else {
+        return;
+    };
+    if let Some(ref descs) = schema.markdown_enum_descriptions
+        && descs.iter().any(Option::is_some)
+    {
+        let _ = writeln!(out, "{indent}{}Values:{}", f.dim, f.reset);
+        for (i, val) in values.iter().enumerate() {
+            let display = val.as_str().map_or_else(|| val.to_string(), str::to_string);
+            let desc = descs.get(i).and_then(|d| d.as_deref()).unwrap_or_default();
+            if desc.is_empty() {
+                let _ = writeln!(out, "{indent}    {}{display}{}", f.magenta, f.reset);
+            } else {
+                let rendered_desc = if f.is_color() {
+                    markdown_to_ansi::render_inline(desc, &f.md_opts(None))
+                } else {
+                    desc.to_string()
+                };
+                let _ = writeln!(
+                    out,
+                    "{indent}    {}{display}{} — {rendered_desc}",
+                    f.magenta, f.reset
+                );
+            }
+        }
+    } else {
+        let prefix = format!("{indent}Values: ");
+        render_enum_values(out, values, f, &prefix);
+    }
+}
+
+/// Render `contentMediaType` / `contentEncoding`.
+fn render_content_info(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &str) {
+    let media = schema.content_media_type.as_deref();
+    let encoding = schema.content_encoding.as_deref();
+    if media.is_none() && encoding.is_none() {
+        return;
+    }
+    let value = match (media, encoding) {
+        (Some(m), Some(e)) => format!("{}{m}{} ({e})", f.magenta, f.reset),
+        (Some(m), None) => format!("{}{m}{}", f.magenta, f.reset),
+        (None, Some(e)) => format!("{}{e}{}", f.magenta, f.reset),
+        (None, None) => unreachable!(),
+    };
+    write_label(out, indent, "Content", &value);
+}
+
+/// Render composition keywords (oneOf/anyOf/allOf) for a property.
+#[allow(clippy::too_many_arguments)]
+fn render_composition(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+    desc_indent: &str,
+) {
+    for keyword in COMPOSITION_KEYWORDS {
+        let variants = match *keyword {
+            "oneOf" => schema.one_of.as_ref(),
+            "anyOf" => schema.any_of.as_ref(),
+            "allOf" => schema.all_of.as_ref(),
+            _ => None,
+        };
+        if let Some(variants) = variants {
+            let label = match *keyword {
+                "oneOf" => "One of",
+                "anyOf" => "Any of",
+                "allOf" => "All of",
+                _ => keyword,
+            };
+            let _ = writeln!(out, "{desc_indent}{}{label}:{}", f.dim, f.reset);
+            for variant in variants {
+                let resolved_sv = resolve_ref(variant, root);
+                let resolved = resolved_sv.as_schema();
+                if let Some(resolved) = resolved {
+                    render_inline_variant(out, resolved, variant, root, f, depth, desc_indent);
+                } else {
+                    let summary = variant_summary(variant, root, f);
+                    let _ = writeln!(out, "{desc_indent}  - {summary}");
+                }
+            }
+        }
+    }
+}
+
+/// Render `if`/`then`/`else` conditional.
+#[allow(clippy::too_many_arguments)]
+fn render_conditional(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+    indent: &str,
+) {
+    if schema.if_.is_none() {
+        return;
+    }
+    let _ = writeln!(out, "{indent}{}Conditional:{}", f.dim, f.reset);
+    if let Some(ref if_sv) = schema.if_ {
+        let summary = variant_summary(if_sv, root, f);
+        let _ = writeln!(out, "{indent}  If: {summary}");
+        if depth < MAX_DEPTH {
+            render_conditional_subschema(out, if_sv, root, f, depth);
+        }
+    }
+    if let Some(ref then_sv) = schema.then_ {
+        let summary = variant_summary(then_sv, root, f);
+        let _ = writeln!(out, "{indent}  Then: {summary}");
+        if depth < MAX_DEPTH {
+            render_conditional_subschema(out, then_sv, root, f, depth);
+        }
+    }
+    if let Some(ref else_sv) = schema.else_ {
+        let summary = variant_summary(else_sv, root, f);
+        let _ = writeln!(out, "{indent}  Else: {summary}");
+        if depth < MAX_DEPTH {
+            render_conditional_subschema(out, else_sv, root, f, depth);
+        }
+    }
+}
+
+/// Render nested properties within a conditional subschema.
+#[allow(clippy::too_many_arguments)]
+fn render_conditional_subschema(
+    out: &mut String,
+    sv: &SchemaValue,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+) {
+    let resolved_sv = resolve_ref(sv, root);
+    if let Some(resolved) = resolved_sv.as_schema()
+        && !resolved.properties.is_empty()
+    {
+        let req = required_set(resolved);
+        render_properties(out, &resolved.properties, &req, root, f, depth + 2);
+    }
+}
+
+/// Render `dependentRequired`.
+fn render_dependent_required(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &str) {
+    let Some(ref deps) = schema.dependent_required else {
+        return;
+    };
+    if deps.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "{indent}{}Dependent required:{}", f.dim, f.reset);
+    for (key, required) in deps {
+        let values = required
+            .iter()
+            .map(|r| format!("{}\"{r}\"{}", f.magenta, f.reset))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "{indent}  {}\"{key}\"{} requires: {values}",
+            f.green, f.reset
+        );
+    }
+}
+
+/// Render `dependentSchemas`.
+#[allow(clippy::too_many_arguments)]
+fn render_dependent_schemas(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+    indent: &str,
+) {
+    if schema.dependent_schemas.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "{indent}{}Dependent schemas:{}", f.dim, f.reset);
+    for (key, dep_sv) in &schema.dependent_schemas {
+        let summary = variant_summary(dep_sv, root, f);
+        let _ = writeln!(out, "{indent}  {}\"{key}\"{}: {summary}", f.green, f.reset);
+        if depth < MAX_DEPTH {
+            let resolved_sv = resolve_ref(dep_sv, root);
+            if let Some(resolved) = resolved_sv.as_schema()
+                && !resolved.properties.is_empty()
+            {
+                let req = required_set(resolved);
+                render_properties(out, &resolved.properties, &req, root, f, depth + 2);
+            }
+        }
+    }
+}
+
+/// Render `patternProperties`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_pattern_properties(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+    indent: &str,
+) {
+    if schema.pattern_properties.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "{indent}{}Pattern properties:{}", f.dim, f.reset);
+    for (pattern, sv) in &schema.pattern_properties {
+        let resolved_sv = resolve_ref(sv, root);
+        let ty = resolved_sv
+            .as_schema()
+            .and_then(schema_type_str)
+            .unwrap_or_default();
+        let type_display = format_type(&ty, f);
+        if ty.is_empty() {
+            let _ = writeln!(out, "{indent}  {}{pattern}{}", f.green, f.reset);
+        } else {
+            let _ = writeln!(
+                out,
+                "{indent}  {}{pattern}{} ({type_display})",
+                f.green, f.reset
+            );
+        }
+        if let Some(resolved) = resolved_sv.as_schema() {
+            if let Some(desc) = get_description(resolved) {
+                let nested_indent = format!("{indent}      ");
+                write_description(out, desc, f, &nested_indent);
+            }
+            if depth < MAX_DEPTH && !resolved.properties.is_empty() {
+                let req = required_set(resolved);
+                render_properties(out, &resolved.properties, &req, root, f, depth + 2);
+            }
+        }
+    }
+}
+
+/// Render `propertyNames` constraints.
+fn render_property_names(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &str) {
+    let Some(ref pn_sv) = schema.property_names else {
+        return;
+    };
+    let Some(pn) = pn_sv.as_schema() else {
+        return;
+    };
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(ref pat) = pn.pattern {
+        parts.push(format!("pattern={}{pat}{}", f.magenta, f.reset));
+    }
+    if let Some(ref fmt_val) = pn.format {
+        parts.push(format!("format={}{fmt_val}{}", f.magenta, f.reset));
+    }
+    if let Some(ref values) = pn.enum_ {
+        let joined = values
+            .iter()
+            .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
+            .collect::<Vec<_>>()
+            .join(", ");
+        parts.push(joined);
+    }
+    if let Some(v) = pn.min_length {
+        parts.push(format!("minLength={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = pn.max_length {
+        parts.push(format!("maxLength={}{v}{}", f.magenta, f.reset));
+    }
+    if !parts.is_empty() {
+        write_label(out, indent, "Property names", &parts.join(", "));
+    }
+}
+
+/// Render `prefixItems` (tuple validation).
+#[allow(clippy::too_many_arguments)]
+fn render_prefix_items(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    indent: &str,
+) {
+    let Some(ref items) = schema.prefix_items else {
+        return;
+    };
+    if items.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "{indent}{}Tuple items:{}", f.dim, f.reset);
+    for (i, item) in items.iter().enumerate() {
+        let summary = variant_summary(item, root, f);
+        let _ = writeln!(out, "{indent}  [{i}]: {summary}");
+    }
+}
+
+/// Render `contains`.
+#[allow(clippy::too_many_arguments)]
+fn render_contains(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    indent: &str,
+) {
+    let Some(ref contains_sv) = schema.contains else {
+        return;
+    };
+    let summary = variant_summary(contains_sv, root, f);
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(v) = schema.min_contains {
+        parts.push(format!("minContains={}{v}{}", f.magenta, f.reset));
+    }
+    if let Some(v) = schema.max_contains {
+        parts.push(format!("maxContains={}{v}{}", f.magenta, f.reset));
+    }
+    if parts.is_empty() {
+        write_label(out, indent, "Contains", &summary);
+    } else {
+        write_label(
+            out,
+            indent,
+            "Contains",
+            &format!("{summary} ({})", parts.join(", ")),
+        );
+    }
+}
+
+/// Render `additionalProperties`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_additional_properties(
+    out: &mut String,
+    schema: &Schema,
+    root: &SchemaValue,
+    f: &Fmt<'_>,
+    depth: usize,
+    indent: &str,
+) {
+    let Some(ref ap) = schema.additional_properties else {
+        return;
+    };
+    match ap.as_ref() {
+        SchemaValue::Bool(false) => {
+            let _ = writeln!(
+                out,
+                "{indent}{}Additional properties:{} not allowed",
+                f.dim, f.reset
+            );
+        }
+        SchemaValue::Bool(true) | SchemaValue::Other(_) => {} // default or invalid, skip
+        SchemaValue::Schema(s) => {
+            let ty = schema_type_str(s).unwrap_or_default();
+            let type_display = format_type(&ty, f);
+            if ty.is_empty() {
+                let _ = writeln!(
+                    out,
+                    "{indent}{}Additional properties:{} allowed",
+                    f.dim, f.reset
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{indent}{}Additional properties:{} {type_display}",
+                    f.dim, f.reset
+                );
+            }
+            if let Some(desc) = get_description(s) {
+                let nested_indent = format!("{indent}    ");
+                write_description(out, desc, f, &nested_indent);
+            }
+            if depth < MAX_DEPTH && !s.properties.is_empty() {
+                let req = required_set(s);
+                render_properties(out, &s.properties, &req, root, f, depth + 2);
+            }
+        }
     }
 }
 
@@ -430,8 +887,8 @@ pub(crate) fn render_subschema(
 
     if depth < MAX_DEPTH {
         let required = required_set(resolved);
-        if let Some(ref props) = resolved.properties {
-            render_properties(out, props, &required, root, f, depth + 1);
+        if !resolved.properties.is_empty() {
+            render_properties(out, &resolved.properties, &required, root, f, depth + 1);
         }
     }
 }

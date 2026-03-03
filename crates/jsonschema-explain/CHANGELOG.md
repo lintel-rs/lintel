@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.6...jsonschema-explain-v0.3.0) - 2026-03-02
+
+### Added
+
+- unify composition rendering and add schema fragment navigation
+- add Schema::absolute() and improve allOf flattening
+- flatten allOf into root schema and show provenance in INCLUDES section
+- add --extended flag to gate $comment rendering
+- render missing schema keywords in explain output
+
+### Fixed
+
+- wrap long label values and remove extra newline after sections
+- use render_enum_values for property-level enum wrapping
+- use write_description for $comment to get proper width wrapping
+
+### Other
+
+- remove INCLUDES section, keep allOf with $ref-backed entries
+- Merge pull request #145 from lintel-rs/nested-properties
+- Improve variant rendering: enum wrapping, pattern display, and type inference
+
 ## [0.2.6](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.5...jsonschema-explain-v0.2.6) - 2026-03-01
 
 ### Other

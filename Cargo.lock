@@ -421,6 +421,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "combine-structs"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+ "trybuild",
+]
+
+[[package]]
 name = "console"
 version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1490,9 +1502,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.42.2"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a44c9bb95f6ac9270bf4fd38d71c2f8704b9fe0323a293af7a5284cbd60a39b2"
+checksum = "267fb27be492e66ab147d2ce0233d88ae465b93c3565016e73998729bf3fe60f"
 dependencies = [
  "ahash 0.8.12",
  "async-trait",
@@ -1521,7 +1533,7 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-explain"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "ansi-term-styles",
  "indexmap",
@@ -1533,20 +1545,26 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-migrate"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
+ "jsonschema-schema",
  "regex-syntax 0.8.10",
  "serde_json",
+ "url",
 ]
 
 [[package]]
 name = "jsonschema-schema"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "combine-structs",
  "indexmap",
  "jsonschema-migrate",
+ "schemars",
  "serde",
  "serde_json",
+ "strum",
+ "url",
 ]
 
 [[package]]
@@ -1587,7 +1605,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lintel"
-version = "0.0.18"
+version = "0.0.19"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1604,6 +1622,7 @@ dependencies = [
  "lintel-github-action",
  "lintel-identify",
  "lintel-reporters",
+ "lintel-schema",
  "lintel-schema-cache",
  "lintel-validate",
  "lintel-validation-cache",
@@ -1620,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-annotate"
-version = "0.0.17"
+version = "0.0.18"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1646,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-catalog-builder"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1674,7 +1693,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-check"
-version = "0.0.18"
+version = "0.0.19"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1695,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-config"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "dprint-config",
@@ -1712,9 +1731,10 @@ dependencies = [
 
 [[package]]
 name = "lintel-config-schema-generator"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "bpaf",
+ "jsonschema-schema",
  "lintel-catalog-builder",
  "lintel-config",
  "schema-catalog",
@@ -1723,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-diagnostics"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "lintel-schema-cache",
  "lintel-validation-cache",
@@ -1733,7 +1753,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-explain"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1749,14 +1769,16 @@ dependencies = [
  "reqwest",
  "schema-catalog",
  "serde_json",
+ "serde_path_to_error",
  "tempfile",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
 name = "lintel-format"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -1780,7 +1802,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-github-action"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1794,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-identify"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "anyhow",
  "bpaf",
@@ -1805,7 +1827,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-reporters"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "ansi-term-styles",
  "lintel-diagnostics",
@@ -1813,8 +1835,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "lintel-schema"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "jsonschema-migrate",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "lintel-schema-cache"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1831,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validate"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1860,7 +1895,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-validation-cache"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2568,9 +2603,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.42.2"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d4124f489451bb67c59d67fa16f3ae9b5690b290406a7538e38458632666df"
+checksum = "12ecd0f3daefd4faff2e0821310c18e6e9d1fd00550bbd7e5a59d78184a071bc"
 dependencies = [
  "ahash 0.8.12",
  "async-trait",
@@ -2850,11 +2885,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
 dependencies = [
  "dyn-clone",
+ "indexmap",
  "ref-cast",
  "schemars_derive",
  "semver",
  "serde",
  "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -2960,6 +2997,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_spanned"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3059,18 +3107,18 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "strum"
-version = "0.27.2"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
 dependencies = [
  "strum_macros",
 ]
 
 [[package]]
 name = "strum_macros"
-version = "0.27.2"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -3210,6 +3258,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "target-triple"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "591ef38edfb78ca4771ee32cf494cb8771944bee237a9b91fc9c1424ac4b777b"
+
+[[package]]
 name = "tempfile"
 version = "3.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3220,6 +3274,15 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "termcolor"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+dependencies = [
+ "winapi-util",
 ]
 
 [[package]]
@@ -3610,6 +3673,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "trybuild"
+version = "1.0.116"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47c635f0191bd3a2941013e5062667100969f8c4e9cd787c14f977265d73616e"
+dependencies = [
+ "glob",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "target-triple",
+ "termcolor",
+ "toml",
+]
+
+[[package]]
 name = "typed-path"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3691,6 +3769,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -4450,9 +4529,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "8.1.0"
+version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e499faf5c6b97a0d086f4a8733de6d47aee2252b8127962439d8d4311a73f72"
+checksum = "b680f2a0cd479b4cff6e1233c483fdead418106eae419dc60200ae9850f6d004"
 dependencies = [
  "crc32fast",
  "flate2",

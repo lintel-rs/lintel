@@ -28,6 +28,10 @@ pub(crate) fn render_schema_section(out: &mut String, schema: &Schema, f: &Fmt<'
 }
 
 /// Render `oneOf`/`anyOf`/`allOf` variant sections.
+///
+/// All composition keywords use the same rendering style:
+/// - `$ref` entries show label, type, description, and URL (not expanded inline)
+/// - Inline entries are expanded normally with properties
 pub(crate) fn render_variants_section(
     out: &mut String,
     schema: &Schema,
@@ -49,10 +53,10 @@ pub(crate) fn render_variants_section(
                 _ => keyword,
             };
             write_section(out, label, f);
-            for (i, variant) in variants.iter().enumerate() {
+            for variant in variants {
                 let resolved_sv = resolve_ref(variant, root);
                 if let Some(resolved) = resolved_sv.as_schema() {
-                    render_variant_block(out, resolved, variant, root, f, i + 1);
+                    render_variant_block(out, resolved, variant, root, f);
                 }
             }
             out.push('\n');
@@ -133,12 +137,19 @@ fn render_defs_block<'a>(
             String::new()
         };
         let _ = writeln!(out, "    {}{def_name}{}{dep_tag}{suffix}", f.green, f.reset);
+        if let Some(src) = def_schema
+            .x_lintel
+            .as_ref()
+            .and_then(|xl| xl.source.as_deref())
+        {
+            write_label(out, "        ", "Source", src);
+        }
         if let Some(desc) = get_description(def_schema) {
             write_description(out, desc, f, "        ");
         }
-        if let Some(ref props) = def_schema.properties {
+        if !def_schema.properties.is_empty() {
             let req = required_set(def_schema);
-            render_properties(out, props, &req, root, f, 2);
+            render_properties(out, &def_schema.properties, &req, root, f, 2);
         }
         out.push('\n');
     }
@@ -152,14 +163,12 @@ mod tests {
     use serde_json::json;
 
     /// Parse with migration so tests work with older JSON Schema drafts.
-    fn parse_schema(mut val: serde_json::Value) -> Schema {
-        jsonschema_migrate::migrate_to_2020_12(&mut val);
-        serde_json::from_value(val).unwrap()
+    fn parse_schema(val: serde_json::Value) -> Schema {
+        jsonschema_migrate::migrate(val).unwrap()
     }
 
-    fn parse_sv(mut val: serde_json::Value) -> SchemaValue {
-        jsonschema_migrate::migrate_to_2020_12(&mut val);
-        serde_json::from_value(val).unwrap()
+    fn parse_sv(val: serde_json::Value) -> SchemaValue {
+        SchemaValue::Schema(Box::new(jsonschema_migrate::migrate(val).unwrap()))
     }
 
     // --- SCHEMA section ---
@@ -275,6 +284,32 @@ mod tests {
         assert!(!out.contains("..."));
     }
 
+    #[test]
+    fn definitions_show_x_lintel_source() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+        let val = json!({
+            "$defs": {
+                "Core vocabulary meta-schema": {
+                    "type": "object",
+                    "x-lintel": {
+                        "source": "https://json-schema.org/draft/2020-12/meta/core"
+                    },
+                    "properties": {
+                        "$id": { "type": "string" }
+                    }
+                }
+            }
+        });
+        let schema = parse_schema(val.clone());
+        let root = parse_sv(val);
+
+        render_definitions_section(&mut out, &schema, &root, &f);
+        assert!(out.contains("DEFINITIONS"));
+        assert!(out.contains("Core vocabulary meta-schema"));
+        assert!(out.contains("Source: https://json-schema.org/draft/2020-12/meta/core"));
+    }
+
     // --- VARIANTS section ---
 
     #[test]
@@ -297,14 +332,14 @@ mod tests {
     }
 
     #[test]
-    fn allof_refs_expanded() {
+    fn allof_refs_show_description_and_url() {
         let mut out = String::new();
         let f = Fmt::plain(80);
         let val = json!({
             "allOf": [
-                { "$ref": "#/definitions/base" }
+                { "$ref": "#/$defs/base" }
             ],
-            "definitions": {
+            "$defs": {
                 "base": {
                     "type": "object",
                     "description": "Base configuration",
@@ -323,7 +358,37 @@ mod tests {
         render_variants_section(&mut out, &schema, &root, &f);
         assert!(out.contains("ALL OF"));
         assert!(out.contains("base"));
+        // Description is shown for $ref entries
         assert!(out.contains("Base configuration"));
-        assert!(out.contains("name (string)"));
+        // $ref URL is shown
+        assert!(out.contains("#/$defs/base"));
+        // Properties are NOT expanded inline for $ref entries
+        assert!(!out.contains("The name"));
+        // No numbered indexes
+        assert!(!out.contains("(1)"));
+    }
+
+    #[test]
+    fn allof_uses_same_style_as_oneof_anyof() {
+        let mut out = String::new();
+        let f = Fmt::plain(80);
+        let val = json!({
+            "allOf": [
+                { "$ref": "#/$defs/First" }
+            ],
+            "$defs": {
+                "First": { "type": "object", "description": "First schema" }
+            }
+        });
+        let schema = parse_schema(val.clone());
+        let root = parse_sv(val);
+
+        render_variants_section(&mut out, &schema, &root, &f);
+        assert!(out.contains("ALL OF"));
+        assert!(out.contains("First"));
+        assert!(out.contains("First schema"));
+        assert!(out.contains("#/$defs/First"));
+        // No numbered indexes
+        assert!(!out.contains("(1)"));
     }
 }

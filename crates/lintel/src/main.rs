@@ -14,6 +14,7 @@ use lintel_format::{FormatArgs, format_args};
 use lintel_github_action::github_action_args;
 use lintel_identify::identify_args;
 use lintel_reporters::{ReporterKind, make_reporter};
+use lintel_schema::schema_command;
 use lintel_validate::{ValidateArgs, validate_args};
 
 mod commands;
@@ -149,6 +150,13 @@ enum Commands {
         #[bpaf(external(github_action_args))] lintel_github_action::GithubActionArgs,
     ),
 
+    #[bpaf(command("schema"), fallback_to_usage)]
+    /// JSON Schema utilities
+    Schema(
+        #[bpaf(external(lintel_cli_common::cli_global_options), hide_usage)] CLIGlobalOptions,
+        #[bpaf(external(schema_command))] lintel_schema::SchemaCommand,
+    ),
+
     #[bpaf(command("cache"), hide, fallback_to_usage)]
     /// Cache debugging tools
     Cache(
@@ -274,6 +282,10 @@ async fn main() -> ExitCode {
         Commands::GithubAction(global, args) => {
             setup_tracing(&global);
             commands::github_action::run(&args).await
+        }
+        Commands::Schema(global, cmd) => {
+            setup_tracing(&global);
+            lintel_schema::run(cmd).await.map(|()| false)
         }
         Commands::Cache(global, cmd) => {
             setup_tracing(&global);

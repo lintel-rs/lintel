@@ -7,14 +7,15 @@ fn plain() -> ExplainOptions {
         syntax_highlight: false,
         width: 80,
         validation_errors: vec![],
+        extended: false,
     }
 }
 
 fn load_fixture() -> SchemaValue {
     let json = include_str!("fixtures/tsconfig.json");
-    let mut val: serde_json::Value = serde_json::from_str(json).expect("fixture should parse");
-    jsonschema_migrate::migrate_to_2020_12(&mut val);
-    serde_json::from_value(val).expect("fixture should deserialize into SchemaValue")
+    let val: serde_json::Value = serde_json::from_str(json).expect("fixture should parse");
+    let schema = jsonschema_migrate::migrate(val).expect("fixture should migrate");
+    SchemaValue::Schema(Box::new(schema))
 }
 
 /// Properties with both `description` and `markdownDescription` should use
@@ -102,6 +103,31 @@ fn pattern_only_variants_show_pattern() {
     assert!(
         output.contains("pattern:"),
         "pattern-only variants should show the pattern"
+    );
+}
+
+/// `markdownEnumDescriptions` should render each enum value with its
+/// description instead of a flat comma-separated list.
+#[test]
+fn markdown_enum_descriptions_rendered() {
+    let schema = load_fixture();
+    let output = explain_at_path(
+        &schema,
+        "/$defs/compilerOptionsDefinition/properties/compilerOptions",
+        "tsconfig.json",
+        &plain(),
+    )
+    .expect("should resolve compilerOptions path");
+
+    // moduleResolution has markdownEnumDescriptions
+    assert!(
+        output.contains("This is the recommended setting for libraries and Node.js applications"),
+        "markdownEnumDescriptions should appear next to enum values"
+    );
+    // Values should be listed vertically with descriptions, indicated by " — "
+    assert!(
+        output.contains("—"),
+        "enum values with descriptions should use '—' separator"
     );
 }
 

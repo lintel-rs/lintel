@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.8...lintel-config-v0.0.9) - 2026-03-02
+
+### Other
+
+- Merge origin/master into git-integration
+- consolidate file discovery into lintel-config
+
 ## [0.0.8](https://github.com/lintel-rs/lintel/compare/lintel-config-v0.0.7...lintel-config-v0.0.8) - 2026-03-01
 
 ### Other

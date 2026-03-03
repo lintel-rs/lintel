@@ -1,6 +1,6 @@
 [package]
 name = "lintel-config"
-version = "0.0.8"
+version = "0.0.9"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
