@@ -824,9 +824,7 @@ mod tests {
         let content =
             std::fs::read_to_string("../jsonschema-migrate/tests/fixtures/cargo.json").unwrap();
         let value: Value = serde_json::from_str(&content).unwrap();
-        let mut migrated = value;
-        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
-        let schema: Schema = serde_json::from_value(migrated).unwrap();
+        let schema = jsonschema_migrate::migrate(value).unwrap();
         assert!(schema.title.is_some() || schema.type_.is_some());
         // Verify x-taplo is parsed if present
         if schema.x_taplo.is_some() {

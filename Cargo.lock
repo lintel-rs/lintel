@@ -1535,6 +1535,7 @@ dependencies = [
 name = "jsonschema-migrate"
 version = "0.1.2"
 dependencies = [
+ "jsonschema-schema",
  "regex-syntax 0.8.10",
  "serde_json",
 ]
@@ -1604,6 +1605,7 @@ dependencies = [
  "lintel-github-action",
  "lintel-identify",
  "lintel-reporters",
+ "lintel-schema",
  "lintel-schema-cache",
  "lintel-validate",
  "lintel-validation-cache",
@@ -1807,6 +1809,19 @@ dependencies = [
  "ansi-term-styles",
  "lintel-diagnostics",
  "miette",
+]
+
+[[package]]
+name = "lintel-schema"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bpaf",
+ "jsonschema-migrate",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]

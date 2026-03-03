@@ -28,6 +28,7 @@ lintel-format = { version = "0.0.6", path = "../lintel-format" }
 lintel-github-action = { version = "0.0.16", path = "../lintel-github-action" }
 lintel-identify = { version = "0.0.14", path = "../lintel-identify" }
 lintel-reporters = { version = "0.0.16", path = "../lintel-reporters" }
+lintel-schema = { version = "0.0.1", path = "../lintel-schema" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
 lintel-validate = { version = "0.0.11", path = "../lintel-validate" }
 lintel-validation-cache = { version = "0.0.9", path = "../lintel-validation-cache" }

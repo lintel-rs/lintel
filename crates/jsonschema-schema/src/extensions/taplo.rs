@@ -1,4 +1,7 @@
+use alloc::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Taplo JSON Schema extension (`x-taplo`).
 ///
@@ -6,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// text, completion links, hidden fields, and plugins.
 ///
 /// Compatible with taplo-common's `TaploSchemaExt`.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaploSchemaExt {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -19,6 +22,8 @@ pub struct TaploSchemaExt {
     pub init_keys: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plugins: Vec<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 /// Documentation text overrides for Taplo hover/completion.

@@ -152,14 +152,12 @@ mod tests {
     use serde_json::json;
 
     /// Parse with migration so tests work with older JSON Schema drafts.
-    fn parse_schema(mut val: serde_json::Value) -> Schema {
-        jsonschema_migrate::migrate_to_2020_12(&mut val);
-        serde_json::from_value(val).unwrap()
+    fn parse_schema(val: serde_json::Value) -> Schema {
+        jsonschema_migrate::migrate(val).unwrap()
     }
 
-    fn parse_sv(mut val: serde_json::Value) -> SchemaValue {
-        jsonschema_migrate::migrate_to_2020_12(&mut val);
-        serde_json::from_value(val).unwrap()
+    fn parse_sv(val: serde_json::Value) -> SchemaValue {
+        SchemaValue::Schema(Box::new(jsonschema_migrate::migrate(val).unwrap()))
     }
 
     // --- SCHEMA section ---

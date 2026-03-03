@@ -192,9 +192,8 @@ mod tests {
 
     /// Parse a JSON value into a `SchemaValue`, running migration first
     /// to ensure compatibility with older JSON Schema drafts.
-    fn sv(mut val: serde_json::Value) -> SchemaValue {
-        jsonschema_migrate::migrate_to_2020_12(&mut val);
-        serde_json::from_value(val).unwrap()
+    fn sv(val: serde_json::Value) -> SchemaValue {
+        SchemaValue::Schema(Box::new(jsonschema_migrate::migrate(val).unwrap()))
     }
 
     fn plain() -> ExplainOptions {
