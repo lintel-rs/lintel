@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.19](https://github.com/lintel-rs/lintel/compare/v0.0.18...v0.0.19) - 2026-03-02
+
+### Other
+
+- Replace external glob-match with internal glob-matcher crate
+
 ## [0.0.18](https://github.com/lintel-rs/lintel/compare/v0.0.17...v0.0.18) - 2026-03-01
 
 ### Other

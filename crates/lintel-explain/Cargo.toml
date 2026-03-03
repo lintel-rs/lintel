@@ -1,6 +1,6 @@
 [package]
 name = "lintel-explain"
-version = "0.0.11"
+version = "0.0.12"
 authors.workspace = true
 categories = ["command-line-utilities", "development-tools"]
 edition.workspace = true
@@ -17,19 +17,20 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 glob-matcher = { version = "0.1.0", path = "../glob-matcher" }
-jsonschema-explain = { version = "0.2.6", path = "../jsonschema-explain" }
-jsonschema-migrate = { version = "0.1.2", path = "../jsonschema-migrate" }
-jsonschema-schema = { version = "0.1.0", path = "../jsonschema-schema" }
+jsonschema-explain = { version = "0.3.0", path = "../jsonschema-explain" }
+jsonschema-migrate = { version = "0.1.3", path = "../jsonschema-migrate" }
+jsonschema-schema = { version = "0.2.0", path = "../jsonschema-schema" }
 lintel-cli-common = { version = "0.0.7", path = "../lintel-cli-common" }
-lintel-config = { version = "0.0.8", path = "../lintel-config" }
-lintel-diagnostics = { version = "0.0.2", path = "../lintel-diagnostics" }
+lintel-config = { version = "0.0.9", path = "../lintel-config" }
+lintel-diagnostics = { version = "0.0.3", path = "../lintel-diagnostics" }
 lintel-schema-cache = { version = "0.0.12", path = "../lintel-schema-cache" }
-lintel-validate = { version = "0.0.11", path = "../lintel-validate" }
+lintel-validate = { version = "0.0.12", path = "../lintel-validate" }
 reqwest.workspace = true
 schema-catalog = { version = "0.0.9", path = "../schema-catalog" }
 serde_json.workspace = true
 tempfile.workspace = true
 tracing.workspace = true
+url = "2"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

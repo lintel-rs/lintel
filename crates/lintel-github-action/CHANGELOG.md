@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.17](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.16...lintel-github-action-v0.0.17) - 2026-03-02
+
+### Added
+
+- use granular validation error codes like lintel::validation::required
+
 ## [0.0.16](https://github.com/lintel-rs/lintel/compare/lintel-github-action-v0.0.15...lintel-github-action-v0.0.16) - 2026-03-01
 
 ### Other

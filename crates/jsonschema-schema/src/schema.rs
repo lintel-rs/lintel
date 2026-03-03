@@ -1,13 +1,15 @@
 use alloc::collections::BTreeMap;
+use core::ops::Add;
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::extensions::LintelExt;
-use crate::extensions::TaploInfo;
+use crate::extensions::IntellijSchemaExt;
+use crate::extensions::LintelSchemaExt;
+use crate::extensions::TaploInfoSchemaExt;
 use crate::extensions::TaploSchemaExt;
-use crate::extensions::TombiExt;
+use crate::extensions::TombiSchemaExt;
 
 /// A JSON Schema value — either a boolean schema or an object schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +46,7 @@ pub struct Schema {
     )]
     pub markdown_description: Option<String>,
     #[serde(rename = "x-lintel", skip_serializing_if = "Option::is_none")]
-    pub x_lintel: Option<LintelExt>,
+    pub x_lintel: Option<LintelSchemaExt>,
 
     #[serde(rename = "$ref", skip_serializing_if = "Option::is_none")]
     pub ref_: Option<String>,
@@ -185,9 +187,11 @@ pub struct Schema {
     #[serde(rename = "x-taplo", skip_serializing_if = "Option::is_none")]
     pub x_taplo: Option<TaploSchemaExt>,
     #[serde(rename = "x-taplo-info", skip_serializing_if = "Option::is_none")]
-    pub x_taplo_info: Option<TaploInfo>,
+    pub x_taplo_info: Option<TaploInfoSchemaExt>,
     #[serde(flatten)]
-    pub x_tombi: TombiExt,
+    pub x_tombi: TombiSchemaExt,
+    #[serde(flatten)]
+    pub x_intellij: IntellijSchemaExt,
 
     // --- Catch-all for unknown properties ---
     #[serde(flatten)]
@@ -234,6 +238,31 @@ impl Schema {
     /// Produce a short human-readable type string.
     pub fn type_str(&self) -> Option<String> {
         schema_type_str(self)
+    }
+
+    /// Validate structural integrity of this schema.
+    ///
+    /// Recursively walks the schema tree and checks that all local `$ref`
+    /// pointers (starting with `#/`) resolve to valid targets.
+    pub fn validate(&self) -> Vec<crate::validate::SchemaError> {
+        crate::validate::validate(self)
+    }
+
+    /// Rewrite all local `$ref` pointers (`#/…`) to absolute URLs using the
+    /// schema's `$id` as base.  Returns the schema unchanged if `$id` is absent.
+    #[must_use]
+    pub fn absolute(&self) -> Schema {
+        crate::absolute::make_absolute(self)
+    }
+
+    /// Flatten composition keywords (currently `allOf`) into a single merged schema.
+    ///
+    /// Properties from `allOf` entries are merged into the root, and unreferenced
+    /// `$defs` entries are pruned. The `allOf` array is preserved so provenance
+    /// remains visible.
+    #[must_use]
+    pub fn flatten(&self, root: &SchemaValue) -> Schema {
+        crate::flatten::flatten_all_of(self, root)
     }
 
     /// Look up a schema-keyword field by its JSON key name.
@@ -311,7 +340,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
 
     // oneOf/anyOf
     for variants in [&schema.one_of, &schema.any_of].into_iter().flatten() {
-        let types: Vec<String> = variants
+        let mut types: Vec<String> = variants
             .iter()
             .filter_map(|v| match v {
                 SchemaValue::Schema(s) => {
@@ -320,6 +349,7 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
                 SchemaValue::Bool(_) => None,
             })
             .collect();
+        types.dedup();
         if !types.is_empty() {
             return Some(types.join(" | "));
         }
@@ -330,8 +360,15 @@ fn schema_type_str(schema: &Schema) -> Option<String> {
         return Some(format!("const: {c}"));
     }
 
-    // enum
-    if schema.enum_.is_some() {
+    // enum — single-value enums show the value (e.g. `"lf"`), multi-value show `enum`
+    if let Some(ref values) = schema.enum_ {
+        if values.len() == 1 {
+            let val = &values[0];
+            return Some(
+                val.as_str()
+                    .map_or_else(|| val.to_string(), |s| format!("\"{s}\"")),
+            );
+        }
         return Some("enum".to_string());
     }
 
@@ -569,6 +606,210 @@ impl Schema {
     }
 }
 
+/// Merge two `Option<IndexMap>` values with left-bias: entries from `source`
+/// are added only if the key does not already exist in `target`.
+fn merge_option_index_map<V>(
+    target: Option<IndexMap<String, V>>,
+    source: Option<IndexMap<String, V>>,
+) -> Option<IndexMap<String, V>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for (k, v) in s {
+                t.entry(k).or_insert(v);
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+/// Merge two `Option<BTreeMap>` values with left-bias: entries from `source`
+/// are added only if the key does not already exist in `target`.
+fn merge_option_btree_map<V>(
+    target: Option<BTreeMap<String, V>>,
+    source: Option<BTreeMap<String, V>>,
+) -> Option<BTreeMap<String, V>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for (k, v) in s {
+                t.entry(k).or_insert(v);
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+/// Merge two `Option<Vec<String>>` values by taking the union (deduplicated).
+fn union_option_vec(
+    target: Option<Vec<String>>,
+    source: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match (target, source) {
+        (Some(mut t), Some(s)) => {
+            for item in s {
+                if !t.contains(&item) {
+                    t.push(item);
+                }
+            }
+            Some(t)
+        }
+        (t, s) => t.or(s),
+    }
+}
+
+impl Add for Schema {
+    type Output = Self;
+
+    /// Merge two schemas with left-bias.
+    ///
+    /// - **Map fields** (`properties`, `pattern_properties`, `defs`, `dependent_schemas`):
+    ///   merge — rhs entries added only if key doesn't exist in self.
+    /// - **`required`**: union (deduplicate).
+    /// - **`extra`** (`BTreeMap` catch-all): merge — rhs entries added only if key doesn't exist.
+    /// - **All other `Option<T>` fields**: `self.field.or(rhs.field)` — left wins.
+    ///
+    /// Composition keywords (`all_of`, `any_of`, `one_of`) are NOT merged.
+    #[allow(clippy::too_many_lines)]
+    fn add(self, rhs: Self) -> Self {
+        let extra = {
+            let mut merged = self.extra;
+            for (k, v) in rhs.extra {
+                merged.entry(k).or_insert(v);
+            }
+            merged
+        };
+
+        let x_tombi = TombiSchemaExt {
+            toml_version: self.x_tombi.toml_version.or(rhs.x_tombi.toml_version),
+            table_keys_order: self
+                .x_tombi
+                .table_keys_order
+                .or(rhs.x_tombi.table_keys_order),
+            additional_key_label: self
+                .x_tombi
+                .additional_key_label
+                .or(rhs.x_tombi.additional_key_label),
+            array_values_order: self
+                .x_tombi
+                .array_values_order
+                .or(rhs.x_tombi.array_values_order),
+        };
+
+        Schema {
+            // Core identifiers
+            schema: self.schema.or(rhs.schema),
+            id: self.id.or(rhs.id),
+            title: self.title.or(rhs.title),
+            description: self.description.or(rhs.description),
+            markdown_description: self.markdown_description.or(rhs.markdown_description),
+            x_lintel: self.x_lintel.or(rhs.x_lintel),
+            ref_: self.ref_.or(rhs.ref_),
+            anchor: self.anchor.or(rhs.anchor),
+            dynamic_ref: self.dynamic_ref.or(rhs.dynamic_ref),
+            dynamic_anchor: self.dynamic_anchor.or(rhs.dynamic_anchor),
+            comment: self.comment.or(rhs.comment),
+            defs: merge_option_btree_map(self.defs, rhs.defs),
+
+            // Metadata
+            default: self.default.or(rhs.default),
+            deprecated: self.deprecated.or(rhs.deprecated),
+            read_only: self.read_only.or(rhs.read_only),
+            write_only: self.write_only.or(rhs.write_only),
+            examples: self.examples.or(rhs.examples),
+
+            // Type
+            type_: self.type_.or(rhs.type_),
+            enum_: self.enum_.or(rhs.enum_),
+            markdown_enum_descriptions: self
+                .markdown_enum_descriptions
+                .or(rhs.markdown_enum_descriptions),
+            const_: self.const_.or(rhs.const_),
+
+            // Object — map fields are merged
+            properties: merge_option_index_map(self.properties, rhs.properties),
+            pattern_properties: merge_option_index_map(
+                self.pattern_properties,
+                rhs.pattern_properties,
+            ),
+            additional_properties: self.additional_properties.or(rhs.additional_properties),
+            required: union_option_vec(self.required, rhs.required),
+            property_names: self.property_names.or(rhs.property_names),
+            min_properties: self.min_properties.or(rhs.min_properties),
+            max_properties: self.max_properties.or(rhs.max_properties),
+            unevaluated_properties: self.unevaluated_properties.or(rhs.unevaluated_properties),
+
+            // Array
+            items: self.items.or(rhs.items),
+            prefix_items: self.prefix_items.or(rhs.prefix_items),
+            contains: self.contains.or(rhs.contains),
+            min_contains: self.min_contains.or(rhs.min_contains),
+            max_contains: self.max_contains.or(rhs.max_contains),
+            min_items: self.min_items.or(rhs.min_items),
+            max_items: self.max_items.or(rhs.max_items),
+            unique_items: self.unique_items.or(rhs.unique_items),
+            unevaluated_items: self.unevaluated_items.or(rhs.unevaluated_items),
+
+            // Number
+            minimum: self.minimum.or(rhs.minimum),
+            maximum: self.maximum.or(rhs.maximum),
+            exclusive_minimum: self.exclusive_minimum.or(rhs.exclusive_minimum),
+            exclusive_maximum: self.exclusive_maximum.or(rhs.exclusive_maximum),
+            multiple_of: self.multiple_of.or(rhs.multiple_of),
+
+            // String
+            min_length: self.min_length.or(rhs.min_length),
+            max_length: self.max_length.or(rhs.max_length),
+            pattern: self.pattern.or(rhs.pattern),
+            format: self.format.or(rhs.format),
+
+            // Composition — NOT merged
+            all_of: self.all_of.or(rhs.all_of),
+            any_of: self.any_of.or(rhs.any_of),
+            one_of: self.one_of.or(rhs.one_of),
+            not: self.not.or(rhs.not),
+
+            // Conditional
+            if_: self.if_.or(rhs.if_),
+            then_: self.then_.or(rhs.then_),
+            else_: self.else_.or(rhs.else_),
+
+            // Dependencies
+            dependent_required: self.dependent_required.or(rhs.dependent_required),
+            dependent_schemas: merge_option_index_map(
+                self.dependent_schemas,
+                rhs.dependent_schemas,
+            ),
+
+            // Content
+            content_media_type: self.content_media_type.or(rhs.content_media_type),
+            content_encoding: self.content_encoding.or(rhs.content_encoding),
+            content_schema: self.content_schema.or(rhs.content_schema),
+
+            // Extensions
+            x_taplo: self.x_taplo.or(rhs.x_taplo),
+            x_taplo_info: self.x_taplo_info.or(rhs.x_taplo_info),
+            x_tombi,
+            x_intellij: IntellijSchemaExt {
+                html_description: self
+                    .x_intellij
+                    .html_description
+                    .or(rhs.x_intellij.html_description),
+                language_injection: self
+                    .x_intellij
+                    .language_injection
+                    .or(rhs.x_intellij.language_injection),
+                enum_metadata: self
+                    .x_intellij
+                    .enum_metadata
+                    .or(rhs.x_intellij.enum_metadata),
+            },
+
+            extra,
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -743,6 +984,117 @@ mod tests {
     }
 
     #[test]
+    fn x_intellij_deserialization() {
+        let json = json!({
+            "type": "string",
+            "enum": ["system", "local"],
+            "x-intellij-html-description": "<b>bold</b> description",
+            "x-intellij-language-injection": "Shell Script",
+            "x-intellij-enum-metadata": {
+                "system": { "description": "Use system nginx" },
+                "local": { "description": "Use local nginx process" }
+            }
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            schema.x_intellij.html_description.as_deref(),
+            Some("<b>bold</b> description")
+        );
+        assert_eq!(
+            schema.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+        let meta = schema.x_intellij.enum_metadata.unwrap();
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+    }
+
+    #[test]
+    fn x_intellij_fixture_huskyrc() {
+        let content = include_str!("../tests/fixtures/huskyrc.json");
+        let value: Value = serde_json::from_str(content).expect("parse huskyrc.json");
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize huskyrc schema");
+
+        // definitions/hook has x-intellij-language-injection
+        let hook = schema.defs.as_ref().expect("defs present")["hook"]
+            .as_schema()
+            .expect("hook is a schema");
+        assert_eq!(
+            hook.x_intellij.language_injection.as_deref(),
+            Some("Shell Script")
+        );
+
+        // hooks/applypatch-msg has x-intellij-html-description
+        let hooks = schema.properties.as_ref().expect("properties present")["hooks"]
+            .as_schema()
+            .expect("hooks is a schema");
+        let applypatch = hooks.properties.as_ref().expect("hooks has properties")["applypatch-msg"]
+            .as_schema()
+            .expect("applypatch-msg is a schema");
+        assert!(
+            applypatch
+                .x_intellij
+                .html_description
+                .as_ref()
+                .expect("html_description present")
+                .starts_with("<p>This hook is invoked by")
+        );
+
+        // Neither should leak into extra
+        assert!(!hook.extra.contains_key("x-intellij-language-injection"));
+        assert!(!applypatch.extra.contains_key("x-intellij-html-description"));
+    }
+
+    #[test]
+    fn x_intellij_fixture_monade() {
+        let content = include_str!("../tests/fixtures/monade-stack-config.json");
+        let value: Value = serde_json::from_str(content).expect("parse monade-stack-config.json");
+        let mut migrated = value;
+        jsonschema_migrate::migrate_to_2020_12(&mut migrated);
+        let schema: Schema = serde_json::from_value(migrated).expect("deserialize monade schema");
+
+        // properties/nginx has x-intellij-enum-metadata
+        let nginx = schema.properties.as_ref().expect("properties present")["nginx"]
+            .as_schema()
+            .expect("nginx is a schema");
+        let meta = nginx
+            .x_intellij
+            .enum_metadata
+            .as_ref()
+            .expect("enum_metadata present");
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta["system"].description.as_deref(),
+            Some("Use system nginx")
+        );
+        assert_eq!(
+            meta["local"].description.as_deref(),
+            Some("Use local nginx process")
+        );
+        assert!(!nginx.extra.contains_key("x-intellij-enum-metadata"));
+    }
+
+    #[test]
+    fn x_intellij_not_in_extra() {
+        let json = json!({
+            "type": "string",
+            "x-intellij-html-description": "hello",
+            "x-custom": "other"
+        });
+        let schema: Schema = serde_json::from_value(json).unwrap();
+        assert!(schema.x_intellij.html_description.is_some());
+        // x-intellij should NOT leak into extra
+        assert!(!schema.extra.contains_key("x-intellij-html-description"));
+        // but other x-* should still be in extra
+        assert!(schema.extra.contains_key("x-custom"));
+    }
+
+    #[test]
     fn x_lintel_deserialization() {
         let json = json!({
             "type": "object",
@@ -821,14 +1173,107 @@ mod tests {
 
     #[test]
     fn parse_cargo_fixture() {
-        let content =
-            std::fs::read_to_string("../jsonschema-migrate/tests/fixtures/cargo.json").unwrap();
-        let value: Value = serde_json::from_str(&content).unwrap();
-        let schema = jsonschema_migrate::migrate(value).unwrap();
+        let content = include_str!("../../jsonschema-migrate/tests/fixtures/cargo.json");
+        let value: Value = serde_json::from_str(content).expect("parse cargo.json");
+        let schema = jsonschema_migrate::migrate(value).expect("migrate cargo schema");
         assert!(schema.title.is_some() || schema.type_.is_some());
         // Verify x-taplo is parsed if present
         if schema.x_taplo.is_some() {
             // Just verify it parsed without error
         }
+    }
+
+    // --- impl Add ---
+
+    #[test]
+    fn add_merges_properties() {
+        let left = Schema {
+            properties: Some(IndexMap::from([("a".into(), SchemaValue::Bool(true))])),
+            ..Default::default()
+        };
+        let right = Schema {
+            properties: Some(IndexMap::from([
+                ("a".into(), SchemaValue::Bool(false)), // should NOT overwrite
+                ("b".into(), SchemaValue::Bool(true)),
+            ])),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let props = merged.properties.unwrap();
+        assert_eq!(props.len(), 2);
+        assert!(matches!(props["a"], SchemaValue::Bool(true)));
+        assert!(matches!(props["b"], SchemaValue::Bool(true)));
+    }
+
+    #[test]
+    fn add_unions_required() {
+        let left = Schema {
+            required: Some(vec!["a".into(), "b".into()]),
+            ..Default::default()
+        };
+        let right = Schema {
+            required: Some(vec!["b".into(), "c".into()]),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let req = merged.required.unwrap();
+        assert_eq!(req, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn add_left_bias_for_scalars() {
+        let left = Schema {
+            title: Some("Left".into()),
+            type_: Some(TypeValue::Single("object".into())),
+            ..Default::default()
+        };
+        let right = Schema {
+            title: Some("Right".into()),
+            type_: Some(TypeValue::Single("string".into())),
+            description: Some("From right".into()),
+            ..Default::default()
+        };
+        let merged = left + right;
+        assert_eq!(merged.title.as_deref(), Some("Left"));
+        assert!(matches!(merged.type_, Some(TypeValue::Single(ref s)) if s == "object"));
+        assert_eq!(merged.description.as_deref(), Some("From right"));
+    }
+
+    #[test]
+    fn add_merges_defs() {
+        let left = Schema {
+            defs: Some(BTreeMap::from([("Foo".into(), SchemaValue::Bool(true))])),
+            ..Default::default()
+        };
+        let right = Schema {
+            defs: Some(BTreeMap::from([
+                ("Foo".into(), SchemaValue::Bool(false)), // should NOT overwrite
+                ("Bar".into(), SchemaValue::Bool(true)),
+            ])),
+            ..Default::default()
+        };
+        let merged = left + right;
+        let defs = merged.defs.unwrap();
+        assert_eq!(defs.len(), 2);
+        assert!(matches!(defs["Foo"], SchemaValue::Bool(true)));
+        assert!(matches!(defs["Bar"], SchemaValue::Bool(true)));
+    }
+
+    #[test]
+    fn add_merges_extra() {
+        let left = Schema {
+            extra: BTreeMap::from([("x-a".into(), json!(1))]),
+            ..Default::default()
+        };
+        let right = Schema {
+            extra: BTreeMap::from([
+                ("x-a".into(), json!(2)), // should NOT overwrite
+                ("x-b".into(), json!(3)),
+            ]),
+            ..Default::default()
+        };
+        let merged = left + right;
+        assert_eq!(merged.extra["x-a"], json!(1));
+        assert_eq!(merged.extra["x-b"], json!(3));
     }
 }
