@@ -20,7 +20,7 @@ use serde_json::Value;
 /// | `x-tombi-array-values-order` | [`array_values_order`](Self::array_values_order) | Preferred array element ordering |
 ///
 /// [Tombi]: https://github.com/tombi-toml/tombi
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct TombiSchemaExt {
     /// TOML specification version required by this schema (e.g. `"1.0.0"`).
     #[serde(

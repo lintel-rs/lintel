@@ -1,0 +1,8 @@
+error: custom attribute panicked
+ --> tests/compile_fail/unknown_source.rs:3:1
+  |
+3 | #[combine_fields(DoesNotExist)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: message: combine_fields: no cached fields for `DoesNotExist`.
+          Make sure `DoesNotExist` derives `combine_structs::Fields` and its module is declared before the target struct.

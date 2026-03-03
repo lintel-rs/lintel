@@ -25,7 +25,9 @@ use serde_json::Value;
 ///
 /// [Taplo]: https://taplo.tamasfe.dev
 /// [taplo-ext]: https://github.com/tamasfe/taplo/blob/main/crates/taplo-common/src/schema/ext.rs
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct TaploSchemaExt {
     /// When `true`, the property is hidden from completion suggestions.
@@ -56,7 +58,9 @@ pub struct TaploSchemaExt {
 ///
 /// Each field replaces the corresponding auto-generated documentation
 /// that Taplo would otherwise derive from the schema.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtDocs {
     /// Primary documentation text, replacing the schema `description`.
@@ -81,7 +85,9 @@ pub struct ExtDocs {
 ///
 /// Provides clickable URLs in the editor for the property key and
 /// individual enum values.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtLinks {
     /// URL to navigate to when clicking the property key.
@@ -116,7 +122,7 @@ pub struct ExtLinks {
 ///
 /// [Taplo]: https://taplo.tamasfe.dev
 /// [taplo-info]: https://github.com/tamasfe/taplo/blob/main/crates/taplo-common/src/schema/ext.rs
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct TaploInfoSchemaExt {
     /// Schema author credits, typically `"Name (url)"`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

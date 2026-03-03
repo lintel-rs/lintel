@@ -34,7 +34,7 @@ macro_rules! fixture {
             fn schema_is_2020_12() {
                 let (_, schema) = load_and_migrate();
                 assert_eq!(
-                    schema.schema.as_deref(),
+                    schema.schema.as_ref().map(url::Url::as_str),
                     Some("https://json-schema.org/draft/2020-12/schema")
                 );
             }
@@ -63,8 +63,8 @@ fn ninjs_required_migrated_to_parent() {
         .expect("should have required array");
     assert!(required.contains(&"uri".to_string()));
     // The child property should not have a boolean `required` in extras
-    let props = schema.properties.as_ref().expect("should have properties");
-    let uri = props
+    let uri = schema
+        .properties
         .get("uri")
         .expect("should have uri property")
         .as_schema()

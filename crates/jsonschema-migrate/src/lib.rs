@@ -830,7 +830,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            schema.schema.as_deref(),
+            schema.schema.as_ref().map(url::Url::as_str),
             Some("https://json-schema.org/draft/2020-12/schema")
         );
         assert_eq!(schema.id.as_deref(), Some("https://example.com/test"));
@@ -849,8 +849,7 @@ mod tests {
         }))
         .unwrap();
 
-        let props = schema.properties.as_ref().unwrap();
-        let type_schema = props.get("Type").unwrap().as_schema().unwrap();
+        let type_schema = schema.properties.get("Type").unwrap().as_schema().unwrap();
         assert_eq!(
             type_schema.enum_,
             Some(vec![json!("Custom"), json!("Steam")])

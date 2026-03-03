@@ -54,7 +54,7 @@ pub(crate) fn render_variant_block(
         }
     } else {
         // Inline entry: expand normally
-        let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
+        let has_properties = !resolved.properties.is_empty();
         let desc = get_description(resolved);
 
         if has_properties || desc.is_some() {
@@ -62,9 +62,9 @@ pub(crate) fn render_variant_block(
             if let Some(desc) = desc {
                 write_description(out, desc, f, "        ");
             }
-            if let Some(ref props) = resolved.properties {
+            if !resolved.properties.is_empty() {
                 let req = required_set(resolved);
-                render_properties(out, props, &req, root, f, 2);
+                render_properties(out, &resolved.properties, &req, root, f, 2);
             }
         } else if resolved.enum_.is_some() {
             if resolved.markdown_enum_descriptions.is_some() {
@@ -186,12 +186,12 @@ pub(crate) fn render_properties(
         } else {
             String::new()
         };
-        let readonly_tag = if prop_schema.read_only.unwrap_or(false) {
+        let readonly_tag = if prop_schema.read_only {
             format!(" {}[READ-ONLY]{}", f.dim, f.reset)
         } else {
             String::new()
         };
-        let writeonly_tag = if prop_schema.write_only.unwrap_or(false) {
+        let writeonly_tag = if prop_schema.write_only {
             format!(" {}[WRITE-ONLY]{}", f.dim, f.reset)
         } else {
             String::new()
@@ -275,12 +275,17 @@ fn render_property_details(
     render_dependent_schemas(out, prop_schema, root, f, depth, desc_indent);
 
     // Nested properties
-    if depth < MAX_DEPTH
-        && let Some(ref nested_props) = prop_schema.properties
-    {
+    if depth < MAX_DEPTH && !prop_schema.properties.is_empty() {
         let nested_required = required_set(prop_schema);
         out.push('\n');
-        render_properties(out, nested_props, &nested_required, root, f, depth + 1);
+        render_properties(
+            out,
+            &prop_schema.properties,
+            &nested_required,
+            root,
+            f,
+            depth + 1,
+        );
     }
 
     // patternProperties
@@ -309,7 +314,7 @@ fn render_inline_variant(
     desc_indent: &str,
 ) {
     let is_ref = original.as_schema().is_some_and(|s| s.ref_.is_some());
-    let has_properties = resolved.properties.as_ref().is_some_and(|p| !p.is_empty());
+    let has_properties = !resolved.properties.is_empty();
 
     if !is_ref && has_properties && depth < MAX_DEPTH {
         let deprecated_tag = deprecated_tag(resolved, f);
@@ -335,9 +340,9 @@ fn render_inline_variant(
             let nested_indent = format!("{desc_indent}      ");
             write_description(out, desc, f, &nested_indent);
         }
-        if let Some(ref props) = resolved.properties {
+        if !resolved.properties.is_empty() {
             let req = required_set(resolved);
-            render_properties(out, props, &req, root, f, depth + 2);
+            render_properties(out, &resolved.properties, &req, root, f, depth + 2);
         }
     } else if resolved.enum_.is_some() {
         if resolved.markdown_enum_descriptions.is_some() {
@@ -453,7 +458,7 @@ fn render_constraints(out: &mut String, schema: &Schema, f: &Fmt<'_>, indent: &s
     if let Some(v) = schema.max_items {
         parts.push(format!("maxItems={}{v}{}", f.magenta, f.reset));
     }
-    if schema.unique_items.unwrap_or(false) {
+    if schema.unique_items {
         parts.push(format!("{}unique{}", f.magenta, f.reset));
     }
     if let Some(v) = schema.min_contains {
@@ -616,10 +621,10 @@ fn render_conditional_subschema(
 ) {
     let resolved_sv = resolve_ref(sv, root);
     if let Some(resolved) = resolved_sv.as_schema()
-        && let Some(ref props) = resolved.properties
+        && !resolved.properties.is_empty()
     {
         let req = required_set(resolved);
-        render_properties(out, props, &req, root, f, depth + 2);
+        render_properties(out, &resolved.properties, &req, root, f, depth + 2);
     }
 }
 
@@ -656,23 +661,20 @@ fn render_dependent_schemas(
     depth: usize,
     indent: &str,
 ) {
-    let Some(ref deps) = schema.dependent_schemas else {
-        return;
-    };
-    if deps.is_empty() {
+    if schema.dependent_schemas.is_empty() {
         return;
     }
     let _ = writeln!(out, "{indent}{}Dependent schemas:{}", f.dim, f.reset);
-    for (key, dep_sv) in deps {
+    for (key, dep_sv) in &schema.dependent_schemas {
         let summary = variant_summary(dep_sv, root, f);
         let _ = writeln!(out, "{indent}  {}\"{key}\"{}: {summary}", f.green, f.reset);
         if depth < MAX_DEPTH {
             let resolved_sv = resolve_ref(dep_sv, root);
             if let Some(resolved) = resolved_sv.as_schema()
-                && let Some(ref props) = resolved.properties
+                && !resolved.properties.is_empty()
             {
                 let req = required_set(resolved);
-                render_properties(out, props, &req, root, f, depth + 2);
+                render_properties(out, &resolved.properties, &req, root, f, depth + 2);
             }
         }
     }
@@ -688,14 +690,11 @@ pub(crate) fn render_pattern_properties(
     depth: usize,
     indent: &str,
 ) {
-    let Some(ref patterns) = schema.pattern_properties else {
-        return;
-    };
-    if patterns.is_empty() {
+    if schema.pattern_properties.is_empty() {
         return;
     }
     let _ = writeln!(out, "{indent}{}Pattern properties:{}", f.dim, f.reset);
-    for (pattern, sv) in patterns {
+    for (pattern, sv) in &schema.pattern_properties {
         let resolved_sv = resolve_ref(sv, root);
         let ty = resolved_sv
             .as_schema()
@@ -716,11 +715,9 @@ pub(crate) fn render_pattern_properties(
                 let nested_indent = format!("{indent}      ");
                 write_description(out, desc, f, &nested_indent);
             }
-            if depth < MAX_DEPTH
-                && let Some(ref props) = resolved.properties
-            {
+            if depth < MAX_DEPTH && !resolved.properties.is_empty() {
                 let req = required_set(resolved);
-                render_properties(out, props, &req, root, f, depth + 2);
+                render_properties(out, &resolved.properties, &req, root, f, depth + 2);
             }
         }
     }
@@ -856,11 +853,9 @@ pub(crate) fn render_additional_properties(
                 let nested_indent = format!("{indent}    ");
                 write_description(out, desc, f, &nested_indent);
             }
-            if depth < MAX_DEPTH
-                && let Some(ref props) = s.properties
-            {
+            if depth < MAX_DEPTH && !s.properties.is_empty() {
                 let req = required_set(s);
-                render_properties(out, props, &req, root, f, depth + 2);
+                render_properties(out, &s.properties, &req, root, f, depth + 2);
             }
         }
     }
@@ -892,8 +887,8 @@ pub(crate) fn render_subschema(
 
     if depth < MAX_DEPTH {
         let required = required_set(resolved);
-        if let Some(ref props) = resolved.properties {
-            render_properties(out, props, &required, root, f, depth + 1);
+        if !resolved.properties.is_empty() {
+            render_properties(out, &resolved.properties, &required, root, f, depth + 1);
         }
     }
 }

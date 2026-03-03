@@ -20,20 +20,14 @@ fn rewrite_schema(schema: &mut Schema, base: &str) {
     }
 
     // Map fields
-    if let Some(ref mut props) = schema.properties {
-        for sv in props.values_mut() {
-            rewrite_value(sv, base);
-        }
+    for sv in schema.properties.values_mut() {
+        rewrite_value(sv, base);
     }
-    if let Some(ref mut props) = schema.pattern_properties {
-        for sv in props.values_mut() {
-            rewrite_value(sv, base);
-        }
+    for sv in schema.pattern_properties.values_mut() {
+        rewrite_value(sv, base);
     }
-    if let Some(ref mut deps) = schema.dependent_schemas {
-        for sv in deps.values_mut() {
-            rewrite_value(sv, base);
-        }
+    for sv in schema.dependent_schemas.values_mut() {
+        rewrite_value(sv, base);
     }
 
     // $defs
@@ -104,8 +98,7 @@ mod tests {
             }
         }));
         let result = make_absolute(&s);
-        let prop = result.properties.unwrap();
-        let r = prop["x"].as_schema().unwrap().ref_.as_deref();
+        let r = result.properties["x"].as_schema().unwrap().ref_.as_deref();
         assert_eq!(r, Some("#/$defs/Foo"));
     }
 
@@ -119,8 +112,7 @@ mod tests {
             }
         }));
         let result = make_absolute(&s);
-        let prop = result.properties.unwrap();
-        let r = prop["x"].as_schema().unwrap().ref_.as_deref();
+        let r = result.properties["x"].as_schema().unwrap().ref_.as_deref();
         assert_eq!(r, Some("https://example.com/schema.json#/$defs/Foo"));
     }
 
@@ -154,8 +146,7 @@ mod tests {
             }
         }));
         let result = make_absolute(&s);
-        let prop = result.properties.unwrap();
-        let r = prop["x"].as_schema().unwrap().ref_.as_deref();
+        let r = result.properties["x"].as_schema().unwrap().ref_.as_deref();
         assert_eq!(r, Some("https://other.com/schema.json#/foo"));
     }
 
@@ -173,10 +164,12 @@ mod tests {
             }
         }));
         let result = make_absolute(&s);
-        let props = result.properties.unwrap();
-        let outer = props["outer"].as_schema().unwrap();
-        let outer_props = outer.properties.as_ref().unwrap();
-        let inner_ref = outer_props["inner"].as_schema().unwrap().ref_.as_deref();
+        let outer = result.properties["outer"].as_schema().unwrap();
+        let inner_ref = outer.properties["inner"]
+            .as_schema()
+            .unwrap()
+            .ref_
+            .as_deref();
         assert_eq!(inner_ref, Some("https://example.com/s.json#/$defs/Deep"));
     }
 }

@@ -14,13 +14,14 @@ on — so you can pattern-match and navigate schemas without string lookups.
 
 ## Features
 
-- **Strongly typed** — `Schema`, `SchemaValue` (object or boolean), and
-  `TypeValue` (single or union) with full serde round-tripping
+- **Strongly typed** — `Schema`, `SchemaValue` (object or boolean),
+  `TypeValue` (single or union), and `SimpleType` (the seven primitive
+  type names) with full serde round-tripping
 - **All standard keywords** — core identifiers, metadata, validation,
   applicators, composition, conditionals, content, and dependencies
-- **Editor extensions** — first-class `x-taplo`, `x-tombi-*`, and `x-lintel`
-  extension structs
-- **Catch-all** — unknown properties are preserved in `extra: IndexMap<String, Value>`
+- **Editor extensions** — first-class `x-taplo`, `x-tombi-*`, `x-intellij-*`,
+  and `x-lintel` extension structs
+- **Catch-all** — unknown properties are preserved in `extra: BTreeMap<String, Value>`
 - **Pointer navigation** — `navigate_pointer` walks a JSON Pointer path
   through nested schemas, resolving `$ref` along the way
 - **Helper utilities** — `ref_name`, `resolve_ref`, `Schema::type_str`,
@@ -31,7 +32,7 @@ on — so you can pattern-match and navigate schemas without string lookups.
 ### Parsing a schema from JSON
 
 ```rust
-use jsonschema_schema::{Schema, SchemaValue, TypeValue};
+use jsonschema_schema::{Schema, SchemaValue, SimpleType, TypeValue};
 
 let json = serde_json::json!({
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -53,27 +54,27 @@ assert_eq!(schema.required_set(), &["name"]);
 assert_eq!(schema.type_str().as_deref(), Some("object"));
 
 // Access a nested property schema
-let name_sv = schema.properties.as_ref().unwrap().get("name").unwrap();
+let name_sv = schema.properties.get("name").unwrap();
 let name = name_sv.as_schema().unwrap();
-assert!(matches!(name.type_, Some(TypeValue::Single(ref t)) if t == "string"));
+assert!(matches!(name.type_, Some(TypeValue::Single(ref t)) if *t == SimpleType::String));
 ```
 
 ### Building a schema programmatically
 
 ```rust
-use jsonschema_schema::{Schema, SchemaValue, TypeValue};
+use jsonschema_schema::{Schema, SchemaValue, SimpleType, TypeValue};
 use indexmap::IndexMap;
 
 let mut props = IndexMap::new();
 props.insert("email".to_string(), SchemaValue::Schema(Box::new(Schema {
-    type_: Some(TypeValue::Single("string".into())),
+    type_: Some(TypeValue::Single(SimpleType::String)),
     format: Some("email".into()),
     ..Default::default()
 })));
 
 let schema = Schema {
-    type_: Some(TypeValue::Single("object".into())),
-    properties: Some(props),
+    type_: Some(TypeValue::Single(SimpleType::Object)),
+    properties: props,
     required: Some(vec!["email".into()]),
     ..Default::default()
 };
@@ -90,12 +91,12 @@ JSON Pointer through the typed schema tree, automatically following `$ref`
 references within the same document.
 
 ```rust
-use jsonschema_schema::{Schema, SchemaValue, TypeValue, navigate_pointer};
+use jsonschema_schema::{Schema, SchemaValue, SimpleType, TypeValue, navigate_pointer};
 use std::collections::BTreeMap;
 
 // Build a schema with $defs and a $ref
 let item = SchemaValue::Schema(Box::new(Schema {
-    type_: Some(TypeValue::Single("string".into())),
+    type_: Some(TypeValue::Single(SimpleType::String)),
     ..Default::default()
 }));
 let mut defs = BTreeMap::new();

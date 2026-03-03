@@ -105,18 +105,15 @@ fn collect_refs_in_schema(schema: &Schema, targets: &mut BTreeSet<String>, skip_
         targets.insert(name.to_string());
     }
 
-    // Map fields
-    for map in [
-        schema.properties.as_ref().map(|m| m.values()),
-        schema.pattern_properties.as_ref().map(|m| m.values()),
-        schema.dependent_schemas.as_ref().map(|m| m.values()),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        for sv in map {
-            collect_refs_in_value(sv, targets);
-        }
+    // Map fields (non-optional IndexMap)
+    for sv in schema.properties.values() {
+        collect_refs_in_value(sv, targets);
+    }
+    for sv in schema.pattern_properties.values() {
+        collect_refs_in_value(sv, targets);
+    }
+    for sv in schema.dependent_schemas.values() {
+        collect_refs_in_value(sv, targets);
     }
 
     // $defs — only walk when not skipping (i.e. when called recursively from within a def)
@@ -248,7 +245,7 @@ mod tests {
         let result = flatten_all_of(&s, &root);
 
         // Properties merged
-        let props = result.properties.unwrap();
+        let props = result.properties;
         assert!(props.contains_key("a"));
         assert!(props.contains_key("b"));
 
@@ -280,7 +277,7 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        let props = result.properties.unwrap();
+        let props = result.properties;
         assert!(props.contains_key("name"));
 
         // allOf kept as original $ref
@@ -311,11 +308,14 @@ mod tests {
         let root = sv(val);
         let result = flatten_all_of(&s, &root);
 
-        let props = result.properties.unwrap();
+        let props = result.properties;
         let x_schema = props["x"].as_schema().unwrap();
-        assert!(
-            matches!(x_schema.type_, Some(crate::schema::TypeValue::Single(ref t)) if t == "string")
-        );
+        assert!(matches!(
+            x_schema.type_,
+            Some(crate::schema::TypeValue::Single(
+                crate::schema::SimpleType::String
+            ))
+        ));
     }
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
         // Inline entry kept in allOf, properties merged
         let all_of = result.all_of.unwrap();
         assert_eq!(all_of.len(), 1);
-        assert!(result.properties.unwrap().contains_key("x"));
+        assert!(result.properties.contains_key("x"));
         assert!(result.defs.is_none());
     }
 }

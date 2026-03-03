@@ -29,34 +29,14 @@ fn validate_schema(schema: &Schema, root: &SchemaValue, path: &str, errors: &mut
         });
     }
 
-    // Map fields
+    // Map fields (non-optional IndexMap)
     for (keyword, map) in [
-        (
-            "properties",
-            schema
-                .properties
-                .as_ref()
-                .map(|m| m.iter().map(|(k, v)| (k.as_str(), v)).collect::<Vec<_>>()),
-        ),
-        (
-            "patternProperties",
-            schema
-                .pattern_properties
-                .as_ref()
-                .map(|m| m.iter().map(|(k, v)| (k.as_str(), v)).collect()),
-        ),
-        (
-            "dependentSchemas",
-            schema
-                .dependent_schemas
-                .as_ref()
-                .map(|m| m.iter().map(|(k, v)| (k.as_str(), v)).collect()),
-        ),
+        ("properties", &schema.properties),
+        ("patternProperties", &schema.pattern_properties),
+        ("dependentSchemas", &schema.dependent_schemas),
     ] {
-        if let Some(entries) = map {
-            for (key, sv) in entries {
-                validate_value(sv, root, &format!("{path}/{keyword}/{key}"), errors);
-            }
+        for (key, sv) in map {
+            validate_value(sv, root, &format!("{path}/{keyword}/{key}"), errors);
         }
     }
 
@@ -117,14 +97,14 @@ fn validate_value(sv: &SchemaValue, root: &SchemaValue, path: &str, errors: &mut
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::schema::TypeValue;
+    use crate::schema::{SimpleType, TypeValue};
     use alloc::collections::BTreeMap;
     use indexmap::IndexMap;
 
     #[test]
     fn valid_schema_no_errors() {
         let item_schema = SchemaValue::Schema(Box::new(Schema {
-            type_: Some(TypeValue::Single("string".into())),
+            type_: Some(TypeValue::Single(SimpleType::String)),
             ..Default::default()
         }));
         let mut defs = BTreeMap::new();
@@ -139,7 +119,7 @@ mod tests {
 
         let schema = Schema {
             defs: Some(defs),
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         };
 
@@ -157,7 +137,7 @@ mod tests {
         props.insert("item".into(), ref_schema);
 
         let schema = Schema {
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         };
 
@@ -177,14 +157,14 @@ mod tests {
         inner_props.insert("nested".into(), ref_schema);
 
         let wrapper = SchemaValue::Schema(Box::new(Schema {
-            properties: Some(inner_props),
+            properties: inner_props,
             ..Default::default()
         }));
         let mut props = IndexMap::new();
         props.insert("wrapper".into(), wrapper);
 
         let schema = Schema {
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         };
 
@@ -203,7 +183,7 @@ mod tests {
         props.insert("item".into(), ref_schema);
 
         let schema = Schema {
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         };
 
@@ -299,7 +279,7 @@ mod tests {
         props.insert("y".into(), ref2);
 
         let schema = Schema {
-            properties: Some(props),
+            properties: props,
             ..Default::default()
         };
 

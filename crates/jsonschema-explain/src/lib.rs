@@ -131,9 +131,9 @@ fn explain_schema(s: &Schema, root: &SchemaValue, name: &str, opts: &ExplainOpti
     }
 
     let required = required_set(&s);
-    if let Some(ref props) = s.properties {
+    if !s.properties.is_empty() {
         write_section(&mut out, "PROPERTIES", &f);
-        render_properties(&mut out, props, &required, &render_root, &f, 1);
+        render_properties(&mut out, &s.properties, &required, &render_root, &f, 1);
         out.push('\n');
     }
 

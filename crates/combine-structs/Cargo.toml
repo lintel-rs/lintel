@@ -1,0 +1,27 @@
+[package]
+name = "combine-structs"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Proc macros for compile-time struct field merging."
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["proc-macro", "derive", "struct", "merge"]
+categories = ["development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trybuild = "1"
+
+[lints]
+workspace = true
