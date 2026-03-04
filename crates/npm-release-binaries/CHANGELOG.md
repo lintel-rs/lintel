@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.6...npm-release-binaries-v0.0.7) - 2026-03-03
+
+### Other
+
+- *(deps)* bump zip from 8.1.0 to 8.2.0
+
 ## [0.0.6](https://github.com/lintel-rs/lintel/compare/npm-release-binaries-v0.0.5...npm-release-binaries-v0.0.6) - 2026-03-01
 
 ### Other
