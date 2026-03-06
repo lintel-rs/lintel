@@ -289,7 +289,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cargo-furnish"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "ansi-term-styles",
  "anyhow",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "combine-structs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "lintel-benchmark"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "bpaf",
