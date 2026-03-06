@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.3.0...jsonschema-explain-v0.3.1) - 2026-03-06
+
+### Other
+
+- updated the following local packages: jsonschema-schema
+
 ## [0.3.0](https://github.com/lintel-rs/lintel/compare/jsonschema-explain-v0.2.6...jsonschema-explain-v0.3.0) - 2026-03-02
 
 ### Added

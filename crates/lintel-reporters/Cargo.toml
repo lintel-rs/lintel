@@ -1,6 +1,6 @@
 [package]
 name = "lintel-reporters"
-version = "0.0.17"
+version = "0.0.18"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -15,5 +15,5 @@ workspace = true
 
 [dependencies]
 ansi-term-styles = "0.1.0"
-lintel-diagnostics = { version = "0.0.3", path = "../lintel-diagnostics" }
+lintel-diagnostics = { version = "0.0.4", path = "../lintel-diagnostics" }
 miette = { workspace = true, features = ["fancy"] }

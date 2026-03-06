@@ -1,6 +1,6 @@
 [package]
 name = "lintel-identify"
-version = "0.0.15"
+version = "0.0.16"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -17,5 +17,5 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 lintel-cli-common = { version = "0.0.7", path = "../lintel-cli-common" }
-lintel-explain = { version = "0.0.12", path = "../lintel-explain" }
+lintel-explain = { version = "0.0.13", path = "../lintel-explain" }
 tracing.workspace = true

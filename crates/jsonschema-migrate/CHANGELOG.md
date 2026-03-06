@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/lintel-rs/lintel/compare/jsonschema-migrate-v0.1.3...jsonschema-migrate-v0.1.4) - 2026-03-06
+
+### Other
+
+- updated the following local packages: jsonschema-schema
+
 ## [0.1.3](https://github.com/lintel-rs/lintel/compare/jsonschema-migrate-v0.1.2...jsonschema-migrate-v0.1.3) - 2026-03-02
 
 ### Other
