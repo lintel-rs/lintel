@@ -1,6 +1,6 @@
 [package]
 name = "combine-structs"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 description = "Proc macros for compile-time struct field merging."
