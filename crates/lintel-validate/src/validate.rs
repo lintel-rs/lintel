@@ -621,7 +621,7 @@ fn push_validation_errors(
             message,
             schema_url: schema_url.to_string(),
             schema_path: ve.schema_path.clone(),
-            validation_code: format!("lintel::validation::{}", ve.kind.as_ref()),
+            validation_code: format!("validation({})", ve.kind.as_ref()),
         }));
     }
 }

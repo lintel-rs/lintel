@@ -221,7 +221,6 @@ fn setup_miette(global: &CLIGlobalOptions) {
         Box::new(
             miette::MietteHandlerOpts::new()
                 .terminal_links(true)
-                .context_lines(2)
                 .graphical_theme(color.clone())
                 .build(),
         )
