@@ -32,7 +32,7 @@ thiserror = "2.0.18"
 tokio = "1.50.0"
 url = { version = "2.5.4", features = ["serde"] }
 toml = "1.0.3"
-toml_edit = "0.25.3"
+toml_edit = "0.25.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing-tree = "0.4.1"
