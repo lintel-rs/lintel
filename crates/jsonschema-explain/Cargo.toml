@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 ansi-term-styles = "0.1.0"
 indexmap.workspace = true
-jsonschema-schema = { version = "0.2.0", path = "../jsonschema-schema" }
+jsonschema-schema = { version = "0.2.1", path = "../jsonschema-schema" }
 markdown-to-ansi = "0.2.0"
 serde_json.workspace = true
 
