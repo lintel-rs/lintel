@@ -1559,7 +1559,6 @@ version = "0.2.0"
 dependencies = [
  "combine-structs",
  "indexmap",
- "jsonschema-migrate",
  "schemars",
  "serde",
  "serde_json",
