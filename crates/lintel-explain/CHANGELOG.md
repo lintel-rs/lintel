@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.12...lintel-explain-v0.0.13) - 2026-03-06
+
+### Other
+
+- updated the following local packages: jsonschema-schema, lintel-schema-cache, lintel-validate, jsonschema-explain, jsonschema-migrate, lintel-diagnostics
+
 ## [0.0.12](https://github.com/lintel-rs/lintel/compare/lintel-explain-v0.0.11...lintel-explain-v0.0.12) - 2026-03-02
 
 ### Added

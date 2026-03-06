@@ -1,6 +1,6 @@
 [package]
 name = "lintel-check"
-version = "0.0.19"
+version = "0.0.20"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -17,6 +17,6 @@ workspace = true
 anyhow.workspace = true
 bpaf.workspace = true
 lintel-config = { version = "0.0.9", path = "../lintel-config" }
-lintel-diagnostics = { version = "0.0.3", path = "../lintel-diagnostics" }
-lintel-format = { version = "0.0.7", path = "../lintel-format" }
-lintel-validate = { version = "0.0.12", path = "../lintel-validate" }
+lintel-diagnostics = { version = "0.0.4", path = "../lintel-diagnostics" }
+lintel-format = { version = "0.0.8", path = "../lintel-format" }
+lintel-validate = { version = "0.0.13", path = "../lintel-validate" }

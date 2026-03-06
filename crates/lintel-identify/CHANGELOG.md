@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.16](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.15...lintel-identify-v0.0.16) - 2026-03-06
+
+### Other
+
+- updated the following local packages: lintel-explain
+
 ## [0.0.15](https://github.com/lintel-rs/lintel/compare/lintel-identify-v0.0.14...lintel-identify-v0.0.15) - 2026-03-02
 
 ### Added

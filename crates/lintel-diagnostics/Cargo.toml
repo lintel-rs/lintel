@@ -1,6 +1,6 @@
 [package]
 name = "lintel-diagnostics"
-version = "0.0.3"
+version = "0.0.4"
 authors.workspace = true
 categories = ["development-tools"]
 edition.workspace = true
@@ -14,7 +14,7 @@ description = "Shared diagnostic types for Lintel — errors, results, and the R
 workspace = true
 
 [dependencies]
-lintel-schema-cache = { version = "0.0.13", path = "../lintel-schema-cache" }
+lintel-schema-cache = { version = "0.0.14", path = "../lintel-schema-cache" }
 lintel-validation-cache = { version = "0.0.10", path = "../lintel-validation-cache" }
 miette = { workspace = true, features = ["fancy"] }
 thiserror.workspace = true

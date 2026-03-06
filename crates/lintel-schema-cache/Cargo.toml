@@ -1,6 +1,6 @@
 [package]
 name = "lintel-schema-cache"
-version = "0.0.13"
+version = "0.0.14"
 authors.workspace = true
 categories = ["caching", "development-tools"]
 edition.workspace = true

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lintel-rs/lintel/compare/lintel-diagnostics-v0.0.3...lintel-diagnostics-v0.0.4) - 2026-03-06
+
+### Other
+
+- updated the following local packages: lintel-schema-cache
+
 ## [0.0.3](https://github.com/lintel-rs/lintel/compare/lintel-diagnostics-v0.0.2...lintel-diagnostics-v0.0.3) - 2026-03-02
 
 ### Added
