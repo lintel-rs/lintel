@@ -34,7 +34,7 @@ url = { version = "2.5.4", features = ["serde"] }
 toml = "1.0.3"
 toml_edit = "0.25.4"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tracing-tree = "0.4.1"
 
 [profile.bench]
