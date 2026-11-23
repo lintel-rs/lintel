@@ -37,6 +37,9 @@ let
     inherit src;
     inherit (lintelMeta) pname version;
     strictDeps = true;
+    # onig_sys: nixpkgs' cargo hook sets RUSTONIG_SYSTEM_LIBONIG=1 (NixOS/nixpkgs#570938).
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [ pkgs.oniguruma ];
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -66,7 +69,10 @@ let
       $out/bin/cargo-furnish man > cargo-furnish.1
       installManPage cargo-furnish.1
     '';
-    nativeBuildInputs = [ pkgs.installShellFiles ];
+    nativeBuildInputs = [
+      pkgs.installShellFiles
+      pkgs.pkg-config
+    ];
   };
 
   lintel = mkPackage ../crates/lintel {
@@ -78,7 +84,10 @@ let
       $out/bin/lintel man > lintel.1
       installManPage lintel.1
     '';
-    nativeBuildInputs = [ pkgs.installShellFiles ];
+    nativeBuildInputs = [
+      pkgs.installShellFiles
+      pkgs.pkg-config
+    ];
   };
 
   lintel-catalog-builder = mkPackage ../crates/lintel-catalog-builder {
@@ -91,7 +100,10 @@ let
       $out/bin/lintel-catalog-builder man > lintel-catalog-builder.1
       installManPage lintel-catalog-builder.1
     '';
-    nativeBuildInputs = [ pkgs.installShellFiles ];
+    nativeBuildInputs = [
+      pkgs.installShellFiles
+      pkgs.pkg-config
+    ];
   };
 
   lintel-config-schema-generator = mkPackage ../crates/lintel-config-schema-generator { };
